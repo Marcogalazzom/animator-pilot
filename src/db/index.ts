@@ -4,3 +4,6 @@ export * from './kpi';
 export * from './projects';
 export * from './imports';
 export * from './settings';
+export * from './compliance';
+export * from './budget';
+export * from './tutelles';

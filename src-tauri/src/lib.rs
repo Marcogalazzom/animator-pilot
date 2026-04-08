@@ -8,7 +8,13 @@ pub fn run() {
             description: "create initial tables",
             sql: include_str!("../migrations/001_init.sql"),
             kind: MigrationKind::Up,
-        }
+        },
+        Migration {
+            version: 2,
+            description: "add phase2 tables (compliance, budget, tutelles)",
+            sql: include_str!("../migrations/002_phase2.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
