@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import KPIs from "./pages/KPIs";
 import Projects from "./pages/Projects";
-import Compliance from "./pages/Compliance";
+import Import from "./pages/Import";
 import Settings from "./pages/Settings";
 
 function Sidebar() {
@@ -28,8 +28,8 @@ function Sidebar() {
         <NavLink to="/projects" className={linkClass}>
           Projets
         </NavLink>
-        <NavLink to="/compliance" className={linkClass}>
-          Conformité
+        <NavLink to="/import" className={linkClass}>
+          Import
         </NavLink>
       </nav>
       <div className="p-3 border-t border-gray-200">
@@ -58,7 +58,7 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/kpis" element={<KPIs />} />
           <Route path="/projects" element={<Projects />} />
-          <Route path="/compliance" element={<Compliance />} />
+          <Route path="/import" element={<Import />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </Layout>
