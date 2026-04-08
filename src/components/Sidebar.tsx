@@ -7,6 +7,9 @@ import {
   FolderKanban,
   ShieldCheck,
   Landmark,
+  FileText,
+  BookOpen,
+  Activity,
   Upload,
   Settings,
 } from "lucide-react";
@@ -27,6 +30,9 @@ const mainNavItems: NavLinkItemProps[] = [
   { to: "/projects", icon: <FolderKanban size={18} />, label: "Projets" },
   { to: "/compliance", icon: <ShieldCheck size={18} />, label: "Conformité" },
   { to: "/tutelles", icon: <Landmark size={18} />, label: "Tutelles" },
+  { to: "/notes", icon: <FileText size={18} />, label: "Notes" },
+  { to: "/veille", icon: <BookOpen size={18} />, label: "Veille" },
+  { to: "/benchmarking", icon: <Activity size={18} />, label: "ANAP" },
   { to: "/import", icon: <Upload size={18} />, label: "Import" },
 ];
 

@@ -6,6 +6,9 @@ import Budget from "@/pages/Budget";
 import Projects from "@/pages/Projects";
 import Compliance from "@/pages/Compliance";
 import Tutelles from "@/pages/Tutelles";
+import Notes from "@/pages/Notes";
+import Veille from "@/pages/Veille";
+import Benchmarking from "@/pages/Benchmarking";
 import Import from "@/pages/Import";
 import Settings from "@/pages/Settings";
 
@@ -20,6 +23,9 @@ export default function App() {
           <Route path="/projects" element={<Projects />} />
           <Route path="/compliance" element={<Compliance />} />
           <Route path="/tutelles" element={<Tutelles />} />
+          <Route path="/notes" element={<Notes />} />
+          <Route path="/veille" element={<Veille />} />
+          <Route path="/benchmarking" element={<Benchmarking />} />
           <Route path="/import" element={<Import />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
