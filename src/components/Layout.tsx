@@ -2,6 +2,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import CommandPalette from "@/components/CommandPalette";
+import ToastContainer from "@/components/Toast";
 import { evaluateAlerts } from "@/utils/alertEngine";
 
 interface LayoutProps {
@@ -23,6 +24,9 @@ export default function Layout({ children }: LayoutProps) {
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
         e.preventDefault();
         setPaletteOpen((prev) => !prev);
+      }
+      if (e.key === "Escape") {
+        window.dispatchEvent(new CustomEvent("close-modal"));
       }
     }
     window.addEventListener("keydown", handleKeyDown);
@@ -46,6 +50,7 @@ export default function Layout({ children }: LayoutProps) {
       </div>
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <ToastContainer />
     </div>
   );
 }

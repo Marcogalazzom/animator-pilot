@@ -3,6 +3,7 @@ import {
   Wallet, TrendingUp, TrendingDown, AlertTriangle,
   Plus, FileSpreadsheet, X, Loader2,
 } from 'lucide-react';
+import { useToastStore } from '@/stores/toastStore';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
@@ -68,6 +69,7 @@ function BudgetChartTooltip({ active, payload, label }: ChartTooltipProps) {
 
 export default function Budget() {
   const data = useBudgetData();
+  const addToast = useToastStore((s) => s.add);
   const [tab, setTab] = useState<Tab>('synthese');
   const [addingLine, setAddingLine] = useState<{ titleNum: number; lineType: BudgetLineType } | null>(null);
   const [newLabel, setNewLabel] = useState('');
@@ -154,10 +156,13 @@ export default function Budget() {
     setSaving(true);
     try {
       await data.initFromTemplate(data.selectedSectionId, data.selectedYear);
+      addToast('Modèle budgétaire initialisé', 'success');
+    } catch {
+      addToast('Erreur lors de l\'initialisation', 'error');
     } finally {
       setSaving(false);
     }
-  }, [data]);
+  }, [data, addToast]);
 
   // ── Input style ──
   const inputStyle: React.CSSProperties = {

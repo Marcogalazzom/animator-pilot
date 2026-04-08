@@ -4,6 +4,7 @@ import {
   Save, CheckCircle2, ChevronDown, ChevronUp,
   FolderOpen, HardDrive,
 } from 'lucide-react';
+import { useToastStore } from '@/stores/toastStore';
 
 import {
   getSetting, setSetting,
@@ -26,11 +27,6 @@ interface ThresholdForm {
 }
 
 type ToastKind = 'success' | 'error';
-
-interface ToastState {
-  message: string;
-  kind:    ToastKind;
-}
 
 interface DbStats {
   kpiEntries:  number;
@@ -222,57 +218,6 @@ function PrimaryButton({ loading, icon, children, variant = 'primary', style, ..
   );
 }
 
-// ─── Toast ────────────────────────────────────────────────────────────────────
-
-interface ToastProps {
-  toast: ToastState | null;
-  onDismiss: () => void;
-}
-
-function Toast({ toast, onDismiss }: ToastProps) {
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(onDismiss, 3000);
-    return () => clearTimeout(t);
-  }, [toast, onDismiss]);
-
-  if (!toast) return null;
-
-  const isSuccess = toast.kind === 'success';
-
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      style={{
-        position:        'fixed',
-        bottom:          '32px',
-        right:           '32px',
-        display:         'flex',
-        alignItems:      'center',
-        gap:             '10px',
-        padding:         '12px 20px',
-        background:      isSuccess ? 'rgba(5,150,105,0.95)' : 'rgba(220,38,38,0.95)',
-        color:           '#fff',
-        borderRadius:    '8px',
-        boxShadow:       '0 8px 24px rgba(0,0,0,0.18)',
-        fontSize:        '13px',
-        fontWeight:      500,
-        fontFamily:      'var(--font-sans)',
-        zIndex:          9999,
-        animation:       'slideUp 0.25s ease',
-        backdropFilter:  'blur(8px)',
-      }}
-    >
-      {isSuccess
-        ? <CheckCircle2 size={16} />
-        : <Info size={16} />
-      }
-      {toast.message}
-    </div>
-  );
-}
-
 // ─── Direction toggle ─────────────────────────────────────────────────────────
 
 interface DirectionToggleProps {
@@ -324,13 +269,11 @@ export default function Settings() {
   const [dbStats, setDbStats] = useState<DbStats>({ kpiEntries: 0, projects: 0, imports: 0 });
 
   // ── Toast ──
-  const [toast, setToast] = useState<ToastState | null>(null);
+  const addToast = useToastStore((s) => s.add);
 
   const showToast = useCallback((message: string, kind: ToastKind = 'success') => {
-    setToast({ message, kind });
-  }, []);
-
-  const dismissToast = useCallback(() => setToast(null), []);
+    addToast(message, kind === 'error' ? 'error' : 'success');
+  }, [addToast]);
 
   // ── Load on mount ──
   useEffect(() => {
@@ -444,10 +387,9 @@ export default function Settings() {
 
   return (
     <>
-      {/* Keyframe for spinner + slide-up toast */}
+      {/* Keyframe for spinner */}
       <style>{`
-        @keyframes spin     { to { transform: rotate(360deg); } }
-        @keyframes slideUp  { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
 
       <div style={{
@@ -918,8 +860,6 @@ export default function Settings() {
 
       </div>
 
-      {/* ── Toast notification ── */}
-      <Toast toast={toast} onDismiss={dismissToast} />
     </>
   );
 }

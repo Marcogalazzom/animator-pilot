@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import type { ReactElement } from "react";
 import {
@@ -13,6 +14,8 @@ import {
   Activity,
   Upload,
   Settings,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 import "./Sidebar.css";
@@ -24,19 +27,69 @@ interface NavLinkItemProps {
   label: string;
 }
 
-const mainNavItems: NavLinkItemProps[] = [
-  { to: "/", end: true, icon: <LayoutDashboard size={18} />, label: "Tableau de bord" },
-  { to: "/kpis", icon: <BarChart3 size={18} />, label: "KPIs" },
-  { to: "/budget", icon: <Wallet size={18} />, label: "Budget" },
-  { to: "/projects", icon: <FolderKanban size={18} />, label: "Projets" },
-  { to: "/compliance", icon: <ShieldCheck size={18} />, label: "Conformité" },
-  { to: "/tutelles", icon: <Landmark size={18} />, label: "Tutelles" },
-  { to: "/notes", icon: <FileText size={18} />, label: "Notes" },
-  { to: "/calendar", icon: <CalendarDays size={18} />, label: "Calendrier" },
-  { to: "/veille", icon: <BookOpen size={18} />, label: "Veille" },
-  { to: "/benchmarking", icon: <Activity size={18} />, label: "ANAP" },
-  { to: "/import", icon: <Upload size={18} />, label: "Import" },
+interface NavGroup {
+  id: string;
+  label: string;
+  items: NavLinkItemProps[];
+}
+
+const navGroups: NavGroup[] = [
+  {
+    id: "pilotage",
+    label: "Pilotage",
+    items: [
+      { to: "/", end: true, icon: <LayoutDashboard size={18} />, label: "Tableau de bord" },
+      { to: "/kpis", icon: <BarChart3 size={18} />, label: "KPIs" },
+      { to: "/budget", icon: <Wallet size={18} />, label: "Budget" },
+      { to: "/benchmarking", icon: <Activity size={18} />, label: "ANAP" },
+    ],
+  },
+  {
+    id: "gestion",
+    label: "Gestion",
+    items: [
+      { to: "/projects", icon: <FolderKanban size={18} />, label: "Projets" },
+      { to: "/notes", icon: <FileText size={18} />, label: "Notes" },
+      { to: "/calendar", icon: <CalendarDays size={18} />, label: "Calendrier" },
+    ],
+  },
+  {
+    id: "reglementaire",
+    label: "Réglementaire",
+    items: [
+      { to: "/compliance", icon: <ShieldCheck size={18} />, label: "Conformité" },
+      { to: "/tutelles", icon: <Landmark size={18} />, label: "Tutelles" },
+      { to: "/veille", icon: <BookOpen size={18} />, label: "Veille" },
+    ],
+  },
+  {
+    id: "outils",
+    label: "Outils",
+    items: [
+      { to: "/import", icon: <Upload size={18} />, label: "Import" },
+    ],
+  },
 ];
+
+const STORAGE_KEY = "sidebar-collapsed-groups";
+
+function loadCollapsedGroups(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+  return {};
+}
+
+function saveCollapsedGroups(state: Record<string, boolean>) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // ignore
+  }
+}
 
 function NavLinkItem({ to, end, icon, label }: NavLinkItemProps) {
   return (
@@ -47,7 +100,53 @@ function NavLinkItem({ to, end, icon, label }: NavLinkItemProps) {
   );
 }
 
+function NavGroupSection({
+  group,
+  collapsed,
+  onToggle,
+}: {
+  group: NavGroup;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="sidebar-group">
+      <button
+        type="button"
+        className="sidebar-group-header"
+        onClick={onToggle}
+        aria-expanded={!collapsed}
+      >
+        <span className="sidebar-group-label">{group.label}</span>
+        <span className="sidebar-group-chevron">
+          {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+        </span>
+      </button>
+
+      {!collapsed && (
+        <div className="sidebar-group-items">
+          {group.items.map((item) => (
+            <NavLinkItem key={item.to} {...item} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Sidebar() {
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() =>
+    loadCollapsedGroups()
+  );
+
+  useEffect(() => {
+    saveCollapsedGroups(collapsed);
+  }, [collapsed]);
+
+  function toggleGroup(id: string) {
+    setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
   return (
     <aside
       className="flex flex-col shrink-0 h-screen"
@@ -84,10 +183,15 @@ export default function Sidebar() {
         </h1>
       </div>
 
-      {/* Main navigation */}
-      <nav className="flex-1 p-3 flex flex-col gap-0.5" aria-label="Navigation principale">
-        {mainNavItems.map((item) => (
-          <NavLinkItem key={item.to} {...item} />
+      {/* Main navigation with groups */}
+      <nav className="flex-1 p-3 flex flex-col overflow-y-auto" aria-label="Navigation principale">
+        {navGroups.map((group) => (
+          <NavGroupSection
+            key={group.id}
+            group={group}
+            collapsed={!!collapsed[group.id]}
+            onToggle={() => toggleGroup(group.id)}
+          />
         ))}
       </nav>
 

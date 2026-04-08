@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useToastStore } from '@/stores/toastStore';
 import {
   ShieldCheck, Calendar, FileText, Check,
   AlertTriangle, Clock, Plus, X, ChevronUp, ChevronDown,
@@ -1385,6 +1386,7 @@ export default function Compliance() {
     markCompliant,
   } = useComplianceData();
 
+  const addToast = useToastStore((s) => s.add);
   const [viewMode, setViewMode]     = useState<ViewMode>('table');
   const [showCreate, setShowCreate] = useState(false);
 
@@ -1396,8 +1398,19 @@ export default function Compliance() {
   );
 
   const handleDeleteCallback = useCallback(
-    (id: number) => deleteObligation(id),
-    [deleteObligation]
+    async (id: number) => {
+      await deleteObligation(id);
+      addToast('Obligation supprimée', 'success');
+    },
+    [deleteObligation, addToast]
+  );
+
+  const handleCreateObligation = useCallback(
+    async (data: Parameters<typeof createObligation>[0]) => {
+      await createObligation(data);
+      addToast('Obligation créée', 'success');
+    },
+    [createObligation, addToast]
   );
 
   const handleMarkCompliantCallback = useCallback(
@@ -1598,7 +1611,7 @@ export default function Compliance() {
       {showCreate && (
         <CreateModal
           onClose={() => setShowCreate(false)}
-          onCreate={createObligation}
+          onCreate={handleCreateObligation}
         />
       )}
     </div>

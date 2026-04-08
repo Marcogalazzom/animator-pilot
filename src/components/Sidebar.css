@@ -29,3 +29,56 @@
   opacity: 0.85;
   display: flex;
 }
+
+/* ── Group styles ──────────────────────────────────────────── */
+
+.sidebar-group {
+  margin-bottom: 4px;
+}
+
+.sidebar-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 13px 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  gap: 6px;
+}
+
+.sidebar-group-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.35);
+  font-family: var(--font-sans, sans-serif);
+  flex: 1;
+  text-align: left;
+  transition: color 150ms ease;
+}
+
+.sidebar-group-header:hover .sidebar-group-label {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.sidebar-group-chevron {
+  color: rgba(255, 255, 255, 0.25);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: color 150ms ease;
+}
+
+.sidebar-group-header:hover .sidebar-group-chevron {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.sidebar-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 4px;
+}

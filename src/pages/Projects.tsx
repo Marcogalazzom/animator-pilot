@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useToastStore } from '@/stores/toastStore';
 import {
   Plus, LayoutGrid, List, X, ChevronRight, Trash2,
   Calendar, User, AlertCircle, CheckCircle2, Clock,
@@ -1343,6 +1344,7 @@ export default function Projects() {
     createAction, updateAction, deleteAction,
   } = useProjectsData();
 
+  const addToast = useToastStore((s) => s.add);
   const [viewMode, setViewMode]     = useState<ViewMode>('kanban');
   const [showCreate, setShowCreate] = useState(false);
 
@@ -1454,6 +1456,7 @@ export default function Projects() {
           onCreate={async (data) => {
             await createProject(data);
             await refreshProjects();
+            addToast('Projet créé', 'success');
           }}
         />
       )}
@@ -1466,7 +1469,10 @@ export default function Projects() {
           actionsLoading={actionsLoading}
           onClose={handleCloseDetail}
           onUpdateProject={updateProject}
-          onDeleteProject={deleteProject}
+          onDeleteProject={async (id: number) => {
+            await deleteProject(id);
+            addToast('Projet supprimé', 'success');
+          }}
           onCreateAction={createAction}
           onUpdateAction={updateAction}
           onDeleteAction={deleteAction}
