@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useId } from 'react';
 import {
   BedDouble, Euro, Users, AlertTriangle,
   Clock, CalendarX, ChevronRight,
@@ -14,6 +14,7 @@ import AlertBanner   from '@/components/AlertBanner';
 import type { AlertItem } from '@/components/AlertBanner';
 import type { KpiStatus } from '@/components/KpiCard';
 import { useDashboardData } from './dashboard/useDashboardData';
+import './Dashboard.css';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -111,7 +112,8 @@ function BudgetTooltip({ active, payload, label }: TooltipProps) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const { kpis, occupationMonths, budgetMonths, overdueProjects, loading } = useDashboardData();
+  const { kpis, occupationMonths, budgetMonths, overdueProjects, loading, error } = useDashboardData();
+  const gradientId = useId();
 
   // Derive KPI statuses
   const occupStatus   = occupationStatus(kpis.taux_occupation.current);
@@ -205,6 +207,21 @@ export default function Dashboard() {
         </p>
       </div>
 
+      {/* ── DB error warning ── */}
+      {error && (
+        <div role="alert" style={{
+          backgroundColor: 'rgba(217,119,6,0.06)',
+          border: '1px solid var(--color-warning)',
+          borderRadius: '8px',
+          padding: '10px 16px',
+          fontSize: '13px',
+          color: 'var(--color-warning)',
+          fontFamily: 'var(--font-sans)',
+        }}>
+          Données de démonstration — la base de données n'est pas accessible.
+        </div>
+      )}
+
       {/* ── B. KPI Cards row ── */}
       <div style={{
         display: 'grid',
@@ -296,7 +313,7 @@ export default function Dashboard() {
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={occupationMonths} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
               <defs>
-                <linearGradient id="occupGrad" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%"  stopColor="#1E40AF" stopOpacity={0.15} />
                   <stop offset="95%" stopColor="#1E40AF" stopOpacity={0} />
                 </linearGradient>
@@ -321,7 +338,7 @@ export default function Dashboard() {
                 dataKey="value"
                 stroke="#1E40AF"
                 strokeWidth={2}
-                fill="url(#occupGrad)"
+                fill={`url(#${gradientId})`}
                 dot={{ r: 3, fill: '#1E40AF', strokeWidth: 0 }}
                 activeDot={{ r: 5, fill: '#1E40AF', stroke: '#fff', strokeWidth: 2 }}
               />
@@ -440,6 +457,7 @@ export default function Dashboard() {
             {overdueProjects.map((project, i) => (
               <li
                 key={project.id}
+                className="overdue-project-item"
                 style={{
                   padding: '12px 20px',
                   borderBottom: i < overdueProjects.length - 1 ? '1px solid var(--color-border)' : 'none',
@@ -448,8 +466,6 @@ export default function Dashboard() {
                   gap: '12px',
                   transition: 'background-color 0.15s ease',
                 }}
-                onMouseEnter={e => { (e.currentTarget as HTMLLIElement).style.backgroundColor = 'rgba(0,0,0,0.02)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLLIElement).style.backgroundColor = 'transparent'; }}
               >
                 {/* Status dot */}
                 <div style={{

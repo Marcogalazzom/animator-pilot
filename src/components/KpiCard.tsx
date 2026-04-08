@@ -1,5 +1,6 @@
-import type { ReactElement } from 'react';
+import type { ReactNode } from 'react';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import './KpiCard.css';
 
 export type KpiStatus = 'ok' | 'warning' | 'critical';
 
@@ -15,7 +16,7 @@ export interface KpiCardProps {
   value:   string;
   trend?:  KpiTrend;
   status:  KpiStatus;
-  icon:    ReactElement;
+  icon:    ReactNode;
   unit?:   string;
 }
 
@@ -51,6 +52,7 @@ export default function KpiCard({ label, value, trend, status, icon, unit }: Kpi
 
   return (
     <div
+      className="kpi-card"
       style={{
         backgroundColor: 'var(--color-surface)',
         borderRadius: '8px',
@@ -60,20 +62,9 @@ export default function KpiCard({ label, value, trend, status, icon, unit }: Kpi
         display: 'flex',
         flexDirection: 'column',
         gap: '8px',
-        transition: 'box-shadow 0.18s ease, transform 0.18s ease',
         cursor: 'default',
         position: 'relative',
         overflow: 'hidden',
-      }}
-      onMouseEnter={e => {
-        (e.currentTarget as HTMLDivElement).style.boxShadow =
-          '0 4px 12px rgba(0,0,0,0.10), 0 2px 4px rgba(0,0,0,0.06)';
-        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-1px)';
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLDivElement).style.boxShadow =
-          '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)';
-        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
       }}
     >
       {/* Background tint blob */}

@@ -61,7 +61,7 @@ export default function AlertBanner({ alerts }: AlertBannerProps) {
           {hasCritical ? 'Alerte critique' : 'Attention'} — {alerts.length} indicateur{alerts.length > 1 ? 's' : ''} hors seuil
         </p>
 
-        {alerts.length > 0 && (
+        {alerts.length > 1 && (
           <ul style={{
             margin: 0,
             padding: 0,
@@ -70,8 +70,8 @@ export default function AlertBanner({ alerts }: AlertBannerProps) {
             flexDirection: 'column',
             gap: '2px',
           }}>
-            {alerts.map((alert, i) => (
-              <li key={i} style={{
+            {alerts.map((alert) => (
+              <li key={alert.indicator} style={{
                 fontSize: '12px',
                 color: 'var(--color-text-primary)',
                 fontFamily: 'var(--font-sans)',
