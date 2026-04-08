@@ -1,4 +1,21 @@
 import { jsPDF } from 'jspdf';
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeFile } from '@tauri-apps/plugin-fs';
+
+async function savePdfWithTauri(doc: jsPDF, defaultFilename: string): Promise<void> {
+  try {
+    const filePath = await save({
+      defaultPath: defaultFilename,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
+    if (!filePath) return; // user cancelled
+    const arrayBuffer = doc.output('arraybuffer');
+    await writeFile(filePath, new Uint8Array(arrayBuffer));
+  } catch {
+    // Fallback to browser download (dev mode)
+    doc.save(defaultFilename);
+  }
+}
 import { getKpiEntries, getProjects, getSetting, getObligations, getBudgetSummary, getAnapIndicators } from '@/db';
 import { getUpcomingEvents } from '@/db/tutelles';
 import {
@@ -493,7 +510,7 @@ export async function exportDashboardPdf(): Promise<void> {
 
   // ── 3. Save the file ───────────────────────────────────────────────────────
   const filename = `rapport-pilotage-${new Date().toISOString().slice(0, 10)}.pdf`;
-  doc.save(filename);
+  await savePdfWithTauri(doc, filename);
 }
 
 // ─── Monthly report ───────────────────────────────────────────────────────────
@@ -906,5 +923,5 @@ export async function exportMonthlyReport(): Promise<void> {
   void COLOR_PURPLE;
 
   const filename = `rapport-mensuel-${new Date().toISOString().slice(0, 7)}.pdf`;
-  doc.save(filename);
+  await savePdfWithTauri(doc, filename);
 }
