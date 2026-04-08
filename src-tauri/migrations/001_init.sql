@@ -50,6 +50,11 @@ CREATE TABLE import_history (
   status TEXT NOT NULL DEFAULT 'success' -- success, error
 );
 
+-- Indexes
+CREATE INDEX idx_kpi_entries_period_category ON kpi_entries(period, category);
+CREATE INDEX idx_kpi_entries_indicator ON kpi_entries(indicator);
+CREATE INDEX idx_actions_project_id ON actions(project_id);
+
 -- app_settings: key-value settings store
 CREATE TABLE app_settings (
   key TEXT PRIMARY KEY,

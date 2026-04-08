@@ -1,7 +1,10 @@
 import { getDb } from './database';
-import type { Project, Action } from './types';
+import type { Project, Action, ProjectStatus } from './types';
 
-export async function getProjects(status?: string): Promise<Project[]> {
+const UPDATABLE_PROJECT_FIELDS = new Set(['title', 'description', 'owner_role', 'status', 'start_date', 'due_date']);
+const UPDATABLE_ACTION_FIELDS = new Set(['title', 'progress', 'due_date', 'status']);
+
+export async function getProjects(status?: ProjectStatus): Promise<Project[]> {
   const db = await getDb();
   if (status) {
     return db.select<Project[]>(
@@ -37,11 +40,11 @@ export async function createProject(project: Omit<Project, 'id' | 'created_at'>)
 
 export async function updateProject(id: number, updates: Partial<Project>): Promise<void> {
   const db = await getDb();
-  const fields = Object.keys(updates).filter((k) => k !== 'id' && k !== 'created_at');
+  const fields = Object.keys(updates).filter((k) => UPDATABLE_PROJECT_FIELDS.has(k));
   if (fields.length === 0) return;
 
   const setClauses = fields.map((f) => `${f} = ?`).join(', ');
-  const values = fields.map((f) => (updates as Record<string, unknown>)[f]);
+  const values: unknown[] = fields.map((f) => (updates as Record<string, unknown>)[f]);
   values.push(id);
 
   await db.execute(`UPDATE projects SET ${setClauses} WHERE id = ?`, values);
@@ -72,13 +75,11 @@ export async function createAction(action: Omit<Action, 'id' | 'created_at'>): P
 
 export async function updateAction(id: number, updates: Partial<Action>): Promise<void> {
   const db = await getDb();
-  const fields = Object.keys(updates).filter(
-    (k) => k !== 'id' && k !== 'created_at' && k !== 'project_id'
-  );
+  const fields = Object.keys(updates).filter((k) => UPDATABLE_ACTION_FIELDS.has(k));
   if (fields.length === 0) return;
 
   const setClauses = fields.map((f) => `${f} = ?`).join(', ');
-  const values = fields.map((f) => (updates as Record<string, unknown>)[f]);
+  const values: unknown[] = fields.map((f) => (updates as Record<string, unknown>)[f]);
   values.push(id);
 
   await db.execute(`UPDATE actions SET ${setClauses} WHERE id = ?`, values);

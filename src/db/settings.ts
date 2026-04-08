@@ -27,6 +27,7 @@ export async function getAllSettings(): Promise<Record<string, string>> {
   return Object.fromEntries(rows.map((r) => [r.key, r.value]));
 }
 
+// INSERT OR IGNORE intentional: never overwrite user-customized values
 export async function seedDefaults(): Promise<void> {
   const db = await getDb();
   await db.execute(

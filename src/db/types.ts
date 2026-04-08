@@ -1,10 +1,17 @@
+export type KpiCategory = 'occupation' | 'finance' | 'rh' | 'qualite';
+export type KpiSource = 'manual' | 'import';
+export type ThresholdDirection = 'above' | 'below';
+export type ProjectStatus = 'todo' | 'in_progress' | 'done' | 'overdue';
+export type ActionStatus = 'todo' | 'in_progress' | 'done';
+export type ImportStatus = 'success' | 'error';
+
 export interface KpiEntry {
   id: number;
-  category: string;
+  category: KpiCategory;
   indicator: string;
   value: number;
   period: string;
-  source: string;
+  source: KpiSource;
   created_at: string;
 }
 
@@ -13,7 +20,7 @@ export interface KpiThreshold {
   indicator: string;
   warning: number | null;
   critical: number | null;
-  direction: string;
+  direction: ThresholdDirection;
 }
 
 export interface Project {
@@ -21,7 +28,7 @@ export interface Project {
   title: string;
   description: string;
   owner_role: string;
-  status: string;
+  status: ProjectStatus;
   start_date: string | null;
   due_date: string | null;
   created_at: string;
@@ -33,7 +40,7 @@ export interface Action {
   title: string;
   progress: number;
   due_date: string | null;
-  status: string;
+  status: ActionStatus;
   created_at: string;
 }
 
@@ -42,5 +49,5 @@ export interface ImportRecord {
   filename: string;
   imported_at: string;
   row_count: number;
-  status: string;
+  status: ImportStatus;
 }

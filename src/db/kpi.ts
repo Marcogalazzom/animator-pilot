@@ -1,7 +1,7 @@
 import { getDb } from './database';
-import type { KpiEntry, KpiThreshold } from './types';
+import type { KpiEntry, KpiThreshold, KpiCategory } from './types';
 
-export async function getKpiEntries(category?: string, period?: string): Promise<KpiEntry[]> {
+export async function getKpiEntries(category?: KpiCategory, period?: string): Promise<KpiEntry[]> {
   const db = await getDb();
   const conditions: string[] = [];
   const bindings: unknown[] = [];
