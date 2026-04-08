@@ -156,3 +156,62 @@ export interface PreparationChecklist {
   sort_order: number;
   created_at: string;
 }
+
+// ─── Documents (Notes de service) ────────────────────────────
+export type DocType = 'note_service' | 'cr_cvs' | 'cr_equipe' | 'cr_chsct' | 'cr_direction' | 'other';
+
+export interface Document {
+  id: number;
+  title: string;
+  doc_type: DocType;
+  content: string;
+  author_role: string;
+  date: string;
+  tags: string;
+  is_template: number;
+  created_at: string;
+}
+
+// ─── Veille réglementaire ────────────────────────────────────
+export type WatchCategory = 'legislation' | 'has_recommendation' | 'ars_circular' | 'formation' | 'other';
+
+export interface RegulatoryWatch {
+  id: number;
+  title: string;
+  category: WatchCategory;
+  source: string;
+  url: string;
+  date_published: string | null;
+  summary: string;
+  is_read: number;
+  created_at: string;
+}
+
+export type TrainingCategory = 'securite' | 'soins' | 'management' | 'other';
+
+export interface TrainingTracking {
+  id: number;
+  title: string;
+  category: string;
+  hours_planned: number;
+  hours_completed: number;
+  fiscal_year: number;
+  notes: string;
+  created_at: string;
+}
+
+// ─── ANAP / Benchmarking ─────────────────────────────────────
+export type AnapCategory = 'activite' | 'rh' | 'finance' | 'qualite';
+
+export interface AnapIndicator {
+  id: number;
+  indicator_key: string;
+  label: string;
+  value_etablissement: number | null;
+  value_national: number | null;
+  value_regional: number | null;
+  unit: string;
+  fiscal_year: number;
+  category: AnapCategory;
+  created_at: string;
+}

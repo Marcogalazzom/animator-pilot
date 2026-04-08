@@ -15,6 +15,12 @@ pub fn run() {
             sql: include_str!("../migrations/002_phase2.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "add phase3 tables (documents, veille, anap)",
+            sql: include_str!("../migrations/003_phase3.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

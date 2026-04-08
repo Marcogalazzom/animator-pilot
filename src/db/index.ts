@@ -7,3 +7,6 @@ export * from './settings';
 export * from './compliance';
 export * from './budget';
 export * from './tutelles';
+export * from './documents';
+export * from './veille';
+export * from './anap';
