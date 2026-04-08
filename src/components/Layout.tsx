@@ -2,6 +2,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import CommandPalette from "@/components/CommandPalette";
+import { evaluateAlerts } from "@/utils/alertEngine";
 
 interface LayoutProps {
   children: ReactNode;
@@ -9,6 +10,13 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Run alert evaluation on mount and every 5 minutes
+  useEffect(() => {
+    evaluateAlerts().catch(() => {});
+    const interval = setInterval(() => evaluateAlerts().catch(() => {}), 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
