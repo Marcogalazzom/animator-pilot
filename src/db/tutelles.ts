@@ -236,3 +236,23 @@ export async function deleteChecklistItem(id: number): Promise<void> {
   const db = await getDb();
   await db.execute('DELETE FROM preparation_checklists WHERE id = ?', [id]);
 }
+
+// ─── Dashboard helpers ────────────────────────────────────────
+
+export interface UpcomingEventWithPrep extends AuthorityEvent {
+  total_items: number;
+  done_items: number;
+}
+
+export async function getUpcomingEvents(days: number): Promise<UpcomingEventWithPrep[]> {
+  const db = await getDb();
+  return db.select<UpcomingEventWithPrep[]>(
+    `SELECT ae.*,
+       (SELECT COUNT(*) FROM preparation_checklists pc WHERE pc.event_id = ae.id) as total_items,
+       (SELECT COUNT(*) FROM preparation_checklists pc WHERE pc.event_id = ae.id AND pc.is_done = 1) as done_items
+     FROM authority_events ae
+     WHERE ae.date_start >= date('now') AND ae.date_start <= date('now', '+' || ? || ' days')
+     ORDER BY ae.date_start ASC LIMIT 3`,
+    [days]
+  );
+}

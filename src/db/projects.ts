@@ -89,3 +89,20 @@ export async function deleteAction(id: number): Promise<void> {
   const db = await getDb();
   await db.execute('DELETE FROM actions WHERE id = ?', [id]);
 }
+
+// ─── Dashboard helpers ────────────────────────────────────────
+
+export interface OverdueAction extends Action {
+  project_title: string;
+}
+
+export async function getOverdueActions(limit = 10): Promise<OverdueAction[]> {
+  const db = await getDb();
+  return db.select<OverdueAction[]>(
+    `SELECT a.*, p.title as project_title FROM actions a
+     JOIN projects p ON a.project_id = p.id
+     WHERE a.status != 'done' AND (a.due_date <= date('now') OR a.due_date IS NULL)
+     ORDER BY a.due_date ASC LIMIT ?`,
+    [limit]
+  );
+}

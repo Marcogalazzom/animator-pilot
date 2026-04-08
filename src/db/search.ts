@@ -57,3 +57,41 @@ export async function globalSearch(query: string): Promise<SearchResult[]> {
 
   return results.slice(0, 20);
 }
+
+// ─── Unified deadlines ────────────────────────────────────────
+
+export interface UpcomingDeadline {
+  title: string;
+  date: string;
+  module: 'projects' | 'compliance' | 'tutelles';
+  link_path: string;
+}
+
+export async function getUpcomingDeadlines(limit = 10): Promise<UpcomingDeadline[]> {
+  const db = await getDb();
+
+  const [projects, obligations, events] = await Promise.all([
+    db.select<{ title: string; due_date: string }[]>(
+      `SELECT title, due_date FROM projects WHERE status != 'done' AND due_date IS NOT NULL ORDER BY due_date ASC LIMIT ?`,
+      [limit]
+    ),
+    db.select<{ title: string; next_due_date: string }[]>(
+      `SELECT title, next_due_date FROM compliance_obligations WHERE status != 'compliant' AND next_due_date IS NOT NULL ORDER BY next_due_date ASC LIMIT ?`,
+      [limit]
+    ),
+    db.select<{ title: string; date_start: string }[]>(
+      `SELECT title, date_start FROM authority_events WHERE status != 'completed' AND date_start IS NOT NULL AND date_start >= date('now') ORDER BY date_start ASC LIMIT ?`,
+      [limit]
+    ),
+  ]);
+
+  const results: UpcomingDeadline[] = [
+    ...projects.map(p => ({ title: p.title, date: p.due_date, module: 'projects' as const, link_path: '/projects' })),
+    ...obligations.map(o => ({ title: o.title, date: o.next_due_date, module: 'compliance' as const, link_path: '/compliance' })),
+    ...events.map(e => ({ title: e.title, date: e.date_start, module: 'tutelles' as const, link_path: '/tutelles' })),
+  ];
+
+  return results
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, limit);
+}

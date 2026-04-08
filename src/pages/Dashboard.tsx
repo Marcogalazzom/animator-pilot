@@ -1,7 +1,9 @@
 import { useMemo, useId, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   BedDouble, Euro, Users, AlertTriangle,
   Clock, CalendarX, ChevronRight, Download,
+  CalendarClock, ShieldCheck, Landmark, Bell,
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar,
@@ -15,6 +17,7 @@ import type { AlertItem } from '@/components/AlertBanner';
 import type { KpiStatus } from '@/components/KpiCard';
 import { useDashboardData } from './dashboard/useDashboardData';
 import { exportDashboardPdf } from '@/utils/pdfExport';
+import { AUTHORITY_LABELS, AUTHORITY_COLORS } from './tutelles/useTutellesData';
 import './Dashboard.css';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -112,10 +115,38 @@ function BudgetTooltip({ active, payload, label }: TooltipProps) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+
+function daysFromNow(dateStr: string): number {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr);
+  target.setHours(0, 0, 0, 0);
+  return Math.round((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+const MODULE_COLORS: Record<string, string> = {
+  projects:   'var(--color-primary)',
+  compliance: 'var(--color-success)',
+  tutelles:   'var(--color-warning)',
+};
+
+const MODULE_LABELS: Record<string, string> = {
+  projects:   'Projets',
+  compliance: 'Conformité',
+  tutelles:   'Tutelles',
+};
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export default function Dashboard() {
-  const { kpis, occupationMonths, budgetMonths, overdueProjects, loading, error } = useDashboardData();
+  const {
+    kpis, occupationMonths, budgetMonths, overdueProjects, loading, error,
+    complianceStats, upcomingEvents, upcomingDeadlines, unreadAlertCount,
+  } = useDashboardData();
   const gradientId = useId();
   const [exporting, setExporting] = useState(false);
+  const navigate = useNavigate();
 
   const handleExportPdf = useCallback(async () => {
     if (exporting) return;
@@ -220,32 +251,58 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Export PDF button */}
-        <button
-          onClick={handleExportPdf}
-          disabled={exporting}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 16px',
-            backgroundColor: exporting ? 'var(--color-border)' : 'var(--color-primary)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '6px',
-            fontSize: '13px',
-            fontWeight: 600,
-            fontFamily: 'var(--font-sans)',
-            cursor: exporting ? 'not-allowed' : 'pointer',
-            flexShrink: 0,
-            transition: 'background-color 0.15s ease, opacity 0.15s ease',
-            opacity: exporting ? 0.7 : 1,
-          }}
-          title="Exporter le rapport en PDF"
-        >
-          <Download size={14} />
-          {exporting ? 'Export en cours…' : 'Exporter PDF'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+          {/* Unread alerts badge */}
+          {unreadAlertCount > 0 && (
+            <button
+              onClick={() => navigate('/settings')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 14px',
+                backgroundColor: 'rgba(220,38,38,0.08)',
+                color: 'var(--color-danger)',
+                border: '1px solid rgba(220,38,38,0.2)',
+                borderRadius: '6px',
+                fontSize: '13px',
+                fontWeight: 600,
+                fontFamily: 'var(--font-sans)',
+                cursor: 'pointer',
+              }}
+              title="Alertes non lues"
+            >
+              <Bell size={14} />
+              {unreadAlertCount} alerte{unreadAlertCount > 1 ? 's' : ''}
+            </button>
+          )}
+
+          {/* Export PDF button */}
+          <button
+            onClick={handleExportPdf}
+            disabled={exporting}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 16px',
+              backgroundColor: exporting ? 'var(--color-border)' : 'var(--color-primary)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: 600,
+              fontFamily: 'var(--font-sans)',
+              cursor: exporting ? 'not-allowed' : 'pointer',
+              transition: 'background-color 0.15s ease, opacity 0.15s ease',
+              opacity: exporting ? 0.7 : 1,
+            }}
+            title="Exporter le rapport en PDF"
+          >
+            <Download size={14} />
+            {exporting ? 'Export en cours…' : 'Exporter PDF'}
+          </button>
+        </div>
       </div>
 
       {/* ── DB error warning ── */}
@@ -264,11 +321,16 @@ export default function Dashboard() {
       )}
 
       {/* ── B. KPI Cards row ── */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '16px',
-      }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '16px',
+          cursor: 'pointer',
+        }}
+        onClick={() => navigate('/kpis')}
+        title="Voir tous les indicateurs"
+      >
         <KpiCard
           label="Taux d'occupation"
           value={kpis.taux_occupation.current.toFixed(1)}
@@ -439,7 +501,306 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── E. Overdue projects ── */}
+      {/* ── E. New sections: Deadlines + Compliance/Tutelles ── */}
+
+      {/* Prochaines échéances */}
+      <div style={{
+        backgroundColor: 'var(--color-surface)',
+        borderRadius: '8px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        overflow: 'hidden',
+        borderLeft: '3px solid var(--color-primary)',
+      }}>
+        <div style={{
+          padding: '16px 20px',
+          borderBottom: upcomingDeadlines.length > 0 ? '1px solid var(--color-border)' : 'none',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+        }}>
+          <CalendarClock size={16} style={{ color: 'var(--color-primary)' }} />
+          <h2 style={{
+            fontFamily: 'var(--font-sans)',
+            fontSize: '14px',
+            fontWeight: 600,
+            color: 'var(--color-text-primary)',
+            margin: 0,
+            flex: 1,
+          }}>
+            Prochaines échéances
+          </h2>
+          <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
+            Tous modules
+          </span>
+        </div>
+
+        {upcomingDeadlines.length === 0 ? (
+          <div style={{ padding: '24px 20px', fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
+            Aucune échéance prochaine
+          </div>
+        ) : (
+          <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+            {upcomingDeadlines.map((d, i) => {
+              const days = daysFromNow(d.date);
+              const isOverdue = days < 0;
+              const isUrgent  = days >= 0 && days <= 7;
+              const badgeColor = isOverdue ? 'var(--color-danger)' : isUrgent ? 'var(--color-warning)' : 'var(--color-text-secondary)';
+              return (
+                <li
+                  key={`${d.module}-${i}`}
+                  onClick={() => navigate(d.link_path)}
+                  style={{
+                    padding: '10px 20px',
+                    borderBottom: i < upcomingDeadlines.length - 1 ? '1px solid var(--color-border)' : 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.15s ease',
+                  }}
+                  className="overdue-project-item"
+                >
+                  {/* Module dot */}
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: MODULE_COLORS[d.module] ?? 'var(--color-border)',
+                    flexShrink: 0,
+                  }} />
+
+                  {/* Title + module label */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{
+                      margin: 0,
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      color: 'var(--color-text-primary)',
+                      fontFamily: 'var(--font-sans)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {d.title}
+                    </p>
+                    <p style={{
+                      margin: '1px 0 0',
+                      fontSize: '11px',
+                      color: 'var(--color-text-secondary)',
+                      fontFamily: 'var(--font-sans)',
+                    }}>
+                      {MODULE_LABELS[d.module]}
+                    </p>
+                  </div>
+
+                  {/* Date */}
+                  <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)', flexShrink: 0 }}>
+                    {formatDate(d.date)}
+                  </span>
+
+                  {/* Days badge */}
+                  <span style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    fontFamily: 'var(--font-sans)',
+                    color: badgeColor,
+                    backgroundColor: `${badgeColor}18`,
+                    borderRadius: '4px',
+                    padding: '2px 7px',
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {isOverdue ? `il y a ${Math.abs(days)}j` : days === 0 ? 'Aujourd\'hui' : `dans ${days}j`}
+                  </span>
+
+                  <ChevronRight size={14} style={{ color: 'var(--color-border)', flexShrink: 0 }} />
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      {/* Compliance + Tutelles summary cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+
+        {/* Conformité card */}
+        <div
+          onClick={() => navigate('/compliance')}
+          style={{
+            backgroundColor: 'var(--color-surface)',
+            borderRadius: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+            padding: '20px',
+            borderLeft: '3px solid var(--color-success)',
+            cursor: 'pointer',
+            transition: 'box-shadow 0.15s ease',
+          }}
+          className="overdue-project-item"
+        >
+          {/* Card header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+            <ShieldCheck size={16} style={{ color: 'var(--color-success)' }} />
+            <h2 style={{
+              fontFamily: 'var(--font-sans)',
+              fontSize: '14px',
+              fontWeight: 600,
+              color: 'var(--color-text-primary)',
+              margin: 0,
+              flex: 1,
+            }}>
+              Conformité
+            </h2>
+            <ChevronRight size={14} style={{ color: 'var(--color-border)' }} />
+          </div>
+
+          {/* Stats row */}
+          <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: 'var(--color-success)', fontFamily: 'var(--font-sans)' }}>
+                {complianceStats.compliant}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
+                conformes
+              </p>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: 'var(--color-danger)', fontFamily: 'var(--font-sans)' }}>
+                {complianceStats.overdue}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
+                en retard
+              </p>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: 'var(--color-warning)', fontFamily: 'var(--font-sans)' }}>
+                {complianceStats.upcoming30}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
+                dans 30j
+              </p>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          {complianceStats.total > 0 && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
+                  Taux de conformité
+                </span>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-success)', fontFamily: 'var(--font-sans)' }}>
+                  {Math.round((complianceStats.compliant / complianceStats.total) * 100)}%
+                </span>
+              </div>
+              <div style={{
+                height: '6px',
+                backgroundColor: 'var(--color-border)',
+                borderRadius: '3px',
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  height: '100%',
+                  width: `${Math.round((complianceStats.compliant / complianceStats.total) * 100)}%`,
+                  backgroundColor: 'var(--color-success)',
+                  borderRadius: '3px',
+                  transition: 'width 0.6s ease',
+                }} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Tutelles card */}
+        <div
+          onClick={() => navigate('/tutelles')}
+          style={{
+            backgroundColor: 'var(--color-surface)',
+            borderRadius: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+            padding: '20px',
+            borderLeft: '3px solid var(--color-warning)',
+            cursor: 'pointer',
+            transition: 'box-shadow 0.15s ease',
+          }}
+          className="overdue-project-item"
+        >
+          {/* Card header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+            <Landmark size={16} style={{ color: 'var(--color-warning)' }} />
+            <h2 style={{
+              fontFamily: 'var(--font-sans)',
+              fontSize: '14px',
+              fontWeight: 600,
+              color: 'var(--color-text-primary)',
+              margin: 0,
+              flex: 1,
+            }}>
+              Tutelles
+            </h2>
+            <ChevronRight size={14} style={{ color: 'var(--color-border)' }} />
+          </div>
+
+          {/* Events list */}
+          {upcomingEvents.length === 0 ? (
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
+              Aucun événement à venir (60 jours)
+            </p>
+          ) : (
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {upcomingEvents.map(ev => {
+                const prepPct = ev.total_items > 0 ? Math.round((ev.done_items / ev.total_items) * 100) : 0;
+                const authorityColor = AUTHORITY_COLORS[ev.authority] ?? 'var(--color-text-secondary)';
+                return (
+                  <li key={ev.id}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{
+                          margin: 0,
+                          fontSize: '13px',
+                          fontWeight: 500,
+                          color: 'var(--color-text-primary)',
+                          fontFamily: 'var(--font-sans)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {ev.title}
+                        </p>
+                        <p style={{ margin: '2px 0 0', fontSize: '11px', color: authorityColor, fontFamily: 'var(--font-sans)', fontWeight: 500 }}>
+                          {AUTHORITY_LABELS[ev.authority] ?? ev.authority} · {ev.date_start ? formatDate(ev.date_start) : '—'}
+                        </p>
+                      </div>
+                      <span style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        fontFamily: 'var(--font-sans)',
+                        color: 'var(--color-text-secondary)',
+                        flexShrink: 0,
+                      }}>
+                        {prepPct}%
+                      </span>
+                    </div>
+                    {ev.total_items > 0 && (
+                      <div style={{ height: '4px', backgroundColor: 'var(--color-border)', borderRadius: '2px', overflow: 'hidden' }}>
+                        <div style={{
+                          height: '100%',
+                          width: `${prepPct}%`,
+                          backgroundColor: prepPct >= 100 ? 'var(--color-success)' : 'var(--color-warning)',
+                          borderRadius: '2px',
+                          transition: 'width 0.6s ease',
+                        }} />
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      {/* ── F. Overdue projects ── */}
       <div style={{
         backgroundColor: 'var(--color-surface)',
         borderRadius: '8px',
@@ -499,6 +860,7 @@ export default function Dashboard() {
               <li
                 key={project.id}
                 className="overdue-project-item"
+                onClick={() => navigate('/projects')}
                 style={{
                   padding: '12px 20px',
                   borderBottom: i < overdueProjects.length - 1 ? '1px solid var(--color-border)' : 'none',
@@ -506,6 +868,7 @@ export default function Dashboard() {
                   alignItems: 'center',
                   gap: '12px',
                   transition: 'background-color 0.15s ease',
+                  cursor: 'pointer',
                 }}
               >
                 {/* Status dot */}
