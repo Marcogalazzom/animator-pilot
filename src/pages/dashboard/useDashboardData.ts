@@ -11,35 +11,42 @@ export const MOCK_KPIS = {
   evenements_indesirables: { current: 3,  previous: 5    },
 };
 
-export const MOCK_OCCUPATION_MONTHS = [
-  { month: 'Jan', value: 91 },
-  { month: 'Fév', value: 92 },
-  { month: 'Mar', value: 93 },
-  { month: 'Avr', value: 94 },
-  { month: 'Mai', value: 93 },
-  { month: 'Jun', value: 95 },
-  { month: 'Jul', value: 92 },
-  { month: 'Aoû', value: 88 },
-  { month: 'Sep', value: 93 },
-  { month: 'Oct', value: 94 },
-  { month: 'Nov', value: 95 },
-  { month: 'Déc', value: 94 },
-];
+// Generate last 12 months labels relative to current month
+function getLast12Months(): { label: string; period: string }[] {
+  const MONTH_SHORT = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+  const now = new Date();
+  const result: { label: string; period: string }[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const m = d.getMonth();
+    const y = d.getFullYear();
+    result.push({
+      label: `${MONTH_SHORT[m]} ${y % 100}`,
+      period: `${y}-${String(m + 1).padStart(2, '0')}`,
+    });
+  }
+  return result;
+}
 
-export const MOCK_BUDGET_MONTHS = [
-  { month: 'Jan', prevu: 160, realise: 155 },
-  { month: 'Fév', prevu: 160, realise: 162 },
-  { month: 'Mar', prevu: 165, realise: 160 },
-  { month: 'Avr', prevu: 165, realise: 168 },
-  { month: 'Mai', prevu: 170, realise: 172 },
-  { month: 'Jun', prevu: 170, realise: 169 },
-  { month: 'Jul', prevu: 175, realise: 171 },
-  { month: 'Aoû', prevu: 175, realise: 173 },
-  { month: 'Sep', prevu: 180, realise: 178 },
-  { month: 'Oct', prevu: 180, realise: 182 },
-  { month: 'Nov', prevu: 185, realise: 183 },
-  { month: 'Déc', prevu: 185, realise: 185 },
-];
+const LAST_12 = getLast12Months();
+
+// Mock occupation values for the last 12 months
+const OCCUP_VALUES = [91, 92, 93, 94, 93, 95, 92, 88, 93, 94, 95, 94];
+export const MOCK_OCCUPATION_MONTHS = LAST_12.map((m, i) => ({
+  month: m.label,
+  period: m.period,
+  value: OCCUP_VALUES[i],
+}));
+
+// Mock budget values for the last 12 months
+const BUDGET_BASE = [155, 162, 160, 168, 172, 169, 171, 173, 178, 182, 183, 185];
+const BUDGET_PREVU = [160, 160, 165, 165, 170, 170, 175, 175, 180, 180, 185, 185];
+export const MOCK_BUDGET_MONTHS = LAST_12.map((m, i) => ({
+  month: m.label,
+  period: m.period,
+  prevu: BUDGET_PREVU[i],
+  realise: BUDGET_BASE[i],
+}));
 
 export const MOCK_OVERDUE_PROJECTS: Project[] = [
   {
@@ -73,8 +80,8 @@ export interface KpiValues {
   evenements_indesirables:{ current: number; previous: number };
 }
 
-export interface OccupationMonth { month: string; value: number }
-export interface BudgetMonth     { month: string; prevu: number; realise: number }
+export interface OccupationMonth { month: string; period?: string; value: number }
+export interface BudgetMonth     { month: string; period?: string; prevu: number; realise: number }
 
 export interface DashboardData {
   kpis:             KpiValues;
@@ -147,10 +154,12 @@ export function useDashboardData(): DashboardData {
             .slice(-12);
           if (occupEntries.length > 0) {
             setOccupationMonths(
-              occupEntries.map(e => ({
-                month: new Date(e.period + '-01').toLocaleDateString('fr-FR', { month: 'short' }),
-                value: e.value,
-              }))
+              occupEntries.map(e => {
+                const d = new Date(e.period + '-01');
+                const monthStr = d.toLocaleDateString('fr-FR', { month: 'short' });
+                const yearStr = String(d.getFullYear() % 100);
+                return { month: `${monthStr} ${yearStr}`, period: e.period, value: e.value };
+              })
             );
           }
         }
