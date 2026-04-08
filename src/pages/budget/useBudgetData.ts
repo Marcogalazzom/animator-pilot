@@ -6,8 +6,12 @@ import {
   updateBudgetLine,
   deleteBudgetLine,
   getBudgetSummary,
+  getInvestments,
+  createInvestment,
+  updateInvestment,
+  deleteInvestment,
 } from '@/db';
-import type { BudgetSection, BudgetLine, BudgetLineType } from '@/db/types';
+import type { BudgetSection, BudgetLine, BudgetLineType, Investment } from '@/db/types';
 
 // ─── Template lines for new fiscal years ─────────────────────
 
@@ -86,6 +90,10 @@ export interface BudgetData {
   editLine: (id: number, updates: Partial<BudgetLine>) => Promise<void>;
   removeLine: (id: number) => Promise<void>;
   initFromTemplate: (sectionId: number, fiscalYear: number) => Promise<void>;
+  investments: Investment[];
+  addInvestment: (inv: Omit<Investment, 'id' | 'created_at'>) => Promise<number>;
+  editInvestment: (id: number, updates: Partial<Investment>) => Promise<void>;
+  removeInvestment: (id: number) => Promise<void>;
 }
 
 export function useBudgetData(): BudgetData {
@@ -95,6 +103,7 @@ export function useBudgetData(): BudgetData {
   const [sections, setSections] = useState<BudgetSection[]>([]);
   const [lines, setLines] = useState<BudgetLine[]>([]);
   const [summary, setSummary] = useState<SectionSummary[]>([]);
+  const [investments, setInvestments] = useState<Investment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -132,6 +141,10 @@ export function useBudgetData(): BudgetData {
         const dbLines = await getBudgetLines(selectedSectionId, selectedYear).catch(() => [] as BudgetLine[]);
         setLines(dbLines);
       }
+
+      // Load investments
+      const dbInvestments = await getInvestments(selectedYear).catch(() => [] as Investment[]);
+      setInvestments(dbInvestments);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -162,6 +175,22 @@ export function useBudgetData(): BudgetData {
 
   const removeLine = useCallback(async (id: number) => {
     await deleteBudgetLine(id);
+    await loadData();
+  }, [loadData]);
+
+  const addInvestment = useCallback(async (inv: Omit<Investment, 'id' | 'created_at'>) => {
+    const id = await createInvestment(inv);
+    await loadData();
+    return id;
+  }, [loadData]);
+
+  const editInvestment = useCallback(async (id: number, updates: Partial<Investment>) => {
+    await updateInvestment(id, updates);
+    await loadData();
+  }, [loadData]);
+
+  const removeInvestment = useCallback(async (id: number) => {
+    await deleteInvestment(id);
     await loadData();
   }, [loadData]);
 
@@ -197,5 +226,9 @@ export function useBudgetData(): BudgetData {
     editLine,
     removeLine,
     initFromTemplate,
+    investments,
+    addInvestment,
+    editInvestment,
+    removeInvestment,
   };
 }

@@ -9,6 +9,8 @@ import {
 } from 'recharts';
 
 import { useBudgetData, CHARGE_TITLES, PRODUIT_TITLES } from './budget/useBudgetData';
+import ERRDView from './budget/ERRDView';
+import InvestissementsView from './budget/InvestissementsView';
 import type { BudgetLine, BudgetLineType } from '@/db/types';
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -265,19 +267,23 @@ export default function Budget() {
         />
       )}
 
-      {(tab === 'errd' || tab === 'investissements') && (
-        <div style={{
-          backgroundColor: 'var(--color-surface)', borderRadius: '8px', padding: '48px 24px',
-          textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-        }}>
-          <FileSpreadsheet size={40} style={{ color: 'var(--color-border)', marginBottom: '12px' }} />
-          <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text-primary)', margin: '0 0 4px', fontFamily: 'var(--font-sans)' }}>
-            À venir dans la prochaine mise à jour
-          </p>
-          <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: 0, fontFamily: 'var(--font-sans)' }}>
-            {tab === 'errd' ? 'L\'État Réalisé des Recettes et Dépenses sera disponible prochainement.' : 'Le suivi des investissements sera disponible prochainement.'}
-          </p>
-        </div>
+      {tab === 'errd' && (
+        <ERRDView
+          sections={data.sections}
+          selectedSectionId={data.selectedSectionId}
+          onSelectSection={data.setSelectedSectionId}
+          lines={data.lines}
+          onEditRealise={async (id, amount) => { await data.editLine(id, { amount_realise: amount }); }}
+        />
+      )}
+
+      {tab === 'investissements' && (
+        <InvestissementsView
+          investments={data.investments}
+          fiscalYear={data.selectedYear}
+          onAdd={data.addInvestment}
+          onDelete={data.removeInvestment}
+        />
       )}
     </div>
   );
