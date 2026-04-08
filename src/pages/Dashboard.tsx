@@ -16,7 +16,7 @@ import AlertBanner   from '@/components/AlertBanner';
 import type { AlertItem } from '@/components/AlertBanner';
 import type { KpiStatus } from '@/components/KpiCard';
 import { useDashboardData } from './dashboard/useDashboardData';
-import { exportDashboardPdf } from '@/utils/pdfExport';
+import { exportDashboardPdf, exportMonthlyReport } from '@/utils/pdfExport';
 import { AUTHORITY_LABELS, AUTHORITY_COLORS } from './tutelles/useTutellesData';
 import './Dashboard.css';
 
@@ -146,6 +146,7 @@ export default function Dashboard() {
   } = useDashboardData();
   const gradientId = useId();
   const [exporting, setExporting] = useState(false);
+  const [exportingMonthly, setExportingMonthly] = useState(false);
   const navigate = useNavigate();
 
   const handleExportPdf = useCallback(async () => {
@@ -157,6 +158,16 @@ export default function Dashboard() {
       setExporting(false);
     }
   }, [exporting]);
+
+  const handleExportMonthly = useCallback(async () => {
+    if (exportingMonthly) return;
+    setExportingMonthly(true);
+    try {
+      await exportMonthlyReport();
+    } finally {
+      setExportingMonthly(false);
+    }
+  }, [exportingMonthly]);
 
   // Derive KPI statuses
   const occupStatus   = occupationStatus(kpis.taux_occupation.current);
@@ -276,6 +287,32 @@ export default function Dashboard() {
               {unreadAlertCount} alerte{unreadAlertCount > 1 ? 's' : ''}
             </button>
           )}
+
+          {/* Monthly report button */}
+          <button
+            onClick={handleExportMonthly}
+            disabled={exportingMonthly}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 16px',
+              backgroundColor: exportingMonthly ? 'var(--color-border)' : 'transparent',
+              color: exportingMonthly ? 'var(--color-text-secondary)' : 'var(--color-primary)',
+              border: '1.5px solid var(--color-primary)',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: 600,
+              fontFamily: 'var(--font-sans)',
+              cursor: exportingMonthly ? 'not-allowed' : 'pointer',
+              transition: 'background-color 0.15s ease, opacity 0.15s ease',
+              opacity: exportingMonthly ? 0.7 : 1,
+            }}
+            title="Exporter le rapport mensuel complet en PDF"
+          >
+            <Download size={14} />
+            {exportingMonthly ? 'Export en cours…' : 'Rapport mensuel'}
+          </button>
 
           {/* Export PDF button */}
           <button

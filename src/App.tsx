@@ -7,6 +7,7 @@ import Projects from "@/pages/Projects";
 import Compliance from "@/pages/Compliance";
 import Tutelles from "@/pages/Tutelles";
 import Notes from "@/pages/Notes";
+import Calendar from "@/pages/Calendar";
 import Veille from "@/pages/Veille";
 import Benchmarking from "@/pages/Benchmarking";
 import Import from "@/pages/Import";
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="/compliance" element={<Compliance />} />
           <Route path="/tutelles" element={<Tutelles />} />
           <Route path="/notes" element={<Notes />} />
+          <Route path="/calendar" element={<Calendar />} />
           <Route path="/veille" element={<Veille />} />
           <Route path="/benchmarking" element={<Benchmarking />} />
           <Route path="/import" element={<Import />} />
