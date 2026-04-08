@@ -1,7 +1,7 @@
-import { useMemo, useId } from 'react';
+import { useMemo, useId, useState, useCallback } from 'react';
 import {
   BedDouble, Euro, Users, AlertTriangle,
-  Clock, CalendarX, ChevronRight,
+  Clock, CalendarX, ChevronRight, Download,
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar,
@@ -14,6 +14,7 @@ import AlertBanner   from '@/components/AlertBanner';
 import type { AlertItem } from '@/components/AlertBanner';
 import type { KpiStatus } from '@/components/KpiCard';
 import { useDashboardData } from './dashboard/useDashboardData';
+import { exportDashboardPdf } from '@/utils/pdfExport';
 import './Dashboard.css';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -114,6 +115,17 @@ function BudgetTooltip({ active, payload, label }: TooltipProps) {
 export default function Dashboard() {
   const { kpis, occupationMonths, budgetMonths, overdueProjects, loading, error } = useDashboardData();
   const gradientId = useId();
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportPdf = useCallback(async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await exportDashboardPdf();
+    } finally {
+      setExporting(false);
+    }
+  }, [exporting]);
 
   // Derive KPI statuses
   const occupStatus   = occupationStatus(kpis.taux_occupation.current);
@@ -186,25 +198,54 @@ export default function Dashboard() {
     }}>
 
       {/* ── A. Page header ── */}
-      <div>
-        <h1 style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: '24px',
-          fontWeight: 700,
-          color: 'var(--color-text-primary)',
-          margin: 0,
-          lineHeight: 1.2,
-        }}>
-          Tableau de bord
-        </h1>
-        <p style={{
-          fontSize: '14px',
-          color: 'var(--color-text-secondary)',
-          margin: '4px 0 0',
-          fontFamily: 'var(--font-sans)',
-        }}>
-          Vue d'ensemble de votre établissement
-        </p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
+        <div>
+          <h1 style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '24px',
+            fontWeight: 700,
+            color: 'var(--color-text-primary)',
+            margin: 0,
+            lineHeight: 1.2,
+          }}>
+            Tableau de bord
+          </h1>
+          <p style={{
+            fontSize: '14px',
+            color: 'var(--color-text-secondary)',
+            margin: '4px 0 0',
+            fontFamily: 'var(--font-sans)',
+          }}>
+            Vue d'ensemble de votre établissement
+          </p>
+        </div>
+
+        {/* Export PDF button */}
+        <button
+          onClick={handleExportPdf}
+          disabled={exporting}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '8px 16px',
+            backgroundColor: exporting ? 'var(--color-border)' : 'var(--color-primary)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '6px',
+            fontSize: '13px',
+            fontWeight: 600,
+            fontFamily: 'var(--font-sans)',
+            cursor: exporting ? 'not-allowed' : 'pointer',
+            flexShrink: 0,
+            transition: 'background-color 0.15s ease, opacity 0.15s ease',
+            opacity: exporting ? 0.7 : 1,
+          }}
+          title="Exporter le rapport en PDF"
+        >
+          <Download size={14} />
+          {exporting ? 'Export en cours…' : 'Exporter PDF'}
+        </button>
       </div>
 
       {/* ── DB error warning ── */}
