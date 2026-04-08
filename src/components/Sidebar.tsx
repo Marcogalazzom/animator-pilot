@@ -3,7 +3,10 @@ import type { ReactElement } from "react";
 import {
   LayoutDashboard,
   BarChart3,
+  Wallet,
   FolderKanban,
+  ShieldCheck,
+  Landmark,
   Upload,
   Settings,
 } from "lucide-react";
@@ -20,7 +23,10 @@ interface NavLinkItemProps {
 const mainNavItems: NavLinkItemProps[] = [
   { to: "/", end: true, icon: <LayoutDashboard size={18} />, label: "Tableau de bord" },
   { to: "/kpis", icon: <BarChart3 size={18} />, label: "KPIs" },
+  { to: "/budget", icon: <Wallet size={18} />, label: "Budget" },
   { to: "/projects", icon: <FolderKanban size={18} />, label: "Projets" },
+  { to: "/compliance", icon: <ShieldCheck size={18} />, label: "Conformité" },
+  { to: "/tutelles", icon: <Landmark size={18} />, label: "Tutelles" },
   { to: "/import", icon: <Upload size={18} />, label: "Import" },
 ];
 
