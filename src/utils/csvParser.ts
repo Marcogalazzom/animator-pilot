@@ -228,7 +228,7 @@ export function buildImportPreview(
   return { mappedRows, warnings };
 }
 
-function tryConvertPeriod(raw: string): string | null {
+export function tryConvertPeriod(raw: string): string | null {
   // Try YYYY/MM or MM/YYYY or YYYY-M etc.
   const slashYM = raw.match(/^(\d{4})[\/\-](\d{1,2})$/);
   if (slashYM) return `${slashYM[1]}-${slashYM[2].padStart(2, '0')}`;
