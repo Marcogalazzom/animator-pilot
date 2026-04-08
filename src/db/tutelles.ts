@@ -18,6 +18,7 @@ const UPDATABLE_EVENT_FIELDS = new Set([
   'notes',
   'is_recurring',
   'recurrence_rule',
+  'linked_project_id',
 ]);
 
 const UPDATABLE_CORRESPONDENCE_FIELDS = new Set([

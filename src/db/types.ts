@@ -68,6 +68,7 @@ export interface ComplianceObligation {
   last_validated_date: string | null;
   document_path: string | null;
   is_builtin: number;
+  linked_project_id?: number | null;
   created_at: string;
 }
 
@@ -92,6 +93,7 @@ export interface BudgetLine {
   amount_realise: number;
   fiscal_year: number;
   period: string | null;
+  linked_obligation_id?: number | null;
   created_at: string;
 }
 
@@ -129,6 +131,7 @@ export interface AuthorityEvent {
   notes: string;
   is_recurring: number;
   recurrence_rule: string | null;
+  linked_project_id?: number | null;
   created_at: string;
 }
 
@@ -214,4 +217,34 @@ export interface AnapIndicator {
   fiscal_year: number;
   category: AnapCategory;
   created_at: string;
+}
+
+// ─── Alertes ─────────────────────────────────────────────────
+export type AlertSeverity = 'info' | 'warning' | 'critical';
+export type AlertRuleType = 'kpi_threshold' | 'deadline' | 'budget_overrun';
+export type AlertModule = 'kpi' | 'compliance' | 'tutelles' | 'budget' | 'projects';
+
+export interface AlertRule {
+  id: number;
+  rule_type: AlertRuleType;
+  module: AlertModule;
+  target_indicator: string | null;
+  condition_operator: string;
+  condition_value: number;
+  message_template: string;
+  is_active: number;
+  created_at: string;
+}
+
+export interface Alert {
+  id: number;
+  rule_id: number | null;
+  module: AlertModule;
+  severity: AlertSeverity;
+  title: string;
+  message: string;
+  link_path: string | null;
+  link_entity_id: number | null;
+  is_read: number;
+  triggered_at: string;
 }

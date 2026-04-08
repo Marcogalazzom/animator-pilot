@@ -27,6 +27,12 @@ pub fn run() {
             sql: include_str!("../migrations/004_seed_testdata.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 5,
+            description: "cross-module linking and alert system",
+            sql: include_str!("../migrations/005_phase4.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

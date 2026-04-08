@@ -10,6 +10,7 @@ const UPDATABLE_OBLIGATION_FIELDS = new Set([
   'next_due_date',
   'last_validated_date',
   'document_path',
+  'linked_project_id',
 ]);
 
 export async function getObligations(

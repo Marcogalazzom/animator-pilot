@@ -10,6 +10,7 @@ const UPDATABLE_BUDGET_LINE_FIELDS = new Set([
   'amount_realise',
   'fiscal_year',
   'period',
+  'linked_obligation_id',
 ]);
 
 const UPDATABLE_INVESTMENT_FIELDS = new Set([
