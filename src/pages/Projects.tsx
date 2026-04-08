@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Plus, LayoutGrid, List, X, ChevronRight, Trash2,
   Calendar, User, AlertCircle, CheckCircle2, Clock,
-  ArrowUpDown, ChevronUp, ChevronDown, Pencil, Check,
+  ArrowUpDown, ChevronUp, ChevronDown, Pencil, Check, ShieldCheck,
 } from 'lucide-react';
+import { getObligationByProjectId } from '@/db';
 import { useProjectsData } from './projects/useProjectsData';
 import type { Project, Action, ProjectStatus, ActionStatus } from './projects/useProjectsData';
 
@@ -488,6 +490,15 @@ function DetailPanel({
   onClose, onUpdateProject, onDeleteProject,
   onCreateAction, onUpdateAction, onDeleteAction,
 }: DetailPanelProps) {
+  const navigate = useNavigate();
+  const [linkedObligationTitle, setLinkedObligationTitle] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    getObligationByProjectId(project.id).then((ob) => {
+      setLinkedObligationTitle(ob ? ob.title : null);
+    });
+  }, [project.id]);
+
   // Editable fields
   const [editTitle, setEditTitle]       = useState(project.title);
   const [editDesc, setEditDesc]         = useState(project.description);
@@ -723,6 +734,31 @@ function DetailPanel({
           <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)', margin: 0, fontStyle: 'italic' }}>
             Enregistrement...
           </p>
+        )}
+
+        {/* ── Compliance badge ── */}
+        {linkedObligationTitle && (
+          <button
+            onClick={() => navigate('/compliance')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '5px 10px',
+              background: '#ECFDF5',
+              border: '1px solid rgba(5, 150, 105, 0.3)',
+              borderRadius: '20px',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-sans)',
+              fontSize: '12px',
+              fontWeight: 600,
+              color: '#059669',
+              width: 'fit-content',
+            }}
+          >
+            <ShieldCheck size={13} />
+            Obligation : {linkedObligationTitle}
+          </button>
         )}
 
         {/* ── Actions section ── */}

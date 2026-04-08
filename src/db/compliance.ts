@@ -89,6 +89,15 @@ export async function deleteObligation(id: number): Promise<void> {
   await db.execute('DELETE FROM compliance_obligations WHERE id = ?', [id]);
 }
 
+export async function getObligationByProjectId(projectId: number): Promise<ComplianceObligation | null> {
+  const db = await getDb();
+  const rows = await db.select<ComplianceObligation[]>(
+    'SELECT * FROM compliance_obligations WHERE linked_project_id = ?',
+    [projectId]
+  );
+  return rows[0] ?? null;
+}
+
 export async function getObligationStats(): Promise<{
   total: number;
   compliant: number;

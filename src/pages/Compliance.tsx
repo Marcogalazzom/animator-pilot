@@ -1,9 +1,11 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ShieldCheck, Calendar, FileText, Check,
   AlertTriangle, Clock, Plus, X, ChevronUp, ChevronDown,
-  ArrowUpDown, Trash2, ExternalLink,
+  ArrowUpDown, Trash2, ExternalLink, FolderKanban,
 } from 'lucide-react';
+import { getProject, createProject } from '@/db';
 import { useComplianceData } from './compliance/useComplianceData';
 import type { ComplianceFilters } from './compliance/useComplianceData';
 import type {
@@ -837,6 +839,43 @@ function DetailPanel({ obligation, onClose, onUpdate, onDelete, onMarkCompliant 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting]     = useState(false);
   const [marking, setMarking]       = useState(false);
+  const [linkedProjectTitle, setLinkedProjectTitle] = useState<string | null>(null);
+  const [linkingProject, setLinkingProject] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (obligation.linked_project_id) {
+      getProject(obligation.linked_project_id).then((p) => {
+        setLinkedProjectTitle(p ? p.title : null);
+      });
+    } else {
+      setLinkedProjectTitle(null);
+    }
+  }, [obligation.linked_project_id]);
+
+  async function handleCreateLinkedProject() {
+    setLinkingProject(true);
+    try {
+      const newId = await createProject({
+        title: obligation.title,
+        description: '',
+        owner_role: '',
+        status: 'todo',
+        start_date: null,
+        due_date: null,
+      });
+      await onUpdate(obligation.id, { linked_project_id: newId });
+      const proj = await getProject(newId);
+      setLinkedProjectTitle(proj ? proj.title : obligation.title);
+    } finally {
+      setLinkingProject(false);
+    }
+  }
+
+  async function handleUnlinkProject() {
+    await onUpdate(obligation.id, { linked_project_id: null });
+    setLinkedProjectTitle(null);
+  }
 
   const catMeta = CATEGORY_META[editCategory];
   const overdue = isOverdue(obligation);
@@ -1094,6 +1133,64 @@ function DetailPanel({ obligation, onClose, onUpdate, onDelete, onMarkCompliant 
               )}
             </div>
           </div>
+        </div>
+
+        {/* Projet lié */}
+        <div style={{
+          borderRadius: '8px',
+          border: obligation.linked_project_id
+            ? '1px solid rgba(22, 163, 74, 0.35)'
+            : '1px dashed var(--color-border)',
+          borderLeft: obligation.linked_project_id
+            ? '3px solid #16A34A'
+            : '3px dashed var(--color-border)',
+          padding: '12px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          background: obligation.linked_project_id ? 'rgba(22,163,74,0.04)' : 'var(--color-bg)',
+        }}>
+          <FolderKanban size={15} style={{ color: obligation.linked_project_id ? '#16A34A' : 'var(--color-text-secondary)', flexShrink: 0 }} />
+          {obligation.linked_project_id && linkedProjectTitle !== null ? (
+            <>
+              <button
+                onClick={() => navigate('/projects')}
+                style={{ flex: 1, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0, fontFamily: 'var(--font-sans)', fontSize: '13px', fontWeight: 600, color: '#16A34A' }}
+              >
+                {linkedProjectTitle}
+              </button>
+              <button
+                onClick={handleUnlinkProject}
+                title="Délier le projet"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+              >
+                <X size={13} />
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={handleCreateLinkedProject}
+              disabled={linkingProject}
+              style={{
+                flex: 1,
+                background: 'none',
+                border: '1px solid var(--color-border)',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                padding: '5px 10px',
+                fontFamily: 'var(--font-sans)',
+                fontSize: '12px',
+                fontWeight: 500,
+                color: 'var(--color-text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}
+            >
+              <Plus size={12} />
+              {linkingProject ? 'Création...' : 'Créer un projet lié'}
+            </button>
+          )}
         </div>
 
         {/* Metadata */}

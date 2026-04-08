@@ -1,8 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Landmark, Calendar, Mail, Phone, Users,
-  Plus, X, ChevronRight, Loader2, Trash2, Square, CheckSquare,
+  Plus, X, ChevronRight, Loader2, Trash2, Square, CheckSquare, FolderKanban,
 } from 'lucide-react';
+import { getProject, createProject } from '@/db';
 import {
   useTutellesData, AUTHORITY_LABELS, AUTHORITY_COLORS,
   EVENT_TYPE_LABELS, STATUS_LABELS, CORR_TYPE_LABELS, CORR_DIR_LABELS, CORR_STATUS_LABELS,
@@ -427,6 +429,43 @@ interface DetailPanelProps {
 function DetailPanel({ event, checklist, correspondences, onClose, onEditEvent, onDeleteEvent, onAddCheckItem, onEditCheckItem, onRemoveCheckItem }: DetailPanelProps) {
   const [newItem, setNewItem] = useState('');
   const [confirmDel, setConfirmDel] = useState(false);
+  const [linkedProjectTitle, setLinkedProjectTitle] = useState<string | null>(null);
+  const [linkingProject, setLinkingProject] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (event.linked_project_id) {
+      getProject(event.linked_project_id).then((p) => {
+        setLinkedProjectTitle(p ? p.title : null);
+      });
+    } else {
+      setLinkedProjectTitle(null);
+    }
+  }, [event.linked_project_id]);
+
+  async function handleCreateLinkedProject() {
+    setLinkingProject(true);
+    try {
+      const newId = await createProject({
+        title: event.title,
+        description: '',
+        owner_role: '',
+        status: 'todo',
+        start_date: null,
+        due_date: null,
+      });
+      await onEditEvent(event.id, { linked_project_id: newId });
+      const proj = await getProject(newId);
+      setLinkedProjectTitle(proj ? proj.title : event.title);
+    } finally {
+      setLinkingProject(false);
+    }
+  }
+
+  async function handleUnlinkProject() {
+    await onEditEvent(event.id, { linked_project_id: null });
+    setLinkedProjectTitle(null);
+  }
 
   const selectStyle: React.CSSProperties = { ...inputStyle, width: 'auto' };
   const doneCount = checklist.filter((c) => c.is_done).length;
@@ -547,6 +586,65 @@ function DetailPanel({ event, checklist, correspondences, onClose, onEditEvent, 
               ))}
             </div>
           )}
+
+          {/* Projet lié */}
+          <div style={{
+            marginBottom: '20px',
+            borderRadius: '8px',
+            border: event.linked_project_id
+              ? '1px solid rgba(22, 163, 74, 0.35)'
+              : '1px dashed var(--color-border)',
+            borderLeft: event.linked_project_id
+              ? '3px solid #16A34A'
+              : '3px dashed var(--color-border)',
+            padding: '12px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            background: event.linked_project_id ? 'rgba(22,163,74,0.04)' : 'var(--color-bg)',
+          }}>
+            <FolderKanban size={15} style={{ color: event.linked_project_id ? '#16A34A' : 'var(--color-text-secondary)', flexShrink: 0 }} />
+            {event.linked_project_id && linkedProjectTitle !== null ? (
+              <>
+                <button
+                  onClick={() => navigate('/projects')}
+                  style={{ flex: 1, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0, fontFamily: 'var(--font-sans)', fontSize: '13px', fontWeight: 600, color: '#16A34A' }}
+                >
+                  {linkedProjectTitle}
+                </button>
+                <button
+                  onClick={handleUnlinkProject}
+                  title="Délier le projet"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                >
+                  <X size={13} />
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={handleCreateLinkedProject}
+                disabled={linkingProject}
+                style={{
+                  flex: 1,
+                  background: 'none',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                  padding: '5px 10px',
+                  fontFamily: 'var(--font-sans)',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  color: 'var(--color-text-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                }}
+              >
+                <Plus size={12} />
+                {linkingProject ? 'Création...' : 'Créer un projet lié'}
+              </button>
+            )}
+          </div>
 
           {/* Delete */}
           <div style={{ paddingTop: '16px', borderTop: '1px solid var(--color-border)' }}>
