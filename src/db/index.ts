@@ -11,3 +11,4 @@ export * from './documents';
 export * from './veille';
 export * from './anap';
 export * from './alerts';
+export * from './search';
