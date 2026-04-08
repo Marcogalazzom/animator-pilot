@@ -21,6 +21,12 @@ pub fn run() {
             sql: include_str!("../migrations/003_phase3.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "seed realistic test data for all modules",
+            sql: include_str!("../migrations/004_seed_testdata.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

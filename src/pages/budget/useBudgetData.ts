@@ -70,6 +70,9 @@ export interface SectionSummary {
   totalCharges: number;
   totalProduits: number;
   result: number;
+  totalChargesRealise: number;
+  totalProduitsRealise: number;
+  resultRealise: number;
 }
 
 // ─── Hook ────────────────────────────────────────────────────
@@ -125,13 +128,20 @@ export function useBudgetData(): BudgetData {
 
       // Build summary with labels
       const summaryWithLabels: SectionSummary[] = dbSections.map((s) => {
-        const match = dbSummary.find((r: { section: string }) => r.section === s.name);
+        const match = dbSummary.find((r: { section: string }) => r.section === s.label) as unknown as Record<string, number> | undefined;
+        const cp = match?.totalChargesPrevu ?? 0;
+        const pp = match?.totalProduitsPrevu ?? 0;
+        const cr = match?.totalChargesRealise ?? 0;
+        const pr = match?.totalProduitsRealise ?? 0;
         return {
           section: s.name,
           label: s.label,
-          totalCharges: (match as { totalCharges?: number })?.totalCharges ?? 0,
-          totalProduits: (match as { totalProduits?: number })?.totalProduits ?? 0,
-          result: ((match as { totalProduits?: number })?.totalProduits ?? 0) - ((match as { totalCharges?: number })?.totalCharges ?? 0),
+          totalCharges: cp,
+          totalProduits: pp,
+          result: pp - cp,
+          totalChargesRealise: cr,
+          totalProduitsRealise: pr,
+          resultRealise: pr - cr,
         };
       });
       setSummary(summaryWithLabels);

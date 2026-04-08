@@ -107,10 +107,12 @@ export async function deleteBudgetLine(id: number): Promise<void> {
 
 export async function getBudgetSummary(
   fiscalYear: number
-): Promise<{ section: string; totalCharges: number; totalProduits: number; result: number }[]> {
+): Promise<{ section: string; totalChargesPrevu: number; totalProduitsPrevu: number; totalChargesRealise: number; totalProduitsRealise: number }[]> {
   const db = await getDb();
-  const rows = await db.select<{ section: string; line_type: string; total: number }[]>(
-    `SELECT bs.label AS section, bl.line_type, SUM(bl.amount_realise) AS total
+  const rows = await db.select<{ section: string; line_type: string; total_prevu: number; total_realise: number }[]>(
+    `SELECT bs.label AS section, bl.line_type,
+            SUM(bl.amount_previsionnel) AS total_prevu,
+            SUM(bl.amount_realise) AS total_realise
      FROM budget_lines bl
      JOIN budget_sections bs ON bl.section_id = bs.id
      WHERE bl.fiscal_year = ?
@@ -118,24 +120,24 @@ export async function getBudgetSummary(
     [fiscalYear]
   );
 
-  const map = new Map<string, { totalCharges: number; totalProduits: number }>();
+  const map = new Map<string, { totalChargesPrevu: number; totalProduitsPrevu: number; totalChargesRealise: number; totalProduitsRealise: number }>();
   for (const row of rows) {
     if (!map.has(row.section)) {
-      map.set(row.section, { totalCharges: 0, totalProduits: 0 });
+      map.set(row.section, { totalChargesPrevu: 0, totalProduitsPrevu: 0, totalChargesRealise: 0, totalProduitsRealise: 0 });
     }
     const entry = map.get(row.section)!;
     if (row.line_type === 'charge') {
-      entry.totalCharges = row.total ?? 0;
+      entry.totalChargesPrevu = row.total_prevu ?? 0;
+      entry.totalChargesRealise = row.total_realise ?? 0;
     } else {
-      entry.totalProduits = row.total ?? 0;
+      entry.totalProduitsPrevu = row.total_prevu ?? 0;
+      entry.totalProduitsRealise = row.total_realise ?? 0;
     }
   }
 
-  return Array.from(map.entries()).map(([section, { totalCharges, totalProduits }]) => ({
+  return Array.from(map.entries()).map(([section, data]) => ({
     section,
-    totalCharges,
-    totalProduits,
-    result: totalProduits - totalCharges,
+    ...data,
   }));
 }
 

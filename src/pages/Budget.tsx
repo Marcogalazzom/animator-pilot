@@ -152,8 +152,11 @@ export default function Budget() {
   const handleInitTemplate = useCallback(async () => {
     if (!data.selectedSectionId) return;
     setSaving(true);
-    await data.initFromTemplate(data.selectedSectionId, data.selectedYear);
-    setSaving(false);
+    try {
+      await data.initFromTemplate(data.selectedSectionId, data.selectedYear);
+    } finally {
+      setSaving(false);
+    }
   }, [data]);
 
   // ── Input style ──
@@ -475,7 +478,9 @@ function EPRDView(props: EPRDProps) {
             display: 'inline-flex', alignItems: 'center', gap: '6px',
             padding: '10px 20px', backgroundColor: 'var(--color-primary)', color: '#fff',
             border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
-            fontFamily: 'var(--font-sans)', cursor: 'pointer',
+            fontFamily: 'var(--font-sans)',
+            cursor: saving ? 'not-allowed' : 'pointer',
+            opacity: saving ? 0.6 : 1,
           }}
         >
           <FileSpreadsheet size={14} />
