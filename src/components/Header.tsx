@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -12,9 +13,10 @@ function formatFrenchDate(date: Date): string {
 
 export default function Header() {
   const navigate = useNavigate();
-  const today = formatFrenchDate(new Date());
-  // Capitalize first letter (weekday)
-  const dateDisplay = today.charAt(0).toUpperCase() + today.slice(1);
+  const dateDisplay = useMemo(() => {
+    const d = formatFrenchDate(new Date());
+    return d.charAt(0).toUpperCase() + d.slice(1);
+  }, []);
 
   return (
     <header
@@ -38,7 +40,6 @@ export default function Header() {
           Mon EHPAD
         </span>
         <span
-          className="hidden sm:block"
           style={{
             fontSize: "13px",
             color: "var(--color-text-secondary)",
@@ -51,7 +52,7 @@ export default function Header() {
       {/* Right: settings icon */}
       <button
         onClick={() => navigate("/settings")}
-        className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors duration-150 hover:bg-gray-100"
+        className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors duration-150"
         style={{ color: "var(--color-text-secondary)" }}
         aria-label="Paramètres"
         title="Paramètres"

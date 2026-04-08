@@ -1,0 +1,31 @@
+.sidebar-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px 10px 13px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 150ms ease;
+  color: var(--color-sidebar-text);
+  border-left: 3px solid transparent;
+  background-color: transparent;
+}
+
+.sidebar-nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+}
+
+.sidebar-nav-link[aria-current="page"] {
+  color: #ffffff;
+  border-left-color: var(--color-primary);
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-nav-icon {
+  flex-shrink: 0;
+  opacity: 0.85;
+  display: flex;
+}
