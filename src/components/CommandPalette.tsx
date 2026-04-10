@@ -3,11 +3,8 @@ import { useNavigate } from "react-router-dom";
 import {
   Search,
   FolderKanban,
-  ShieldCheck,
   FileText,
-  Landmark,
-  BookOpen,
-  BarChart3,
+  Palette,
   Plus,
   X,
 } from "lucide-react";
@@ -34,33 +31,17 @@ const MODULE_META: Record<
     icon: <FolderKanban size={15} />,
     color: "#1E40AF",
   },
-  conformite: {
-    label: "Conformité",
-    icon: <ShieldCheck size={15} />,
-    color: "#059669",
-  },
   notes: {
     label: "Notes",
     icon: <FileText size={15} />,
     color: "#D97706",
-  },
-  tutelles: {
-    label: "Tutelles",
-    icon: <Landmark size={15} />,
-    color: "#7C3AED",
-  },
-  veille: {
-    label: "Veille",
-    icon: <BookOpen size={15} />,
-    color: "#64748B",
   },
 };
 
 const QUICK_ACTIONS: QuickAction[] = [
   { label: "Nouveau projet", path: "/projects", icon: <FolderKanban size={16} /> },
   { label: "Nouvelle note", path: "/notes", icon: <FileText size={16} /> },
-  { label: "Saisir un KPI", path: "/kpis", icon: <BarChart3 size={16} /> },
-  { label: "Nouvel événement", path: "/tutelles", icon: <Landmark size={16} /> },
+  { label: "Nouvelle activité", path: "/activities", icon: <Palette size={16} /> },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -236,7 +217,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
           <input
             ref={inputRef}
             type="text"
-            placeholder="Rechercher projets, conformité, notes…"
+            placeholder="Rechercher projets, activités, notes…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             style={{

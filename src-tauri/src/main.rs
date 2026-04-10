@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    ehpad_pilot_lib::run()
+    pilot_animateur_lib::run()
 }

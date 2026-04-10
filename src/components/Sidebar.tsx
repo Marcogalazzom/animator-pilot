@@ -3,15 +3,15 @@ import { NavLink } from "react-router-dom";
 import type { ReactElement } from "react";
 import {
   LayoutDashboard,
-  BarChart3,
   Wallet,
   FolderKanban,
-  ShieldCheck,
-  Landmark,
   FileText,
   CalendarDays,
-  BookOpen,
-  Activity,
+  Palette,
+  Heart,
+  Package,
+  Users,
+  Camera,
   Upload,
   Settings,
   ChevronDown,
@@ -39,27 +39,27 @@ const navGroups: NavGroup[] = [
     label: "Pilotage",
     items: [
       { to: "/", end: true, icon: <LayoutDashboard size={18} />, label: "Tableau de bord" },
-      { to: "/kpis", icon: <BarChart3 size={18} />, label: "KPIs" },
       { to: "/budget", icon: <Wallet size={18} />, label: "Budget" },
-      { to: "/benchmarking", icon: <Activity size={18} />, label: "ANAP" },
+      { to: "/projects", icon: <FolderKanban size={18} />, label: "Projets" },
     ],
   },
   {
-    id: "gestion",
-    label: "Gestion",
+    id: "animation",
+    label: "Animation",
     items: [
-      { to: "/projects", icon: <FolderKanban size={18} />, label: "Projets" },
-      { to: "/notes", icon: <FileText size={18} />, label: "Notes" },
+      { to: "/activities", icon: <Palette size={18} />, label: "Ateliers & Activités" },
+      { to: "/residents", icon: <Heart size={18} />, label: "Résidents" },
+      { to: "/photos", icon: <Camera size={18} />, label: "Photos & CR" },
       { to: "/calendar", icon: <CalendarDays size={18} />, label: "Calendrier" },
     ],
   },
   {
-    id: "reglementaire",
-    label: "Réglementaire",
+    id: "ressources",
+    label: "Ressources",
     items: [
-      { to: "/compliance", icon: <ShieldCheck size={18} />, label: "Conformité" },
-      { to: "/tutelles", icon: <Landmark size={18} />, label: "Tutelles" },
-      { to: "/veille", icon: <BookOpen size={18} />, label: "Veille" },
+      { to: "/inventory", icon: <Package size={18} />, label: "Inventaire" },
+      { to: "/staff", icon: <Users size={18} />, label: "Annuaire" },
+      { to: "/notes", icon: <FileText size={18} />, label: "Notes" },
     ],
   },
   {
@@ -165,21 +165,21 @@ export default function Sidebar() {
           style={{
             width: "28px",
             height: "28px",
-            backgroundColor: "var(--color-primary)",
+            backgroundColor: "#7C3AED",
           }}
         >
           <span
             className="text-white font-bold"
             style={{ fontFamily: "var(--font-display)", fontSize: "14px", lineHeight: 1 }}
           >
-            E
+            A
           </span>
         </div>
         <h1
           className="text-white font-semibold leading-tight"
-          style={{ fontFamily: "var(--font-display)", fontSize: "18px" }}
+          style={{ fontFamily: "var(--font-display)", fontSize: "16px" }}
         >
-          EHPAD Pilot
+          Pilot Animateur
         </h1>
       </div>
 

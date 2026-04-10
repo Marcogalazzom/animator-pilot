@@ -60,7 +60,7 @@ export default function Header() {
             color: "var(--color-text-primary)",
           }}
         >
-          Mon EHPAD
+          Service Animation
         </span>
         <span
           style={{

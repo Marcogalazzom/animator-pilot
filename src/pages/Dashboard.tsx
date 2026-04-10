@@ -1,152 +1,61 @@
-import { useMemo, useId, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  BedDouble, Euro, Users, AlertTriangle,
+  Palette, Users, Camera, Package, Heart,
   Clock, CalendarX, ChevronRight, Download,
-  CalendarClock, ShieldCheck, Landmark, Bell,
+  CalendarDays, Bell, MapPin, AlertTriangle,
 } from 'lucide-react';
-import {
-  AreaChart, Area, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
-} from 'recharts';
 
-import KpiCard       from '@/components/KpiCard';
-import AlertBanner   from '@/components/AlertBanner';
-import type { AlertItem } from '@/components/AlertBanner';
-import type { KpiStatus } from '@/components/KpiCard';
+import KpiCard from '@/components/KpiCard';
 import { useDashboardData } from './dashboard/useDashboardData';
-import { exportDashboardPdf, exportMonthlyReport } from '@/utils/pdfExport';
-import { AUTHORITY_LABELS, AUTHORITY_COLORS } from './tutelles/useTutellesData';
+import { exportDashboardPdf } from '@/utils/pdfExport';
 import './Dashboard.css';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function trendPct(current: number, previous: number): string {
-  if (previous === 0) return '0%';
-  const delta = ((current - previous) / previous) * 100;
-  return (delta > 0 ? '+' : '') + delta.toFixed(1) + '%';
-}
-
-function trendDir(current: number, previous: number): 'up' | 'down' | 'neutral' {
-  if (current > previous) return 'up';
-  if (current < previous) return 'down';
-  return 'neutral';
-}
-
-function occupationStatus(value: number): KpiStatus {
-  if (value >= 90) return 'ok';
-  if (value >= 80) return 'warning';
-  return 'critical';
-}
-
-function absenteismeStatus(value: number): KpiStatus {
-  if (value <= 8)  return 'ok';
-  if (value <= 12) return 'warning';
-  return 'critical';
-}
-
-function evenementsStatus(value: number): KpiStatus {
-  if (value <= 3) return 'ok';
-  if (value <= 6) return 'warning';
-  return 'critical';
-}
-
-function budgetStatus(current: number, previous: number): KpiStatus {
-  const ratio = previous === 0 ? 1 : current / previous;
-  if (ratio <= 1.05) return 'ok';
-  if (ratio <= 1.15) return 'warning';
-  return 'critical';
-}
+// ─── Helpers ──────────────────────────────────────────────────
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(dateStr).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
-// ─── Custom Recharts components ───────────────────────────────────────────────
-
-interface TooltipProps {
-  active?:  boolean;
-  payload?: Array<{ value: number; name: string; color: string }>;
-  label?:   string;
-}
-
-function OccupationTooltip({ active, payload, label }: TooltipProps) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{
-      background: 'var(--color-surface)',
-      border: '1px solid var(--color-border)',
-      borderRadius: '6px',
-      padding: '8px 12px',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-      fontFamily: 'var(--font-sans)',
-    }}>
-      <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '2px' }}>{label}</p>
-      <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--color-primary)' }}>
-        {payload[0].value}%
-      </p>
-    </div>
-  );
-}
-
-function BudgetTooltip({ active, payload, label }: TooltipProps) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{
-      background: 'var(--color-surface)',
-      border: '1px solid var(--color-border)',
-      borderRadius: '6px',
-      padding: '8px 12px',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-      fontFamily: 'var(--font-sans)',
-      minWidth: '120px',
-    }}>
-      <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>{label}</p>
-      {payload.map((p, i) => (
-        <p key={i} style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: p.color }}>
-          {p.name}: {p.value} k€
-        </p>
-      ))}
-    </div>
-  );
-}
-
-// ─── Main component ───────────────────────────────────────────────────────────
-
-// ─── Date helpers ─────────────────────────────────────────────────────────────
-
-function daysFromNow(dateStr: string): number {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const target = new Date(dateStr);
-  target.setHours(0, 0, 0, 0);
-  return Math.round((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-const MODULE_COLORS: Record<string, string> = {
-  projects:   'var(--color-primary)',
-  compliance: 'var(--color-success)',
-  tutelles:   'var(--color-warning)',
+const ACTIVITY_COLORS: Record<string, string> = {
+  atelier_creatif:     '#7C3AED',
+  musique:             '#1E40AF',
+  jeux:                '#059669',
+  sortie:              '#D97706',
+  sport:               '#0F766E',
+  lecture:             '#8B5CF6',
+  cuisine:             '#EA580C',
+  bien_etre:           '#EC4899',
+  intergenerationnel:  '#0EA5E9',
+  fete:                '#DC2626',
+  other:               '#64748B',
 };
 
-const MODULE_LABELS: Record<string, string> = {
-  projects:   'Projets',
-  compliance: 'Conformité',
-  tutelles:   'Tutelles',
+const ACTIVITY_LABELS: Record<string, string> = {
+  atelier_creatif:     'Atelier créatif',
+  musique:             'Musique',
+  jeux:                'Jeux',
+  sortie:              'Sortie',
+  sport:               'Sport',
+  lecture:             'Lecture',
+  cuisine:             'Cuisine',
+  bien_etre:           'Bien-être',
+  intergenerationnel:  'Intergénérationnel',
+  fete:                'Fête',
+  other:               'Autre',
 };
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Main component ───────────────────────────────────────────
 
 export default function Dashboard() {
   const {
-    kpis, occupationMonths, budgetMonths, overdueProjects, loading, error,
-    complianceStats, upcomingEvents, upcomingDeadlines, unreadAlertCount,
+    activityStats, upcomingActivities, overdueProjects,
+    residentCount, inventoryToReplace, albumCount,
+    unreadAlertCount, loading, error,
   } = useDashboardData();
-  const gradientId = useId();
+
   const [exporting, setExporting] = useState(false);
-  const [exportingMonthly, setExportingMonthly] = useState(false);
   const navigate = useNavigate();
 
   const handleExportPdf = useCallback(async () => {
@@ -159,56 +68,7 @@ export default function Dashboard() {
     }
   }, [exporting]);
 
-  const handleExportMonthly = useCallback(async () => {
-    if (exportingMonthly) return;
-    setExportingMonthly(true);
-    try {
-      await exportMonthlyReport();
-    } finally {
-      setExportingMonthly(false);
-    }
-  }, [exportingMonthly]);
-
-  // Derive KPI statuses
-  const occupStatus   = occupationStatus(kpis.taux_occupation.current);
-  const absentStatus  = absenteismeStatus(kpis.taux_absenteisme.current);
-  const evenemStatus  = evenementsStatus(kpis.evenements_indesirables.current);
-  const budgetSt      = budgetStatus(kpis.budget_realise.current, kpis.budget_realise.previous);
-
-  // Build alerts list
-  const alerts = useMemo<AlertItem[]>(() => {
-    const list: AlertItem[] = [];
-    if (absentStatus !== 'ok') {
-      list.push({
-        indicator: 'taux_absenteisme',
-        value:     kpis.taux_absenteisme.current,
-        threshold: absentStatus === 'warning' ? 8 : 12,
-        severity:  absentStatus,
-        unit:      '%',
-      });
-    }
-    if (occupStatus !== 'ok') {
-      list.push({
-        indicator: 'taux_occupation',
-        value:     kpis.taux_occupation.current,
-        threshold: occupStatus === 'warning' ? 80 : 90,
-        severity:  occupStatus,
-        unit:      '%',
-      });
-    }
-    if (evenemStatus !== 'ok') {
-      list.push({
-        indicator: 'evenements_indesirables',
-        value:     kpis.evenements_indesirables.current,
-        threshold: evenemStatus === 'warning' ? 3 : 6,
-        severity:  evenemStatus,
-        unit:      '',
-      });
-    }
-    return list;
-  }, [kpis, absentStatus, occupStatus, evenemStatus]);
-
-  // ── Skeleton shimmer while loading ──
+  // ── Loading skeleton ──
   if (loading) {
     return (
       <div style={{ padding: '0', display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -219,11 +79,8 @@ export default function Dashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
           {[0,1,2,3].map(i => (
             <div key={i} style={{
-              height: '112px',
-              borderRadius: '8px',
-              background: 'var(--color-surface)',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-              borderLeft: '3px solid var(--color-border)',
+              height: '112px', borderRadius: '8px', background: 'var(--color-surface)',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)', borderLeft: '3px solid var(--color-border)',
             }} className="shimmer" />
           ))}
         </div>
@@ -232,109 +89,54 @@ export default function Dashboard() {
   }
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '24px',
-      maxWidth: '1400px',
-    }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '1400px' }}>
 
       {/* ── A. Page header ── */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
         <div>
           <h1 style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: '24px',
-            fontWeight: 700,
-            color: 'var(--color-text-primary)',
-            margin: 0,
-            lineHeight: 1.2,
+            fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: 700,
+            color: 'var(--color-text-primary)', margin: 0, lineHeight: 1.2,
           }}>
             Tableau de bord
           </h1>
           <p style={{
-            fontSize: '14px',
-            color: 'var(--color-text-secondary)',
-            margin: '4px 0 0',
-            fontFamily: 'var(--font-sans)',
+            fontSize: '14px', color: 'var(--color-text-secondary)',
+            margin: '4px 0 0', fontFamily: 'var(--font-sans)',
           }}>
-            Vue d'ensemble de votre établissement
+            Vue d'ensemble de l'animation
           </p>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-          {/* Unread alerts badge */}
           {unreadAlertCount > 0 && (
             <button
               onClick={() => navigate('/settings')}
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 14px',
-                backgroundColor: 'rgba(220,38,38,0.08)',
-                color: 'var(--color-danger)',
-                border: '1px solid rgba(220,38,38,0.2)',
-                borderRadius: '6px',
-                fontSize: '13px',
-                fontWeight: 600,
-                fontFamily: 'var(--font-sans)',
-                cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                padding: '8px 14px', backgroundColor: 'rgba(220,38,38,0.08)',
+                color: 'var(--color-danger)', border: '1px solid rgba(220,38,38,0.2)',
+                borderRadius: '6px', fontSize: '13px', fontWeight: 600,
+                fontFamily: 'var(--font-sans)', cursor: 'pointer',
               }}
-              title="Alertes non lues"
             >
               <Bell size={14} />
               {unreadAlertCount} alerte{unreadAlertCount > 1 ? 's' : ''}
             </button>
           )}
 
-          {/* Monthly report button */}
-          <button
-            onClick={handleExportMonthly}
-            disabled={exportingMonthly}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 16px',
-              backgroundColor: exportingMonthly ? 'var(--color-border)' : 'transparent',
-              color: exportingMonthly ? 'var(--color-text-secondary)' : 'var(--color-primary)',
-              border: '1.5px solid var(--color-primary)',
-              borderRadius: '6px',
-              fontSize: '13px',
-              fontWeight: 600,
-              fontFamily: 'var(--font-sans)',
-              cursor: exportingMonthly ? 'not-allowed' : 'pointer',
-              transition: 'background-color 0.15s ease, opacity 0.15s ease',
-              opacity: exportingMonthly ? 0.7 : 1,
-            }}
-            title="Exporter le rapport mensuel complet en PDF"
-          >
-            <Download size={14} />
-            {exportingMonthly ? 'Export en cours…' : 'Rapport mensuel'}
-          </button>
-
-          {/* Export PDF button */}
           <button
             onClick={handleExportPdf}
             disabled={exporting}
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
               padding: '8px 16px',
               backgroundColor: exporting ? 'var(--color-border)' : 'var(--color-primary)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '6px',
-              fontSize: '13px',
-              fontWeight: 600,
-              fontFamily: 'var(--font-sans)',
+              color: '#fff', border: 'none', borderRadius: '6px',
+              fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-sans)',
               cursor: exporting ? 'not-allowed' : 'pointer',
-              transition: 'background-color 0.15s ease, opacity 0.15s ease',
               opacity: exporting ? 0.7 : 1,
             }}
-            title="Exporter le rapport en PDF"
           >
             <Download size={14} />
             {exporting ? 'Export en cours…' : 'Exporter PDF'}
@@ -345,310 +147,144 @@ export default function Dashboard() {
       {/* ── DB error warning ── */}
       {error && (
         <div role="alert" style={{
-          backgroundColor: 'rgba(217,119,6,0.06)',
-          border: '1px solid var(--color-warning)',
-          borderRadius: '8px',
-          padding: '10px 16px',
-          fontSize: '13px',
-          color: 'var(--color-warning)',
-          fontFamily: 'var(--font-sans)',
+          backgroundColor: 'rgba(217,119,6,0.06)', border: '1px solid var(--color-warning)',
+          borderRadius: '8px', padding: '10px 16px', fontSize: '13px',
+          color: 'var(--color-warning)', fontFamily: 'var(--font-sans)',
         }}>
           Données de démonstration — la base de données n'est pas accessible.
         </div>
       )}
 
       {/* ── B. KPI Cards row ── */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '16px',
-          cursor: 'pointer',
-        }}
-        onClick={() => navigate('/kpis')}
-        title="Voir tous les indicateurs"
-      >
-        <KpiCard
-          label="Taux d'occupation"
-          value={kpis.taux_occupation.current.toFixed(1)}
-          unit="%"
-          status={occupStatus}
-          icon={<BedDouble size={16} />}
-          trend={{
-            direction: trendDir(kpis.taux_occupation.current, kpis.taux_occupation.previous),
-            value:     trendPct(kpis.taux_occupation.current, kpis.taux_occupation.previous),
-            upIsGood:  true,
-          }}
-        />
-        <KpiCard
-          label="Budget réalisé"
-          value={kpis.budget_realise.current.toString()}
-          unit="k€"
-          status={budgetSt}
-          icon={<Euro size={16} />}
-          trend={{
-            direction: trendDir(kpis.budget_realise.current, kpis.budget_realise.previous),
-            value:     trendPct(kpis.budget_realise.current, kpis.budget_realise.previous),
-            upIsGood:  false,
-          }}
-        />
-        <KpiCard
-          label="Taux d'absentéisme"
-          value={kpis.taux_absenteisme.current.toFixed(1)}
-          unit="%"
-          status={absentStatus}
-          icon={<Users size={16} />}
-          trend={{
-            direction: trendDir(kpis.taux_absenteisme.current, kpis.taux_absenteisme.previous),
-            value:     trendPct(kpis.taux_absenteisme.current, kpis.taux_absenteisme.previous),
-            upIsGood:  false,
-          }}
-        />
-        <KpiCard
-          label="Événements indésirables"
-          value={kpis.evenements_indesirables.current.toString()}
-          status={evenemStatus}
-          icon={<AlertTriangle size={16} />}
-          trend={{
-            direction: trendDir(kpis.evenements_indesirables.current, kpis.evenements_indesirables.previous),
-            value:     trendPct(kpis.evenements_indesirables.current, kpis.evenements_indesirables.previous),
-            upIsGood:  false,
-          }}
-        />
-      </div>
-
-      {/* ── D. Alerts banner (shown before charts for prominence) ── */}
-      {alerts.length > 0 && <AlertBanner alerts={alerts} />}
-
-      {/* ── C. Charts section ── */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
         gap: '16px',
       }}>
-
-        {/* Occupation line chart */}
-        <div style={{
-          backgroundColor: 'var(--color-surface)',
-          borderRadius: '8px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          padding: '20px',
-        }}>
-          <h2 style={{
-            fontFamily: 'var(--font-sans)',
-            fontSize: '14px',
-            fontWeight: 600,
-            color: 'var(--color-text-primary)',
-            margin: '0 0 4px',
-          }}>
-            Taux d'occupation
-          </h2>
-          <p style={{
-            fontSize: '12px',
-            color: 'var(--color-text-secondary)',
-            margin: '0 0 16px',
-          }}>
-            Évolution sur 12 mois
-          </p>
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={occupationMonths} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#1E40AF" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#1E40AF" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-              <XAxis
-                dataKey="month"
-                tick={{ fontSize: 11, fill: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                domain={[80, 100]}
-                tick={{ fontSize: 11, fill: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v: number) => `${v}%`}
-              />
-              <Tooltip content={<OccupationTooltip />} />
-              <Area
-                type="monotone"
-                dataKey="value"
-                stroke="#1E40AF"
-                strokeWidth={2}
-                fill={`url(#${gradientId})`}
-                dot={{ r: 3, fill: '#1E40AF', strokeWidth: 0 }}
-                activeDot={{ r: 5, fill: '#1E40AF', stroke: '#fff', strokeWidth: 2 }}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+        <div onClick={() => navigate('/activities')} style={{ cursor: 'pointer' }}>
+          <KpiCard
+            label="Activités ce mois"
+            value={activityStats.thisMonth.toString()}
+            status="ok"
+            icon={<Palette size={16} />}
+          />
         </div>
-
-        {/* Budget bar chart */}
-        <div style={{
-          backgroundColor: 'var(--color-surface)',
-          borderRadius: '8px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          padding: '20px',
-        }}>
-          <h2 style={{
-            fontFamily: 'var(--font-sans)',
-            fontSize: '14px',
-            fontWeight: 600,
-            color: 'var(--color-text-primary)',
-            margin: '0 0 4px',
-          }}>
-            Budget
-          </h2>
-          <p style={{
-            fontSize: '12px',
-            color: 'var(--color-text-secondary)',
-            margin: '0 0 16px',
-          }}>
-            Prévisionnel vs réalisé (k€)
-          </p>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={budgetMonths} margin={{ top: 4, right: 8, left: -20, bottom: 0 }} barCategoryGap="30%">
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-              <XAxis
-                dataKey="month"
-                tick={{ fontSize: 11, fill: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fontSize: 11, fill: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip content={<BudgetTooltip />} />
-              <Legend
-                verticalAlign="top"
-                align="right"
-                iconType="circle"
-                iconSize={8}
-                wrapperStyle={{ fontSize: '11px', fontFamily: 'var(--font-sans)', paddingBottom: '8px' }}
-              />
-              <Bar dataKey="prevu"   name="Prévisionnel" fill="#CBD5E1" radius={[3,3,0,0]} />
-              <Bar dataKey="realise" name="Réalisé"       fill="#1E40AF" radius={[3,3,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
+        <div onClick={() => navigate('/activities')} style={{ cursor: 'pointer' }}>
+          <KpiCard
+            label="Participants (année)"
+            value={activityStats.totalParticipants.toString()}
+            status="ok"
+            icon={<Users size={16} />}
+          />
+        </div>
+        <div onClick={() => navigate('/residents')} style={{ cursor: 'pointer' }}>
+          <KpiCard
+            label="Résidents"
+            value={residentCount.toString()}
+            status="ok"
+            icon={<Heart size={16} />}
+          />
+        </div>
+        <div onClick={() => navigate('/photos')} style={{ cursor: 'pointer' }}>
+          <KpiCard
+            label="Albums photos"
+            value={albumCount.toString()}
+            status="ok"
+            icon={<Camera size={16} />}
+          />
         </div>
       </div>
 
-      {/* ── E. New sections: Deadlines + Compliance/Tutelles ── */}
-
-      {/* Prochaines échéances */}
+      {/* ── C. Upcoming Activities ── */}
       <div style={{
-        backgroundColor: 'var(--color-surface)',
-        borderRadius: '8px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-        overflow: 'hidden',
-        borderLeft: '3px solid var(--color-primary)',
+        backgroundColor: 'var(--color-surface)', borderRadius: '8px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden',
+        borderLeft: '3px solid #7C3AED',
       }}>
         <div style={{
           padding: '16px 20px',
-          borderBottom: upcomingDeadlines.length > 0 ? '1px solid var(--color-border)' : 'none',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
+          borderBottom: upcomingActivities.length > 0 ? '1px solid var(--color-border)' : 'none',
+          display: 'flex', alignItems: 'center', gap: '10px',
         }}>
-          <CalendarClock size={16} style={{ color: 'var(--color-primary)' }} />
+          <CalendarDays size={16} style={{ color: '#7C3AED' }} />
           <h2 style={{
-            fontFamily: 'var(--font-sans)',
-            fontSize: '14px',
-            fontWeight: 600,
-            color: 'var(--color-text-primary)',
-            margin: 0,
-            flex: 1,
+            fontFamily: 'var(--font-sans)', fontSize: '14px', fontWeight: 600,
+            color: 'var(--color-text-primary)', margin: 0, flex: 1,
           }}>
-            Prochaines échéances
+            Prochaines activités
           </h2>
-          <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
-            Tous modules
-          </span>
+          <button
+            onClick={() => navigate('/activities')}
+            style={{
+              fontSize: '12px', color: 'var(--color-primary)', fontFamily: 'var(--font-sans)',
+              background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500,
+            }}
+          >
+            Voir tout
+          </button>
         </div>
 
-        {upcomingDeadlines.length === 0 ? (
+        {upcomingActivities.length === 0 ? (
           <div style={{ padding: '24px 20px', fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
-            Aucune échéance prochaine
+            Aucune activité planifiée
           </div>
         ) : (
           <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-            {upcomingDeadlines.map((d, i) => {
-              const days = daysFromNow(d.date);
-              const isOverdue = days < 0;
-              const isUrgent  = days >= 0 && days <= 7;
-              const badgeColor = isOverdue ? 'var(--color-danger)' : isUrgent ? 'var(--color-warning)' : 'var(--color-text-secondary)';
+            {upcomingActivities.map((a, i) => {
+              const color = ACTIVITY_COLORS[a.activity_type] ?? '#64748B';
               return (
                 <li
-                  key={`${d.module}-${i}`}
-                  onClick={() => navigate(d.link_path)}
+                  key={a.id}
+                  onClick={() => navigate('/activities')}
                   style={{
-                    padding: '10px 20px',
-                    borderBottom: i < upcomingDeadlines.length - 1 ? '1px solid var(--color-border)' : 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    cursor: 'pointer',
-                    transition: 'background-color 0.15s ease',
+                    padding: '12px 20px',
+                    borderBottom: i < upcomingActivities.length - 1 ? '1px solid var(--color-border)' : 'none',
+                    display: 'flex', alignItems: 'center', gap: '12px',
+                    cursor: 'pointer', transition: 'background-color 0.15s ease',
                   }}
                   className="overdue-project-item"
                 >
-                  {/* Module dot */}
+                  {/* Type dot */}
                   <div style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    backgroundColor: MODULE_COLORS[d.module] ?? 'var(--color-border)',
-                    flexShrink: 0,
+                    width: '8px', height: '8px', borderRadius: '50%',
+                    backgroundColor: color, flexShrink: 0,
                   }} />
 
-                  {/* Title + module label */}
+                  {/* Title + type */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{
-                      margin: 0,
-                      fontSize: '13px',
-                      fontWeight: 500,
-                      color: 'var(--color-text-primary)',
-                      fontFamily: 'var(--font-sans)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
+                      margin: 0, fontSize: '13px', fontWeight: 500,
+                      color: 'var(--color-text-primary)', fontFamily: 'var(--font-sans)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
-                      {d.title}
+                      {a.title}
                     </p>
                     <p style={{
-                      margin: '1px 0 0',
-                      fontSize: '11px',
-                      color: 'var(--color-text-secondary)',
-                      fontFamily: 'var(--font-sans)',
+                      margin: '1px 0 0', fontSize: '11px', color: 'var(--color-text-secondary)',
+                      fontFamily: 'var(--font-sans)', display: 'flex', alignItems: 'center', gap: '8px',
                     }}>
-                      {MODULE_LABELS[d.module]}
+                      <span style={{ color }}>{ACTIVITY_LABELS[a.activity_type] ?? a.activity_type}</span>
+                      {a.location && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                          <MapPin size={10} /> {a.location}
+                        </span>
+                      )}
                     </p>
                   </div>
 
-                  {/* Date */}
+                  {/* Date + time */}
                   <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)', flexShrink: 0 }}>
-                    {formatDate(d.date)}
+                    {formatDate(a.date)}
                   </span>
-
-                  {/* Days badge */}
-                  <span style={{
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    fontFamily: 'var(--font-sans)',
-                    color: badgeColor,
-                    backgroundColor: `${badgeColor}18`,
-                    borderRadius: '4px',
-                    padding: '2px 7px',
-                    flexShrink: 0,
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {isOverdue ? `il y a ${Math.abs(days)}j` : days === 0 ? 'Aujourd\'hui' : `dans ${days}j`}
-                  </span>
+                  {a.time_start && (
+                    <span style={{
+                      fontSize: '11px', fontWeight: 600, fontFamily: 'var(--font-sans)',
+                      color: '#7C3AED', backgroundColor: 'rgba(124,58,237,0.08)',
+                      borderRadius: '4px', padding: '2px 7px', flexShrink: 0,
+                    }}>
+                      {a.time_start}
+                    </span>
+                  )}
 
                   <ChevronRight size={14} style={{ color: 'var(--color-border)', flexShrink: 0 }} />
                 </li>
@@ -658,233 +294,126 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Compliance + Tutelles summary cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+      {/* ── D. Quick access cards ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
 
-        {/* Conformité card */}
+        {/* Inventory alert card */}
         <div
-          onClick={() => navigate('/compliance')}
+          onClick={() => navigate('/inventory')}
           style={{
-            backgroundColor: 'var(--color-surface)',
-            borderRadius: '8px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-            padding: '20px',
-            borderLeft: '3px solid var(--color-success)',
-            cursor: 'pointer',
-            transition: 'box-shadow 0.15s ease',
+            backgroundColor: 'var(--color-surface)', borderRadius: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)', padding: '20px',
+            borderLeft: '3px solid var(--color-warning)', cursor: 'pointer',
           }}
           className="overdue-project-item"
         >
-          {/* Card header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-            <ShieldCheck size={16} style={{ color: 'var(--color-success)' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+            <Package size={16} style={{ color: 'var(--color-warning)' }} />
             <h2 style={{
-              fontFamily: 'var(--font-sans)',
-              fontSize: '14px',
-              fontWeight: 600,
-              color: 'var(--color-text-primary)',
-              margin: 0,
-              flex: 1,
+              fontFamily: 'var(--font-sans)', fontSize: '14px', fontWeight: 600,
+              color: 'var(--color-text-primary)', margin: 0, flex: 1,
             }}>
-              Conformité
+              Inventaire
             </h2>
             <ChevronRight size={14} style={{ color: 'var(--color-border)' }} />
           </div>
-
-          {/* Stats row */}
-          <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: 'var(--color-success)', fontFamily: 'var(--font-sans)' }}>
-                {complianceStats.compliant}
-              </p>
-              <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
-                conformes
-              </p>
+          {inventoryToReplace > 0 ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertTriangle size={14} style={{ color: 'var(--color-warning)' }} />
+              <span style={{ fontSize: '13px', color: 'var(--color-warning)', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
+                {inventoryToReplace} article{inventoryToReplace > 1 ? 's' : ''} à remplacer
+              </span>
             </div>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: 'var(--color-danger)', fontFamily: 'var(--font-sans)' }}>
-                {complianceStats.overdue}
-              </p>
-              <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
-                en retard
-              </p>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: 'var(--color-warning)', fontFamily: 'var(--font-sans)' }}>
-                {complianceStats.upcoming30}
-              </p>
-              <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
-                dans 30j
-              </p>
-            </div>
-          </div>
-
-          {/* Progress bar */}
-          {complianceStats.total > 0 && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
-                  Taux de conformité
-                </span>
-                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-success)', fontFamily: 'var(--font-sans)' }}>
-                  {Math.round((complianceStats.compliant / complianceStats.total) * 100)}%
-                </span>
-              </div>
-              <div style={{
-                height: '6px',
-                backgroundColor: 'var(--color-border)',
-                borderRadius: '3px',
-                overflow: 'hidden',
-              }}>
-                <div style={{
-                  height: '100%',
-                  width: `${Math.round((complianceStats.compliant / complianceStats.total) * 100)}%`,
-                  backgroundColor: 'var(--color-success)',
-                  borderRadius: '3px',
-                  transition: 'width 0.6s ease',
-                }} />
-              </div>
-            </div>
+          ) : (
+            <span style={{ fontSize: '13px', color: 'var(--color-success)', fontFamily: 'var(--font-sans)' }}>
+              Tout le matériel est en bon état
+            </span>
           )}
+          <p style={{ margin: '8px 0 0', fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
+            Synchronisé depuis planning-ehpad
+          </p>
         </div>
 
-        {/* Tutelles card */}
+        {/* Stats card */}
         <div
-          onClick={() => navigate('/tutelles')}
+          onClick={() => navigate('/activities')}
           style={{
-            backgroundColor: 'var(--color-surface)',
-            borderRadius: '8px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-            padding: '20px',
-            borderLeft: '3px solid var(--color-warning)',
-            cursor: 'pointer',
-            transition: 'box-shadow 0.15s ease',
+            backgroundColor: 'var(--color-surface)', borderRadius: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)', padding: '20px',
+            borderLeft: '3px solid var(--color-success)', cursor: 'pointer',
           }}
           className="overdue-project-item"
         >
-          {/* Card header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-            <Landmark size={16} style={{ color: 'var(--color-warning)' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+            <Palette size={16} style={{ color: 'var(--color-success)' }} />
             <h2 style={{
-              fontFamily: 'var(--font-sans)',
-              fontSize: '14px',
-              fontWeight: 600,
-              color: 'var(--color-text-primary)',
-              margin: 0,
-              flex: 1,
+              fontFamily: 'var(--font-sans)', fontSize: '14px', fontWeight: 600,
+              color: 'var(--color-text-primary)', margin: 0, flex: 1,
             }}>
-              Tutelles
+              Bilan animation
             </h2>
             <ChevronRight size={14} style={{ color: 'var(--color-border)' }} />
           </div>
-
-          {/* Events list */}
-          {upcomingEvents.length === 0 ? (
-            <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
-              Aucun événement à venir (60 jours)
-            </p>
-          ) : (
-            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {upcomingEvents.map(ev => {
-                const prepPct = ev.total_items > 0 ? Math.round((ev.done_items / ev.total_items) * 100) : 0;
-                const authorityColor = AUTHORITY_COLORS[ev.authority] ?? 'var(--color-text-secondary)';
-                return (
-                  <li key={ev.id}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
-                      <div style={{ minWidth: 0 }}>
-                        <p style={{
-                          margin: 0,
-                          fontSize: '13px',
-                          fontWeight: 500,
-                          color: 'var(--color-text-primary)',
-                          fontFamily: 'var(--font-sans)',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}>
-                          {ev.title}
-                        </p>
-                        <p style={{ margin: '2px 0 0', fontSize: '11px', color: authorityColor, fontFamily: 'var(--font-sans)', fontWeight: 500 }}>
-                          {AUTHORITY_LABELS[ev.authority] ?? ev.authority} · {ev.date_start ? formatDate(ev.date_start) : '—'}
-                        </p>
-                      </div>
-                      <span style={{
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        fontFamily: 'var(--font-sans)',
-                        color: 'var(--color-text-secondary)',
-                        flexShrink: 0,
-                      }}>
-                        {prepPct}%
-                      </span>
-                    </div>
-                    {ev.total_items > 0 && (
-                      <div style={{ height: '4px', backgroundColor: 'var(--color-border)', borderRadius: '2px', overflow: 'hidden' }}>
-                        <div style={{
-                          height: '100%',
-                          width: `${prepPct}%`,
-                          backgroundColor: prepPct >= 100 ? 'var(--color-success)' : 'var(--color-warning)',
-                          borderRadius: '2px',
-                          transition: 'width 0.6s ease',
-                        }} />
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+          <div style={{ display: 'flex', gap: '20px' }}>
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: 'var(--color-success)', fontFamily: 'var(--font-sans)' }}>
+                {activityStats.completedThisYear}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
+                réalisées (année)
+              </p>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#7C3AED', fontFamily: 'var(--font-sans)' }}>
+                {activityStats.upcoming}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
+                à venir
+              </p>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: 'var(--color-primary)', fontFamily: 'var(--font-sans)' }}>
+                {activityStats.totalParticipants}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
+                participants
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* ── F. Overdue projects ── */}
+      {/* ── E. Overdue projects ── */}
       <div style={{
-        backgroundColor: 'var(--color-surface)',
-        borderRadius: '8px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-        overflow: 'hidden',
+        backgroundColor: 'var(--color-surface)', borderRadius: '8px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden',
       }}>
-        {/* Section header */}
         <div style={{
           padding: '16px 20px',
           borderBottom: overdueProjects.length > 0 ? '1px solid var(--color-border)' : 'none',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
+          display: 'flex', alignItems: 'center', gap: '10px',
         }}>
           <CalendarX size={16} style={{ color: 'var(--color-danger)' }} />
           <h2 style={{
-            fontFamily: 'var(--font-sans)',
-            fontSize: '14px',
-            fontWeight: 600,
-            color: 'var(--color-text-primary)',
-            margin: 0,
+            fontFamily: 'var(--font-sans)', fontSize: '14px', fontWeight: 600,
+            color: 'var(--color-text-primary)', margin: 0,
           }}>
             Projets en retard
           </h2>
           {overdueProjects.length > 0 && (
             <span style={{
-              backgroundColor: 'var(--color-danger)',
-              color: '#fff',
-              fontSize: '11px',
-              fontWeight: 700,
-              borderRadius: '10px',
-              padding: '1px 7px',
-              lineHeight: '18px',
-              fontFamily: 'var(--font-sans)',
+              backgroundColor: 'var(--color-danger)', color: '#fff',
+              fontSize: '11px', fontWeight: 700, borderRadius: '10px',
+              padding: '1px 7px', lineHeight: '18px', fontFamily: 'var(--font-sans)',
             }}>
               {overdueProjects.length}
             </span>
           )}
         </div>
 
-        {/* Project list or empty state */}
         {overdueProjects.length === 0 ? (
           <div style={{
-            padding: '24px 20px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
+            padding: '24px 20px', display: 'flex', alignItems: 'center', gap: '10px',
             color: 'var(--color-text-secondary)',
           }}>
             <span style={{ fontSize: '13px', fontFamily: 'var(--font-sans)' }}>
@@ -901,71 +430,43 @@ export default function Dashboard() {
                 style={{
                   padding: '12px 20px',
                   borderBottom: i < overdueProjects.length - 1 ? '1px solid var(--color-border)' : 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  transition: 'background-color 0.15s ease',
+                  display: 'flex', alignItems: 'center', gap: '12px',
                   cursor: 'pointer',
                 }}
               >
-                {/* Status dot */}
                 <div style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  backgroundColor: 'var(--color-danger)',
-                  flexShrink: 0,
+                  width: '8px', height: '8px', borderRadius: '50%',
+                  backgroundColor: 'var(--color-danger)', flexShrink: 0,
                 }} />
-
-                {/* Title + meta */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{
-                    margin: 0,
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    color: 'var(--color-text-primary)',
-                    fontFamily: 'var(--font-sans)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
+                    margin: 0, fontSize: '13px', fontWeight: 600,
+                    color: 'var(--color-text-primary)', fontFamily: 'var(--font-sans)',
                   }}>
                     {project.title}
                   </p>
                   <p style={{
-                    margin: '2px 0 0',
-                    fontSize: '12px',
-                    color: 'var(--color-text-secondary)',
-                    fontFamily: 'var(--font-sans)',
+                    margin: '2px 0 0', fontSize: '12px',
+                    color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)',
                   }}>
                     {project.owner_role}
                   </p>
                 </div>
-
-                {/* Due date */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  flexShrink: 0,
-                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
                   <Clock size={12} style={{ color: 'var(--color-danger)' }} />
                   <span style={{
-                    fontSize: '12px',
-                    color: 'var(--color-danger)',
-                    fontWeight: 500,
+                    fontSize: '12px', color: 'var(--color-danger)', fontWeight: 500,
                     fontFamily: 'var(--font-sans)',
                   }}>
                     {formatDate(project.due_date)}
                   </span>
                 </div>
-
                 <ChevronRight size={14} style={{ color: 'var(--color-border)', flexShrink: 0 }} />
               </li>
             ))}
           </ul>
         )}
       </div>
-
     </div>
   );
 }

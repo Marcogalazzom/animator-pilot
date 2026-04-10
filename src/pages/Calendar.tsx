@@ -1,6 +1,6 @@
 import { useState, useMemo, type ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FolderKanban, ShieldCheck, Landmark, BookOpen, CalendarDays } from 'lucide-react';
+import { FolderKanban, Palette, CalendarDays } from 'lucide-react';
 import { useCalendarData } from './calendar/useCalendarData';
 import type { CalendarModule } from './calendar/useCalendarData';
 
@@ -8,38 +8,28 @@ import type { CalendarModule } from './calendar/useCalendarData';
 
 const MODULE_COLORS: Record<CalendarModule, string> = {
   projects:   'var(--color-primary)',
-  compliance: 'var(--color-success)',
-  tutelles:   'var(--color-warning)',
-  training:   '#9333ea',
+  activities: '#7C3AED',
 };
 
 const MODULE_BG: Record<CalendarModule, string> = {
   projects:   'rgba(30,64,175,0.08)',
-  compliance: 'rgba(22,163,74,0.08)',
-  tutelles:   'rgba(217,119,6,0.08)',
-  training:   'rgba(147,51,234,0.08)',
+  activities: 'rgba(124,58,237,0.08)',
 };
 
 const MODULE_LABELS: Record<CalendarModule, string> = {
   projects:   'Projets',
-  compliance: 'Conformité',
-  tutelles:   'Tutelles',
-  training:   'Formations',
+  activities: 'Activités',
 };
 
 const MODULE_ICONS: Record<CalendarModule, ReactElement> = {
   projects:   <FolderKanban size={11} />,
-  compliance: <ShieldCheck size={11} />,
-  tutelles:   <Landmark size={11} />,
-  training:   <BookOpen size={11} />,
+  activities: <Palette size={11} />,
 };
 
 const FILTER_OPTIONS: Array<{ key: CalendarModule | 'all'; label: string }> = [
   { key: 'all',        label: 'Tous' },
   { key: 'projects',   label: 'Projets' },
-  { key: 'compliance', label: 'Conformité' },
-  { key: 'tutelles',   label: 'Tutelles' },
-  { key: 'training',   label: 'Formations' },
+  { key: 'activities', label: 'Activités' },
 ];
 
 const MONTH_FR = [

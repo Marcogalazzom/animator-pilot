@@ -4,7 +4,7 @@ let dbPromise: Promise<Database> | null = null;
 
 export function getDb(): Promise<Database> {
   if (!dbPromise) {
-    dbPromise = Database.load('sqlite:ehpad-pilot.db').catch((err) => {
+    dbPromise = Database.load('sqlite:pilot-animateur.db').catch((err) => {
       dbPromise = null;
       throw err;
     });

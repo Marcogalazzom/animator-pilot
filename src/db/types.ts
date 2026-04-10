@@ -1,27 +1,6 @@
-export type KpiCategory = 'occupation' | 'finance' | 'rh' | 'qualite';
-export type KpiSource = 'manual' | 'import';
-export type ThresholdDirection = 'above' | 'below';
 export type ProjectStatus = 'todo' | 'in_progress' | 'done' | 'overdue';
 export type ActionStatus = 'todo' | 'in_progress' | 'done';
 export type ImportStatus = 'success' | 'error';
-
-export interface KpiEntry {
-  id: number;
-  category: KpiCategory;
-  indicator: string;
-  value: number;
-  period: string;
-  source: KpiSource;
-  created_at: string;
-}
-
-export interface KpiThreshold {
-  id: number;
-  indicator: string;
-  warning: number | null;
-  critical: number | null;
-  direction: ThresholdDirection;
-}
 
 export interface Project {
   id: number;
@@ -52,26 +31,6 @@ export interface ImportRecord {
   status: ImportStatus;
 }
 
-// ─── Compliance ───────────────────────────────────────────────
-export type ObligationCategory = 'governance' | 'quality' | 'security' | 'hr';
-export type ObligationFrequency = 'annual' | 'biannual' | 'triennial' | 'quinquennial' | 'permanent' | 'periodic';
-export type ObligationStatus = 'compliant' | 'in_progress' | 'non_compliant' | 'to_plan';
-
-export interface ComplianceObligation {
-  id: number;
-  title: string;
-  category: ObligationCategory;
-  frequency: ObligationFrequency;
-  description: string;
-  status: ObligationStatus;
-  next_due_date: string | null;
-  last_validated_date: string | null;
-  document_path: string | null;
-  is_builtin: number;
-  linked_project_id?: number | null;
-  created_at: string;
-}
-
 // ─── Budget ───────────────────────────────────────────────────
 export type BudgetLineType = 'charge' | 'produit';
 export type InvestmentStatus = 'planned' | 'in_progress' | 'completed';
@@ -93,7 +52,6 @@ export interface BudgetLine {
   amount_realise: number;
   fiscal_year: number;
   period: string | null;
-  linked_obligation_id?: number | null;
   created_at: string;
 }
 
@@ -112,56 +70,8 @@ export interface Investment {
   created_at: string;
 }
 
-// ─── Tutelles ─────────────────────────────────────────────────
-export type EventType = 'cpom' | 'budget_campaign' | 'evaluation' | 'inspection' | 'commission' | 'dialogue' | 'other';
-export type AuthorityType = 'ars' | 'cd' | 'has' | 'prefecture' | 'other';
-export type EventStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled';
-export type CorrespondenceDirection = 'sent' | 'received';
-export type CorrespondenceType = 'letter' | 'email' | 'meeting' | 'phone';
-export type CorrespondenceStatus = 'sent' | 'received' | 'awaiting_reply' | 'archived';
-
-export interface AuthorityEvent {
-  id: number;
-  title: string;
-  event_type: EventType;
-  authority: AuthorityType;
-  date_start: string | null;
-  date_end: string | null;
-  status: EventStatus;
-  notes: string;
-  is_recurring: number;
-  recurrence_rule: string | null;
-  linked_project_id?: number | null;
-  created_at: string;
-}
-
-export interface AuthorityCorrespondence {
-  id: number;
-  event_id: number | null;
-  date: string;
-  direction: CorrespondenceDirection;
-  type: CorrespondenceType;
-  authority: AuthorityType;
-  contact_role: string;
-  subject: string;
-  content: string;
-  document_path: string | null;
-  status: CorrespondenceStatus;
-  created_at: string;
-}
-
-export interface PreparationChecklist {
-  id: number;
-  event_id: number;
-  item_text: string;
-  is_done: number;
-  category: string;
-  sort_order: number;
-  created_at: string;
-}
-
-// ─── Documents (Notes de service) ────────────────────────────
-export type DocType = 'note_service' | 'cr_cvs' | 'cr_equipe' | 'cr_chsct' | 'cr_direction' | 'other';
+// ─── Documents (Notes / Comptes rendus) ─────────────────────
+export type DocType = 'note_service' | 'cr_animation' | 'cr_equipe' | 'cr_reunion' | 'cr_projet' | 'other';
 
 export interface Document {
   id: number;
@@ -175,54 +85,103 @@ export interface Document {
   created_at: string;
 }
 
-// ─── Veille réglementaire ────────────────────────────────────
-export type WatchCategory = 'legislation' | 'has_recommendation' | 'ars_circular' | 'formation' | 'other';
+// ─── Inventaire (synced from planning-ehpad) ─────────────────
+export type InventoryCategory = 'materiel_animation' | 'jeux' | 'fournitures' | 'decoration' | 'musique' | 'sport' | 'other';
+export type InventoryCondition = 'neuf' | 'bon' | 'usage' | 'a_remplacer';
 
-export interface RegulatoryWatch {
+export interface InventoryItem {
   id: number;
-  title: string;
-  category: WatchCategory;
-  source: string;
-  url: string;
-  date_published: string | null;
-  summary: string;
-  is_read: number;
-  created_at: string;
-}
-
-export type TrainingCategory = 'securite' | 'soins' | 'management' | 'other';
-
-export interface TrainingTracking {
-  id: number;
-  title: string;
-  category: string;
-  hours_planned: number;
-  hours_completed: number;
-  fiscal_year: number;
+  name: string;
+  category: InventoryCategory;
+  quantity: number;
+  condition: InventoryCondition;
+  location: string;
   notes: string;
+  synced_from: string;
+  last_sync_at: string | null;
   created_at: string;
 }
 
-// ─── ANAP / Benchmarking ─────────────────────────────────────
-export type AnapCategory = 'activite' | 'rh' | 'finance' | 'qualite';
+// ─── Annuaire Personnel (synced with planning-ehpad) ─────────
+export type StaffRole = 'animateur' | 'aide_soignant' | 'infirmier' | 'medecin' | 'psychologue' | 'kinesitherapeute' | 'ergotherapeute' | 'ash' | 'cuisine' | 'direction' | 'administratif' | 'benevole' | 'other';
 
-export interface AnapIndicator {
+export interface StaffMember {
   id: number;
-  indicator_key: string;
-  label: string;
-  value_etablissement: number | null;
-  value_national: number | null;
-  value_regional: number | null;
-  unit: string;
-  fiscal_year: number;
-  category: AnapCategory;
+  first_name: string;
+  last_name: string;
+  role: StaffRole;
+  phone: string;
+  email: string;
+  service: string;
+  is_available: number;
+  notes: string;
+  synced_from: string;
+  last_sync_at: string | null;
+  created_at: string;
+}
+
+// ─── Photos & Albums ─────────────────────────────────────────
+
+export interface PhotoAlbum {
+  id: number;
+  title: string;
+  description: string;
+  activity_date: string;
+  cover_path: string | null;
+  created_at: string;
+}
+
+export interface Photo {
+  id: number;
+  album_id: number;
+  file_path: string;
+  caption: string;
+  taken_at: string | null;
+  created_at: string;
+}
+
+// ─── Résidents (suivi animation) ─────────────────────────────
+export type ResidentAutonomy = 'gir1' | 'gir2' | 'gir3' | 'gir4' | 'gir5' | 'gir6';
+
+export interface Resident {
+  id: number;
+  first_name: string;
+  last_name: string;
+  room_number: string;
+  autonomy_level: ResidentAutonomy;
+  interests: string;
+  notes: string;
+  arrival_date: string | null;
+  created_at: string;
+}
+
+// ─── Ateliers / Activités ────────────────────────────────────
+export type ActivityType = 'atelier_creatif' | 'musique' | 'jeux' | 'sortie' | 'sport' | 'lecture' | 'cuisine' | 'bien_etre' | 'intergenerationnel' | 'fete' | 'other';
+export type ActivityStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled';
+
+export interface Activity {
+  id: number;
+  title: string;
+  activity_type: ActivityType;
+  description: string;
+  date: string;
+  time_start: string | null;
+  time_end: string | null;
+  location: string;
+  max_participants: number;
+  actual_participants: number;
+  animator_name: string;
+  status: ActivityStatus;
+  materials_needed: string;
+  notes: string;
+  linked_project_id: number | null;
   created_at: string;
 }
 
 // ─── Alertes ─────────────────────────────────────────────────
 export type AlertSeverity = 'info' | 'warning' | 'critical';
-export type AlertRuleType = 'kpi_threshold' | 'deadline' | 'budget_overrun';
-export type AlertModule = 'kpi' | 'compliance' | 'tutelles' | 'budget' | 'projects';
+export type AlertRuleType = 'deadline' | 'budget_overrun' | 'low_participation';
+export type AlertModule = 'budget' | 'projects' | 'activities' | 'inventory';
 
 export interface AlertRule {
   id: number;

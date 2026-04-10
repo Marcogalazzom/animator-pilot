@@ -17,15 +17,15 @@ import type { DocType, Document } from './notes/useNotesData';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DOC_TYPE_META: Record<DocType, { label: string; color: string; bg: string; border: string }> = {
-  note_service: { label: 'Note de service', color: '#1E40AF', bg: '#EFF6FF',  border: '#BFDBFE' },
-  cr_cvs:       { label: 'CR CVS',          color: '#059669', bg: '#ECFDF5',  border: '#A7F3D0' },
-  cr_equipe:    { label: 'CR Équipe',        color: '#7C3AED', bg: '#F5F3FF',  border: '#DDD6FE' },
-  cr_chsct:     { label: 'CR CHSCT',         color: '#D97706', bg: '#FFFBEB',  border: '#FDE68A' },
-  cr_direction: { label: 'CR Direction',     color: '#0F766E', bg: '#F0FDFA',  border: '#99F6E4' },
-  other:        { label: 'Autre',            color: '#64748B', bg: '#F1F5F9',  border: '#CBD5E1' },
+  note_service:  { label: 'Note de service',  color: '#1E40AF', bg: '#EFF6FF',  border: '#BFDBFE' },
+  cr_animation:  { label: 'CR Animation',     color: '#7C3AED', bg: '#F5F3FF',  border: '#DDD6FE' },
+  cr_equipe:     { label: 'CR Équipe',         color: '#059669', bg: '#ECFDF5',  border: '#A7F3D0' },
+  cr_reunion:    { label: 'CR Réunion',        color: '#D97706', bg: '#FFFBEB',  border: '#FDE68A' },
+  cr_projet:     { label: 'CR Projet',         color: '#0F766E', bg: '#F0FDFA',  border: '#99F6E4' },
+  other:         { label: 'Autre',             color: '#64748B', bg: '#F1F5F9',  border: '#CBD5E1' },
 };
 
-const DOC_TYPES: DocType[] = ['note_service', 'cr_cvs', 'cr_equipe', 'cr_chsct', 'cr_direction', 'other'];
+const DOC_TYPES: DocType[] = ['note_service', 'cr_animation', 'cr_equipe', 'cr_reunion', 'cr_projet', 'other'];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
