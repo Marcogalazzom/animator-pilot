@@ -1,18 +1,13 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import {
-  Wallet, TrendingUp, TrendingDown, AlertTriangle,
-  Plus, FileSpreadsheet, X, Loader2,
+  Wallet, Plus, X, Trash2, Pencil, ChevronDown,
+  Euro, Receipt, TrendingDown, Paperclip, FileText as FileIcon,
 } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
-} from 'recharts';
-
-import { useBudgetData, CHARGE_TITLES, PRODUIT_TITLES } from './budget/useBudgetData';
-import ERRDView from './budget/ERRDView';
-import InvestissementsView from './budget/InvestissementsView';
-import type { BudgetLine, BudgetLineType } from '@/db/types';
+import { useBudgetData, CATEGORIES, CATEGORY_KEYS } from './budget/useBudgetData';
+import { SyncButton, SyncStatus } from '@/components/SyncIndicator';
+import { uploadInvoice } from '@/services/firebase';
+import type { ExpenseCategory } from '@/db/types';
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -20,746 +15,389 @@ function fmt(n: number): string {
   return n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function fmtShort(n: number): string {
-  if (Math.abs(n) >= 1_000_000) return (n / 1_000_000).toFixed(1) + ' M€';
-  if (Math.abs(n) >= 1_000) return (n / 1_000).toFixed(0) + ' k€';
-  return fmt(n) + ' €';
+function formatDate(d: string): string {
+  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-// ─── Sub-components ──────────────────────────────────────────
-
-type Tab = 'synthese' | 'eprd' | 'errd' | 'investissements';
-
-const TAB_LABELS: Record<Tab, string> = {
-  synthese: 'Synthèse',
-  eprd: 'EPRD',
-  errd: 'ERRD',
-  investissements: 'Investissements',
-};
-
-// ─── Tooltip ─────────────────────────────────────────────────
-
-interface ChartTooltipProps {
-  active?: boolean;
-  payload?: Array<{ value: number; name: string; color: string }>;
-  label?: string;
+function progressColor(pct: number): string {
+  if (pct < 75) return 'var(--color-success)';
+  if (pct < 90) return 'var(--color-warning)';
+  return 'var(--color-danger)';
 }
 
-function BudgetChartTooltip({ active, payload, label }: ChartTooltipProps) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{
-      background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-      borderRadius: '6px', padding: '8px 12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-      fontFamily: 'var(--font-sans)',
-    }}>
-      <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>{label}</p>
-      {payload.map((p, i) => (
-        <p key={i} style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: p.color }}>
-          {p.name}: {fmtShort(p.value)}
-        </p>
-      ))}
-    </div>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════
-// Main component
-// ═════════════════════════════════════════════════════════════
+// ─── Component ───────────────────────────────────────────────
 
 export default function Budget() {
-  const data = useBudgetData();
-  const addToast = useToastStore((s) => s.add);
-  const [tab, setTab] = useState<Tab>('synthese');
-  const [addingLine, setAddingLine] = useState<{ titleNum: number; lineType: BudgetLineType } | null>(null);
-  const [newLabel, setNewLabel] = useState('');
-  const [newAmount, setNewAmount] = useState('');
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editValue, setEditValue] = useState('');
-  const [saving, setSaving] = useState(false);
+  const {
+    budget, expenses, summary, year, setYear,
+    loading, saveBudgetTotal, addExpense, editExpense, removeExpense,
+  } = useBudgetData();
+  const addToast = useToastStore((s) => s.addToast);
 
-  const years = [2024, 2025, 2026, 2027];
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [filterCat, setFilterCat] = useState<ExpenseCategory | ''>('');
+  const [editingTotal, setEditingTotal] = useState(false);
+  const [totalInput, setTotalInput] = useState('');
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
-  // ── Computed EPRD data ──
-  const charges = useMemo(() => data.lines.filter((l) => l.line_type === 'charge'), [data.lines]);
-  const produits = useMemo(() => data.lines.filter((l) => l.line_type === 'produit'), [data.lines]);
+  const totalAllocated = budget?.total_allocated ?? 0;
+  const totalSpent = summary.total;
+  const remaining = totalAllocated - totalSpent;
+  const percentUsed = totalAllocated > 0 ? (totalSpent / totalAllocated) * 100 : 0;
 
-  const chargesByTitle = useMemo(() => {
-    const groups: Record<number, BudgetLine[]> = {};
-    for (const l of charges) {
-      (groups[l.title_number] ??= []).push(l);
-    }
-    return groups;
-  }, [charges]);
+  const filteredExpenses = useMemo(() => {
+    if (!filterCat) return expenses;
+    return expenses.filter((e) => e.category === filterCat);
+  }, [expenses, filterCat]);
 
-  const produitsByTitle = useMemo(() => {
-    const groups: Record<number, BudgetLine[]> = {};
-    for (const l of produits) {
-      (groups[l.title_number] ??= []).push(l);
-    }
-    return groups;
-  }, [produits]);
+  const editItem = editId ? expenses.find((e) => e.id === editId) : null;
 
-  const totalCharges = charges.reduce((s, l) => s + l.amount_previsionnel, 0);
-  const totalProduits = produits.reduce((s, l) => s + l.amount_previsionnel, 0);
-  const result = totalProduits - totalCharges;
+  async function handleSaveTotal() {
+    const amount = parseFloat(totalInput);
+    if (isNaN(amount) || amount < 0) return;
+    await saveBudgetTotal(amount);
+    setEditingTotal(false);
+    addToast('Budget mis à jour', 'success');
+  }
 
-  // ── Chart data ──
-  const chartData = data.summary.map((s) => ({
-    name: s.label,
-    Charges: s.totalCharges,
-    Produits: s.totalProduits,
-  }));
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const form = formRef.current;
+    if (!form) return;
+    const fd = new FormData(form);
 
-  const hasDeficit = data.summary.some((s) => s.result < 0);
+    let invoicePath: string | null = null;
 
-  // ── Handlers ──
-  const handleStartEdit = useCallback((line: BudgetLine) => {
-    setEditingId(line.id);
-    setEditValue(line.amount_previsionnel.toString());
-  }, []);
+    const data = {
+      fiscal_year: year,
+      title: fd.get('title') as string,
+      category: fd.get('category') as ExpenseCategory,
+      amount: parseFloat(fd.get('amount') as string) || 0,
+      date: fd.get('date') as string,
+      description: fd.get('description') as string,
+      supplier: fd.get('supplier') as string,
+      invoice_path: invoicePath,
+      linked_intervenant_id: null,
+      synced_from: '',
+      last_sync_at: null,
+      external_id: null,
+    };
 
-  const handleSaveEdit = useCallback(async () => {
-    if (editingId === null) return;
-    const val = parseFloat(editValue.replace(/\s/g, '').replace(',', '.'));
-    if (isNaN(val)) { setEditingId(null); return; }
-    setSaving(true);
-    await data.editLine(editingId, { amount_previsionnel: val });
-    setEditingId(null);
-    setSaving(false);
-  }, [editingId, editValue, data]);
-
-  const handleAddLine = useCallback(async () => {
-    if (!addingLine || !newLabel.trim() || !data.selectedSectionId) return;
-    const amt = parseFloat(newAmount.replace(/\s/g, '').replace(',', '.')) || 0;
-    await data.addLine({
-      section_id: data.selectedSectionId,
-      title_number: addingLine.titleNum,
-      line_label: newLabel.trim(),
-      line_type: addingLine.lineType,
-      amount_previsionnel: amt,
-      amount_realise: 0,
-      fiscal_year: data.selectedYear,
-      period: null,
-    });
-    setAddingLine(null);
-    setNewLabel('');
-    setNewAmount('');
-  }, [addingLine, newLabel, newAmount, data]);
-
-  const handleDeleteLine = useCallback(async (id: number) => {
-    await data.removeLine(id);
-  }, [data]);
-
-  const handleInitTemplate = useCallback(async () => {
-    if (!data.selectedSectionId) return;
-    setSaving(true);
     try {
-      await data.initFromTemplate(data.selectedSectionId, data.selectedYear);
-      addToast('Modèle budgétaire initialisé', 'success');
+      if (editId) {
+        // Upload invoice if new file
+        if (invoiceFile) {
+          try {
+            invoicePath = await uploadInvoice(invoiceFile, year, String(editId));
+            data.invoice_path = invoicePath;
+          } catch { /* upload failed, keep null */ }
+        }
+        await editExpense(editId, data);
+        addToast('Dépense mise à jour', 'success');
+      } else {
+        const id = await addExpense(data);
+        // Upload invoice after creation (need the id)
+        if (invoiceFile && id) {
+          try {
+            invoicePath = await uploadInvoice(invoiceFile, year, String(id));
+            await editExpense(id, { invoice_path: invoicePath });
+          } catch { /* upload failed */ }
+        }
+        addToast('Dépense ajoutée', 'success');
+      }
     } catch {
-      addToast('Erreur lors de l\'initialisation', 'error');
-    } finally {
-      setSaving(false);
+      addToast('Erreur', 'error');
     }
-  }, [data, addToast]);
 
-  // ── Input style ──
-  const inputStyle: React.CSSProperties = {
-    padding: '6px 10px', border: '1px solid var(--color-border)', borderRadius: '6px',
-    fontSize: '13px', fontFamily: 'var(--font-sans)', outline: 'none',
-    width: '100%',
-  };
+    setShowForm(false);
+    setEditId(null);
+    setInvoiceFile(null);
+  }
 
-  // ── Loading state ──
-  if (data.loading) {
+  if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '40px', color: 'var(--color-text-secondary)' }}>
-        <Loader2 size={18} className="animate-spin" /> Chargement...
+      <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ width: '200px', height: '28px', borderRadius: '6px', background: 'var(--color-border)' }} className="shimmer" />
+        <div style={{ width: '100%', height: '120px', borderRadius: '8px', background: 'var(--color-surface)' }} className="shimmer" />
       </div>
     );
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // Render
-  // ═══════════════════════════════════════════════════════════
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '1400px' }}>
-
-      {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1200px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
         <div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0, lineHeight: 1.2 }}>
-            Gestion budgétaire
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
+            Budget Animation
           </h1>
-          <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)', margin: '4px 0 0', fontFamily: 'var(--font-sans)' }}>
-            Suivi des 3 sections tarifaires
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px' }}>
+            <select value={year} onChange={(e) => setYear(parseInt(e.target.value))}
+              style={{ padding: '4px 8px', border: '1px solid var(--color-border)', borderRadius: '4px', fontSize: '13px', fontFamily: 'var(--font-sans)', backgroundColor: 'var(--color-surface)' }}>
+              {[2024, 2025, 2026, 2027].map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <SyncStatus module="budget" />
+          </div>
         </div>
-
-        {/* Year selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>Exercice :</span>
-          <select
-            value={data.selectedYear}
-            onChange={(e) => data.setSelectedYear(Number(e.target.value))}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <SyncButton module="budget" />
+          <button onClick={() => { setEditId(null); setShowForm(true); setInvoiceFile(null); }}
             style={{
-              ...inputStyle, width: 'auto', padding: '6px 28px 6px 10px',
-              appearance: 'none', backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%2364748B\' stroke-width=\'2\'%3E%3Cpath d=\'M6 9l6 6 6-6\'/%3E%3C/svg%3E")',
-              backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center',
-            }}
-          >
-            {years.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              padding: '8px 16px', backgroundColor: 'var(--color-primary)',
+              color: '#fff', border: 'none', borderRadius: '6px',
+              fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-sans)', cursor: 'pointer',
+            }}>
+            <Plus size={14} /> Nouvelle dépense
+          </button>
         </div>
       </div>
 
-      {/* ── Tabs ── */}
-      <div style={{ display: 'flex', gap: '0', borderBottom: '2px solid var(--color-border)' }}>
-        {(Object.keys(TAB_LABELS) as Tab[]).map((t) => {
-          const isActive = tab === t;
-          const isDisabled = t === 'errd' || t === 'investissements';
-          return (
-            <button
-              key={t}
-              onClick={() => !isDisabled && setTab(t)}
-              disabled={isDisabled}
-              style={{
-                padding: '10px 20px', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-sans)',
-                border: 'none', background: 'none', cursor: isDisabled ? 'not-allowed' : 'pointer',
-                color: isDisabled ? 'var(--color-border)' : isActive ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                borderBottom: isActive ? '2px solid var(--color-primary)' : '2px solid transparent',
-                marginBottom: '-2px', transition: 'all 0.15s ease',
-                opacity: isDisabled ? 0.5 : 1,
-              }}
-            >
-              {TAB_LABELS[t]}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── Tab content ── */}
-      {tab === 'synthese' && (
-        <SyntheseView summary={data.summary} caf={data.caf} chartData={chartData} hasDeficit={hasDeficit} />
-      )}
-
-      {tab === 'eprd' && (
-        <EPRDView
-          sections={data.sections}
-          selectedSectionId={data.selectedSectionId}
-          onSelectSection={data.setSelectedSectionId}
-          chargesByTitle={chargesByTitle}
-          produitsByTitle={produitsByTitle}
-          totalCharges={totalCharges}
-          totalProduits={totalProduits}
-          result={result}
-          lines={data.lines}
-          editingId={editingId}
-          editValue={editValue}
-          setEditValue={setEditValue}
-          onStartEdit={handleStartEdit}
-          onSaveEdit={handleSaveEdit}
-          onDeleteLine={handleDeleteLine}
-          addingLine={addingLine}
-          setAddingLine={setAddingLine}
-          newLabel={newLabel}
-          setNewLabel={setNewLabel}
-          newAmount={newAmount}
-          setNewAmount={setNewAmount}
-          onAddLine={handleAddLine}
-          onInitTemplate={handleInitTemplate}
-          saving={saving}
-          inputStyle={inputStyle}
-        />
-      )}
-
-      {tab === 'errd' && (
-        <ERRDView
-          sections={data.sections}
-          selectedSectionId={data.selectedSectionId}
-          onSelectSection={data.setSelectedSectionId}
-          lines={data.lines}
-          onEditRealise={async (id, amount) => { await data.editLine(id, { amount_realise: amount }); }}
-        />
-      )}
-
-      {tab === 'investissements' && (
-        <InvestissementsView
-          investments={data.investments}
-          fiscalYear={data.selectedYear}
-          onAdd={data.addInvestment}
-          onDelete={data.removeInvestment}
-        />
-      )}
-    </div>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════
-// Synthèse View
-// ═════════════════════════════════════════════════════════════
-
-interface SyntheseProps {
-  summary: { section: string; label: string; totalCharges: number; totalProduits: number; result: number }[];
-  caf: number;
-  chartData: { name: string; Charges: number; Produits: number }[];
-  hasDeficit: boolean;
-}
-
-function SyntheseView({ summary, caf, chartData, hasDeficit }: SyntheseProps) {
-  return (
-    <>
-      {/* Deficit warning */}
-      {hasDeficit && (
-        <div role="alert" style={{
-          backgroundColor: 'rgba(220,38,38,0.06)', border: '1px solid var(--color-danger)',
-          borderLeft: '4px solid var(--color-danger)', borderRadius: '8px', padding: '12px 16px',
-          display: 'flex', alignItems: 'center', gap: '10px',
-        }}>
-          <AlertTriangle size={16} style={{ color: 'var(--color-danger)', flexShrink: 0 }} />
-          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-danger)', fontFamily: 'var(--font-sans)' }}>
-            Attention — une ou plusieurs sections présentent un déficit prévisionnel.
+      {/* Progress bar */}
+      <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', padding: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+          <span style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)', color: 'var(--color-text-primary)' }}>
+            Budget utilisé
+          </span>
+          <span style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'var(--font-sans)', color: progressColor(percentUsed) }}>
+            {percentUsed.toFixed(0)}%
           </span>
         </div>
-      )}
+        <div style={{ height: '10px', backgroundColor: 'var(--color-border)', borderRadius: '5px', overflow: 'hidden' }}>
+          <div style={{
+            height: '100%', width: `${Math.min(percentUsed, 100)}%`,
+            backgroundColor: progressColor(percentUsed), borderRadius: '5px',
+            transition: 'width 0.6s ease',
+          }} />
+        </div>
+        <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
+          {fmt(totalSpent)} EUR dépensés sur {fmt(totalAllocated)} EUR
+        </p>
+      </div>
 
       {/* Summary cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-        {summary.map((s) => (
-          <div key={s.section} style={{
-            backgroundColor: 'var(--color-surface)', borderRadius: '8px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)', padding: '16px 20px',
-            borderLeft: `3px solid ${s.result >= 0 ? 'var(--color-success)' : 'var(--color-danger)'}`,
-          }}>
-            <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)', fontWeight: 500, marginBottom: '8px' }}>
-              {s.label}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+        {/* Budget total */}
+        <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: '8px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', borderLeft: '3px solid var(--color-primary)' }}>
+          {editingTotal ? (
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <input value={totalInput} onChange={(e) => setTotalInput(e.target.value)} type="number" min="0" step="100" autoFocus
+                style={{ flex: 1, padding: '6px 8px', border: '1px solid var(--color-border)', borderRadius: '4px', fontSize: '14px' }}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSaveTotal(); if (e.key === 'Escape') setEditingTotal(false); }} />
+              <button onClick={handleSaveTotal} style={{ padding: '6px 10px', backgroundColor: 'var(--color-primary)', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>OK</button>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)', marginBottom: '4px' }}>
-              <span>Charges</span><span>{fmtShort(s.totalCharges)}</span>
+          ) : (
+            <div onClick={() => { setTotalInput(String(totalAllocated)); setEditingTotal(true); }} style={{ cursor: 'pointer' }} title="Cliquez pour modifier">
+              <p style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: 'var(--color-primary)', fontFamily: 'var(--font-sans)' }}>
+                {fmt(totalAllocated)} <span style={{ fontSize: '13px', fontWeight: 400 }}>EUR</span>
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>Budget total <Pencil size={10} style={{ marginLeft: '4px', verticalAlign: 'middle' }} /></p>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)', marginBottom: '8px' }}>
-              <span>Produits</span><span>{fmtShort(s.totalProduits)}</span>
-            </div>
-            <div style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              borderTop: '1px solid var(--color-border)', paddingTop: '8px',
-            }}>
-              <span style={{ fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-sans)', color: 'var(--color-text-primary)' }}>Résultat</span>
-              <span style={{
-                fontSize: '16px', fontWeight: 700, fontFamily: 'var(--font-sans)',
-                color: s.result >= 0 ? 'var(--color-success)' : 'var(--color-danger)',
-                display: 'flex', alignItems: 'center', gap: '4px',
-              }}>
-                {s.result >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                {fmtShort(s.result)}
-              </span>
-            </div>
-          </div>
-        ))}
+          )}
+        </div>
 
-        {/* CAF card */}
-        <div style={{
-          backgroundColor: 'var(--color-surface)', borderRadius: '8px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.06)', padding: '16px 20px',
-          borderLeft: `3px solid ${caf >= 0 ? 'var(--color-primary)' : 'var(--color-danger)'}`,
-          display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-        }}>
-          <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)', fontWeight: 500, marginBottom: '8px' }}>
-            <Wallet size={14} style={{ display: 'inline', marginRight: '6px', verticalAlign: '-2px' }} />
-            CAF prévisionnelle
-          </div>
-          <div style={{
-            fontSize: '24px', fontWeight: 700, fontFamily: 'var(--font-sans)',
-            color: caf >= 0 ? 'var(--color-primary)' : 'var(--color-danger)',
-          }}>
-            {fmtShort(caf)}
-          </div>
-          <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)', marginTop: '4px' }}>
-            Capacité d'autofinancement
-          </div>
+        {/* Dépensé */}
+        <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: '8px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', borderLeft: `3px solid ${progressColor(percentUsed)}` }}>
+          <p style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: progressColor(percentUsed), fontFamily: 'var(--font-sans)' }}>
+            {fmt(totalSpent)} <span style={{ fontSize: '13px', fontWeight: 400 }}>EUR</span>
+          </p>
+          <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>Dépensé</p>
+        </div>
+
+        {/* Restant */}
+        <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: '8px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', borderLeft: `3px solid ${remaining >= 0 ? 'var(--color-success)' : 'var(--color-danger)'}` }}>
+          <p style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: remaining >= 0 ? 'var(--color-success)' : 'var(--color-danger)', fontFamily: 'var(--font-sans)' }}>
+            {fmt(remaining)} <span style={{ fontSize: '13px', fontWeight: 400 }}>EUR</span>
+          </p>
+          <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>Restant</p>
+        </div>
+
+        {/* Nb factures */}
+        <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: '8px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', borderLeft: '3px solid #64748B' }}>
+          <p style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: 'var(--color-text-primary)', fontFamily: 'var(--font-sans)' }}>{summary.count}</p>
+          <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>Dépenses</p>
         </div>
       </div>
 
-      {/* Chart */}
-      {chartData.length > 0 && (
-        <div style={{
-          backgroundColor: 'var(--color-surface)', borderRadius: '8px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.06)', padding: '20px',
-        }}>
-          <h2 style={{ fontFamily: 'var(--font-sans)', fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)', margin: '0 0 16px' }}>
-            Charges vs Produits par section
+      {/* Category breakdown */}
+      <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', padding: '20px' }}>
+        <h2 style={{ fontFamily: 'var(--font-sans)', fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)', margin: '0 0 16px' }}>
+          Répartition par catégorie
+        </h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {CATEGORY_KEYS.map((cat) => {
+            const meta = CATEGORIES[cat];
+            const amount = summary.byCategory[cat];
+            const pct = totalSpent > 0 ? (amount / totalSpent) * 100 : 0;
+            return (
+              <div key={cat}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 500, color: meta.color, fontFamily: 'var(--font-sans)' }}>{meta.label}</span>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)', fontFamily: 'var(--font-sans)' }}>
+                    {fmt(amount)} EUR ({pct.toFixed(0)}%)
+                  </span>
+                </div>
+                <div style={{ height: '6px', backgroundColor: 'var(--color-border)', borderRadius: '3px', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${pct}%`, backgroundColor: meta.color, borderRadius: '3px', transition: 'width 0.4s ease' }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Expense list */}
+      <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Receipt size={16} style={{ color: 'var(--color-text-secondary)' }} />
+          <h2 style={{ fontFamily: 'var(--font-sans)', fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)', margin: 0, flex: 1 }}>
+            Dépenses
           </h2>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={chartData} barCategoryGap="30%">
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 12, fill: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => fmtShort(v)} />
-              <Tooltip content={<BudgetChartTooltip />} />
-              <Legend verticalAlign="top" align="right" iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '11px', fontFamily: 'var(--font-sans)', paddingBottom: '8px' }} />
-              <Bar dataKey="Charges" fill="var(--color-danger)" radius={[3, 3, 0, 0]} opacity={0.8} />
-              <Bar dataKey="Produits" fill="var(--color-success)" radius={[3, 3, 0, 0]} opacity={0.8} />
-            </BarChart>
-          </ResponsiveContainer>
+          <div style={{ position: 'relative' }}>
+            <select value={filterCat} onChange={(e) => setFilterCat(e.target.value as ExpenseCategory | '')}
+              style={{ padding: '5px 24px 5px 8px', border: '1px solid var(--color-border)', borderRadius: '4px', fontSize: '12px', fontFamily: 'var(--font-sans)', backgroundColor: 'var(--color-surface)', appearance: 'none', cursor: 'pointer' }}>
+              <option value="">Toutes</option>
+              {CATEGORY_KEYS.map((k) => <option key={k} value={k}>{CATEGORIES[k].label}</option>)}
+            </select>
+            <ChevronDown size={10} style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--color-text-secondary)' }} />
+          </div>
+        </div>
+
+        {filteredExpenses.length === 0 ? (
+          <div style={{ padding: '24px 20px', fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)', textAlign: 'center' }}>
+            Aucune dépense
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600, color: 'var(--color-text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date</th>
+                <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600, color: 'var(--color-text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Titre</th>
+                <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600, color: 'var(--color-text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Catégorie</th>
+                <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600, color: 'var(--color-text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fournisseur</th>
+                <th style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Montant</th>
+                <th style={{ padding: '10px 16px', textAlign: 'center', fontWeight: 600, color: 'var(--color-text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PJ</th>
+                <th style={{ padding: '10px 16px', textAlign: 'center', fontWeight: 600, color: 'var(--color-text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredExpenses.map((exp) => {
+                const cat = CATEGORIES[exp.category] ?? CATEGORIES.other;
+                return (
+                  <tr key={exp.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <td style={{ padding: '10px 16px', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{formatDate(exp.date)}</td>
+                    <td style={{ padding: '10px 16px', fontWeight: 500, color: 'var(--color-text-primary)' }}>{exp.title}</td>
+                    <td style={{ padding: '10px 16px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 500, color: cat.color, backgroundColor: cat.bg, padding: '2px 8px', borderRadius: '4px' }}>
+                        {cat.label}
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px 16px', color: 'var(--color-text-secondary)' }}>{exp.supplier}</td>
+                    <td style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }}>{fmt(exp.amount)} EUR</td>
+                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>
+                      {exp.invoice_path ? (
+                        <a href={exp.invoice_path} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary)' }} title="Voir la facture">
+                          <Paperclip size={14} />
+                        </a>
+                      ) : (
+                        <span style={{ color: 'var(--color-border)' }}>—</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: '4px' }}>
+                        <button onClick={() => { setEditId(exp.id); setShowForm(true); setInvoiceFile(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', padding: '4px' }} title="Modifier">
+                          <Pencil size={13} />
+                        </button>
+                        <button onClick={() => { removeExpense(exp.id); addToast('Dépense supprimée', 'success'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-danger)', padding: '4px' }} title="Supprimer">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Modal form */}
+      {showForm && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
+          onClick={() => { setShowForm(false); setEditId(null); }}>
+          <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: '12px', padding: '24px', width: '520px', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
+            onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: 700 }}>
+                {editId ? 'Modifier la dépense' : 'Nouvelle dépense'}
+              </h2>
+              <button onClick={() => { setShowForm(false); setEditId(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)' }}><X size={18} /></button>
+            </div>
+            <form ref={formRef} onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
+                Titre
+                <input name="title" defaultValue={editItem?.title ?? ''} required style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }} />
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
+                  Catégorie
+                  <select name="category" defaultValue={editItem?.category ?? 'intervenants'} style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}>
+                    {CATEGORY_KEYS.map((k) => <option key={k} value={k}>{CATEGORIES[k].label}</option>)}
+                  </select>
+                </label>
+                <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
+                  Montant (EUR)
+                  <input name="amount" type="number" min="0" step="0.01" defaultValue={editItem?.amount ?? ''} required style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }} />
+                </label>
+                <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
+                  Date
+                  <input name="date" type="date" defaultValue={editItem?.date ?? new Date().toISOString().slice(0, 10)} required style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }} />
+                </label>
+              </div>
+              <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
+                Fournisseur / Intervenant
+                <input name="supplier" defaultValue={editItem?.supplier ?? ''} style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }} />
+              </label>
+              <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
+                Description
+                <textarea name="description" rows={2} defaultValue={editItem?.description ?? ''} style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px', resize: 'vertical' }} />
+              </label>
+              {/* Invoice attachment */}
+              <div>
+                <p style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)', margin: '0 0 6px' }}>
+                  Pièce jointe (facture)
+                </p>
+                {editItem?.invoice_path && !invoiceFile && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', fontSize: '12px', color: 'var(--color-success)' }}>
+                    <Paperclip size={12} /> Facture existante
+                  </div>
+                )}
+                <label style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  padding: '8px 14px', border: '1.5px dashed var(--color-border)',
+                  borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 500,
+                  fontFamily: 'var(--font-sans)', color: 'var(--color-text-secondary)',
+                  backgroundColor: invoiceFile ? 'rgba(5,150,105,0.04)' : 'transparent',
+                }}>
+                  <FileIcon size={14} />
+                  {invoiceFile ? invoiceFile.name : 'Joindre une facture (image/PDF)'}
+                  <input type="file" accept="image/*,.pdf" style={{ display: 'none' }}
+                    onChange={(e) => setInvoiceFile(e.target.files?.[0] ?? null)} />
+                </label>
+              </div>
+              <button type="submit" style={{
+                padding: '10px', backgroundColor: 'var(--color-primary)', color: '#fff',
+                border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600,
+                fontFamily: 'var(--font-sans)', cursor: 'pointer', marginTop: '4px',
+              }}>
+                {editId ? 'Mettre à jour' : 'Ajouter la dépense'}
+              </button>
+            </form>
+          </div>
         </div>
       )}
-    </>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════
-// EPRD View
-// ═════════════════════════════════════════════════════════════
-
-interface EPRDProps {
-  sections: { id: number; name: string; label: string }[];
-  selectedSectionId: number | null;
-  onSelectSection: (id: number) => void;
-  chargesByTitle: Record<number, BudgetLine[]>;
-  produitsByTitle: Record<number, BudgetLine[]>;
-  totalCharges: number;
-  totalProduits: number;
-  result: number;
-  lines: BudgetLine[];
-  editingId: number | null;
-  editValue: string;
-  setEditValue: (v: string) => void;
-  onStartEdit: (line: BudgetLine) => void;
-  onSaveEdit: () => void;
-  onDeleteLine: (id: number) => void;
-  addingLine: { titleNum: number; lineType: BudgetLineType } | null;
-  setAddingLine: (v: { titleNum: number; lineType: BudgetLineType } | null) => void;
-  newLabel: string;
-  setNewLabel: (v: string) => void;
-  newAmount: string;
-  setNewAmount: (v: string) => void;
-  onAddLine: () => void;
-  onInitTemplate: () => void;
-  saving: boolean;
-  inputStyle: React.CSSProperties;
-}
-
-function EPRDView(props: EPRDProps) {
-  const {
-    sections, selectedSectionId, onSelectSection,
-    chargesByTitle, produitsByTitle, totalCharges, totalProduits, result,
-    lines, editingId, editValue, setEditValue, onStartEdit, onSaveEdit,
-    onDeleteLine, addingLine, setAddingLine, newLabel, setNewLabel,
-    newAmount, setNewAmount, onAddLine, onInitTemplate, saving, inputStyle,
-  } = props;
-
-  const cellStyle: React.CSSProperties = {
-    padding: '8px 12px', fontSize: '13px', fontFamily: 'var(--font-sans)',
-    borderBottom: '1px solid var(--color-border)',
-  };
-  const headerCellStyle: React.CSSProperties = {
-    ...cellStyle, fontWeight: 700, backgroundColor: 'rgba(30,64,175,0.04)',
-    color: 'var(--color-text-primary)',
-  };
-  const totalRowStyle: React.CSSProperties = {
-    ...cellStyle, fontWeight: 700, backgroundColor: 'rgba(0,0,0,0.02)',
-    color: 'var(--color-text-primary)', fontSize: '14px',
-  };
-
-  // Show template init if no lines
-  if (lines.length === 0) {
-    return (
-      <div style={{
-        backgroundColor: 'var(--color-surface)', borderRadius: '8px', padding: '48px 24px',
-        textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-      }}>
-        <FileSpreadsheet size={40} style={{ color: 'var(--color-primary)', marginBottom: '12px', opacity: 0.6 }} />
-        <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text-primary)', margin: '0 0 8px', fontFamily: 'var(--font-sans)' }}>
-          Aucune ligne budgétaire
-        </p>
-        <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: '0 0 20px', fontFamily: 'var(--font-sans)' }}>
-          Initialisez l'EPRD avec le modèle standard EHPAD ou ajoutez vos lignes manuellement.
-        </p>
-        <button
-          onClick={onInitTemplate}
-          disabled={saving}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: '6px',
-            padding: '10px 20px', backgroundColor: 'var(--color-primary)', color: '#fff',
-            border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
-            fontFamily: 'var(--font-sans)',
-            cursor: saving ? 'not-allowed' : 'pointer',
-            opacity: saving ? 0.6 : 1,
-          }}
-        >
-          <FileSpreadsheet size={14} />
-          {saving ? 'Initialisation...' : 'Initialiser depuis le modèle'}
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      {/* Section sub-tabs */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '0' }}>
-        {sections.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => onSelectSection(s.id)}
-            style={{
-              padding: '8px 16px', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-sans)',
-              border: `1px solid ${selectedSectionId === s.id ? 'var(--color-primary)' : 'var(--color-border)'}`,
-              borderRadius: '6px', cursor: 'pointer',
-              backgroundColor: selectedSectionId === s.id ? 'var(--color-primary)' : 'var(--color-surface)',
-              color: selectedSectionId === s.id ? '#fff' : 'var(--color-text-secondary)',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
-
-      {/* EPRD Table */}
-      <div style={{
-        backgroundColor: 'var(--color-surface)', borderRadius: '8px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden',
-      }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
-              <th style={{ ...cellStyle, fontWeight: 600, textAlign: 'left', width: '60%' }}>Libellé</th>
-              <th style={{ ...cellStyle, fontWeight: 600, textAlign: 'right', width: '30%' }}>Montant prévisionnel (€)</th>
-              <th style={{ ...cellStyle, fontWeight: 600, textAlign: 'center', width: '10%' }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {/* ── CHARGES ── */}
-            <tr><td colSpan={3} style={{ ...headerCellStyle, fontSize: '14px', letterSpacing: '0.05em', color: 'var(--color-danger)' }}>CHARGES</td></tr>
-
-            {[1, 2, 3, 4].map((titleNum) => {
-              const titleLines = chargesByTitle[titleNum] ?? [];
-              const titleTotal = titleLines.reduce((s, l) => s + l.amount_previsionnel, 0);
-              return (
-                <TitleSection
-                  key={`c-${titleNum}`}
-                  titleNum={titleNum}
-                  titleLabel={CHARGE_TITLES[titleNum]}
-                  lines={titleLines}
-                  total={titleTotal}
-                  lineType="charge"
-                  cellStyle={cellStyle}
-                  headerCellStyle={headerCellStyle}
-                  editingId={editingId}
-                  editValue={editValue}
-                  setEditValue={setEditValue}
-                  onStartEdit={onStartEdit}
-                  onSaveEdit={onSaveEdit}
-                  onDeleteLine={onDeleteLine}
-                  addingLine={addingLine}
-                  setAddingLine={setAddingLine}
-                  newLabel={newLabel}
-                  setNewLabel={setNewLabel}
-                  newAmount={newAmount}
-                  setNewAmount={setNewAmount}
-                  onAddLine={onAddLine}
-                  inputStyle={inputStyle}
-                />
-              );
-            })}
-
-            {/* Total charges */}
-            <tr><td style={totalRowStyle}>TOTAL CHARGES</td><td style={{ ...totalRowStyle, textAlign: 'right', color: 'var(--color-danger)' }}>{fmt(totalCharges)}</td><td style={totalRowStyle}></td></tr>
-
-            {/* Spacer */}
-            <tr><td colSpan={3} style={{ height: '12px', border: 'none' }}></td></tr>
-
-            {/* ── PRODUITS ── */}
-            <tr><td colSpan={3} style={{ ...headerCellStyle, fontSize: '14px', letterSpacing: '0.05em', color: 'var(--color-success)' }}>PRODUITS</td></tr>
-
-            {[1, 2, 3].map((titleNum) => {
-              const titleLines = produitsByTitle[titleNum] ?? [];
-              const titleTotal = titleLines.reduce((s, l) => s + l.amount_previsionnel, 0);
-              return (
-                <TitleSection
-                  key={`p-${titleNum}`}
-                  titleNum={titleNum}
-                  titleLabel={PRODUIT_TITLES[titleNum]}
-                  lines={titleLines}
-                  total={titleTotal}
-                  lineType="produit"
-                  cellStyle={cellStyle}
-                  headerCellStyle={headerCellStyle}
-                  editingId={editingId}
-                  editValue={editValue}
-                  setEditValue={setEditValue}
-                  onStartEdit={onStartEdit}
-                  onSaveEdit={onSaveEdit}
-                  onDeleteLine={onDeleteLine}
-                  addingLine={addingLine}
-                  setAddingLine={setAddingLine}
-                  newLabel={newLabel}
-                  setNewLabel={setNewLabel}
-                  newAmount={newAmount}
-                  setNewAmount={setNewAmount}
-                  onAddLine={onAddLine}
-                  inputStyle={inputStyle}
-                />
-              );
-            })}
-
-            {/* Total produits */}
-            <tr><td style={totalRowStyle}>TOTAL PRODUITS</td><td style={{ ...totalRowStyle, textAlign: 'right', color: 'var(--color-success)' }}>{fmt(totalProduits)}</td><td style={totalRowStyle}></td></tr>
-
-            {/* Spacer */}
-            <tr><td colSpan={3} style={{ height: '12px', border: 'none' }}></td></tr>
-
-            {/* ── RÉSULTAT ── */}
-            <tr>
-              <td style={{ ...totalRowStyle, fontSize: '15px', backgroundColor: result >= 0 ? 'rgba(5,150,105,0.06)' : 'rgba(220,38,38,0.06)' }}>
-                RÉSULTAT PRÉVISIONNEL
-              </td>
-              <td style={{
-                ...totalRowStyle, textAlign: 'right', fontSize: '15px',
-                color: result >= 0 ? 'var(--color-success)' : 'var(--color-danger)',
-                backgroundColor: result >= 0 ? 'rgba(5,150,105,0.06)' : 'rgba(220,38,38,0.06)',
-              }}>
-                {fmt(result)}
-              </td>
-              <td style={{ ...totalRowStyle, backgroundColor: result >= 0 ? 'rgba(5,150,105,0.06)' : 'rgba(220,38,38,0.06)' }}></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════
-// Title Section (sub-component for EPRD table)
-// ═════════════════════════════════════════════════════════════
-
-interface TitleSectionProps {
-  titleNum: number;
-  titleLabel: string;
-  lines: BudgetLine[];
-  total: number;
-  lineType: BudgetLineType;
-  cellStyle: React.CSSProperties;
-  headerCellStyle: React.CSSProperties;
-  editingId: number | null;
-  editValue: string;
-  setEditValue: (v: string) => void;
-  onStartEdit: (line: BudgetLine) => void;
-  onSaveEdit: () => void;
-  onDeleteLine: (id: number) => void;
-  addingLine: { titleNum: number; lineType: BudgetLineType } | null;
-  setAddingLine: (v: { titleNum: number; lineType: BudgetLineType } | null) => void;
-  newLabel: string;
-  setNewLabel: (v: string) => void;
-  newAmount: string;
-  setNewAmount: (v: string) => void;
-  onAddLine: () => void;
-  inputStyle: React.CSSProperties;
-}
-
-function TitleSection(props: TitleSectionProps) {
-  const {
-    titleNum, titleLabel, lines, total, lineType,
-    cellStyle, headerCellStyle,
-    editingId, editValue, setEditValue, onStartEdit, onSaveEdit,
-    onDeleteLine, addingLine, setAddingLine,
-    newLabel, setNewLabel, newAmount, setNewAmount, onAddLine, inputStyle,
-  } = props;
-
-  const isAdding = addingLine?.titleNum === titleNum && addingLine?.lineType === lineType;
-
-  return (
-    <>
-      {/* Title header */}
-      <tr>
-        <td style={{ ...headerCellStyle, paddingLeft: '24px', fontSize: '12px', fontWeight: 600 }}>{titleLabel}</td>
-        <td style={{ ...headerCellStyle, textAlign: 'right', fontSize: '12px' }}>{fmt(total)}</td>
-        <td style={headerCellStyle}></td>
-      </tr>
-
-      {/* Lines */}
-      {lines.map((line) => (
-        <tr key={line.id}>
-          <td style={{ ...cellStyle, paddingLeft: '44px', color: 'var(--color-text-primary)' }}>
-            {line.line_label}
-          </td>
-          <td style={{ ...cellStyle, textAlign: 'right' }}>
-            {editingId === line.id ? (
-              <input
-                type="text"
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                onBlur={onSaveEdit}
-                onKeyDown={(e) => { if (e.key === 'Enter') onSaveEdit(); if (e.key === 'Escape') { setEditValue(''); onSaveEdit(); } }}
-                autoFocus
-                style={{ ...inputStyle, textAlign: 'right', width: '140px' }}
-              />
-            ) : (
-              <span
-                onClick={() => onStartEdit(line)}
-                style={{ cursor: 'pointer', padding: '4px 8px', borderRadius: '4px', transition: 'background 0.15s' }}
-                title="Cliquer pour modifier"
-              >
-                {fmt(line.amount_previsionnel)}
-              </span>
-            )}
-          </td>
-          <td style={{ ...cellStyle, textAlign: 'center' }}>
-            <button
-              onClick={() => onDeleteLine(line.id)}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer', padding: '4px',
-                color: 'var(--color-text-secondary)', opacity: 0.4, transition: 'opacity 0.15s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--color-danger)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.4'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
-              title="Supprimer"
-            >
-              <X size={14} />
-            </button>
-          </td>
-        </tr>
-      ))}
-
-      {/* Add line form */}
-      {isAdding ? (
-        <tr>
-          <td style={{ ...cellStyle, paddingLeft: '44px' }}>
-            <input type="text" placeholder="Libellé" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} style={inputStyle} autoFocus />
-          </td>
-          <td style={{ ...cellStyle, textAlign: 'right' }}>
-            <input type="text" placeholder="0,00" value={newAmount} onChange={(e) => setNewAmount(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') onAddLine(); }}
-              style={{ ...inputStyle, textAlign: 'right', width: '140px' }} />
-          </td>
-          <td style={{ ...cellStyle, textAlign: 'center', display: 'flex', gap: '4px', justifyContent: 'center' }}>
-            <button onClick={onAddLine} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-success)', padding: '4px' }} title="Confirmer">
-              <Plus size={14} />
-            </button>
-            <button onClick={() => setAddingLine(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', padding: '4px' }} title="Annuler">
-              <X size={14} />
-            </button>
-          </td>
-        </tr>
-      ) : (
-        <tr>
-          <td colSpan={3} style={{ ...cellStyle, paddingLeft: '44px' }}>
-            <button
-              onClick={() => { setAddingLine({ titleNum, lineType }); setNewLabel(''); setNewAmount(''); }}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px',
-                color: 'var(--color-primary)', fontFamily: 'var(--font-sans)', fontWeight: 500,
-                display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 0',
-              }}
-            >
-              <Plus size={12} /> Ajouter une ligne
-            </button>
-          </td>
-        </tr>
-      )}
-    </>
+    </div>
   );
 }

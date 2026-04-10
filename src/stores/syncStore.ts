@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { SyncModule, SyncStatus } from '@/db/types';
-import { syncAll, syncActivities, syncInventory, syncStaff, shouldAutoSync } from '@/services/syncService';
+import { syncAll, syncActivities, syncInventory, syncStaff, syncBudget, shouldAutoSync } from '@/services/syncService';
 import type { SyncResult } from '@/services/syncService';
 import { getLastSyncAll } from '@/db/sync';
 
@@ -34,6 +34,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     activities: { ...DEFAULT_MODULE_STATE },
     inventory: { ...DEFAULT_MODULE_STATE },
     staff: { ...DEFAULT_MODULE_STATE },
+    budget: { ...DEFAULT_MODULE_STATE },
   },
   globalStatus: 'idle',
   autoSyncTimer: null,
@@ -55,6 +56,10 @@ export const useSyncStore = create<SyncState>((set, get) => ({
             ...state.modules.staff,
             lastSyncAt: lastSyncs.staff?.finished_at ?? null,
           },
+          budget: {
+            ...state.modules.budget,
+            lastSyncAt: lastSyncs.budget?.finished_at ?? null,
+          },
         },
       }));
     } catch {
@@ -74,7 +79,8 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     try {
       const syncFn = module === 'activities' ? syncActivities
         : module === 'inventory' ? syncInventory
-        : syncStaff;
+        : module === 'staff' ? syncStaff
+        : syncBudget;
 
       const result = await syncFn();
       const now = new Date().toISOString();

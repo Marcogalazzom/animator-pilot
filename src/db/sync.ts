@@ -42,7 +42,7 @@ export async function getSyncLogs(limit = 20): Promise<SyncLog[]> {
 }
 
 export async function getLastSyncAll(): Promise<Record<SyncModule, SyncLog | null>> {
-  const modules: SyncModule[] = ['activities', 'inventory', 'staff'];
+  const modules: SyncModule[] = ['activities', 'inventory', 'staff', 'budget'];
   const result: Record<string, SyncLog | null> = {};
   for (const mod of modules) {
     result[mod] = await getLastSync(mod).catch(() => null);

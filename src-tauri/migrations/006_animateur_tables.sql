@@ -120,6 +120,39 @@ CREATE TABLE IF NOT EXISTS sync_log (
 CREATE INDEX IF NOT EXISTS idx_sync_log_module ON sync_log(module);
 CREATE INDEX IF NOT EXISTS idx_sync_log_status ON sync_log(status);
 
+-- ─── Animation Budget ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS animation_budget (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  fiscal_year     INTEGER NOT NULL UNIQUE,
+  total_allocated REAL    NOT NULL DEFAULT 0,
+  synced_from     TEXT    NOT NULL DEFAULT '',
+  last_sync_at    TEXT,
+  external_id     TEXT,
+  created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ─── Expenses (dépenses animation) ──────────────────────────
+CREATE TABLE IF NOT EXISTS expenses (
+  id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+  fiscal_year             INTEGER NOT NULL,
+  title                   TEXT    NOT NULL,
+  category                TEXT    NOT NULL DEFAULT 'other',
+  amount                  REAL    NOT NULL DEFAULT 0,
+  date                    TEXT    NOT NULL,
+  description             TEXT    NOT NULL DEFAULT '',
+  supplier                TEXT    NOT NULL DEFAULT '',
+  invoice_path            TEXT,
+  linked_intervenant_id   TEXT,
+  synced_from             TEXT    NOT NULL DEFAULT '',
+  last_sync_at            TEXT,
+  external_id             TEXT,
+  created_at              TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_expenses_year ON expenses(fiscal_year);
+CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);
+CREATE INDEX IF NOT EXISTS idx_expenses_external ON expenses(external_id);
+
 -- ─── Sync settings defaults ─────────────────────────────────
 INSERT OR IGNORE INTO app_settings (key, value) VALUES ('sync_email', '');
 INSERT OR IGNORE INTO app_settings (key, value) VALUES ('sync_auto_enabled', 'true');

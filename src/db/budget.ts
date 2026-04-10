@@ -1,200 +1,108 @@
 import { getDb } from './database';
-import type { BudgetSection, BudgetLine, BudgetLineType, Investment } from './types';
+import type { AnimationBudget, Expense, ExpenseCategory } from './types';
 
-const UPDATABLE_BUDGET_LINE_FIELDS = new Set([
-  'section_id',
-  'title_number',
-  'line_label',
-  'line_type',
-  'amount_previsionnel',
-  'amount_realise',
-  'fiscal_year',
-  'period',
-  'linked_obligation_id',
+const UPDATABLE_BUDGET = new Set(['total_allocated', 'synced_from', 'last_sync_at', 'external_id']);
+const UPDATABLE_EXPENSE = new Set([
+  'title', 'category', 'amount', 'date', 'description', 'supplier',
+  'invoice_path', 'linked_intervenant_id', 'synced_from', 'last_sync_at', 'external_id',
 ]);
 
-const UPDATABLE_INVESTMENT_FIELDS = new Set([
-  'title',
-  'description',
-  'amount_planned',
-  'amount_committed',
-  'amount_realized',
-  'funding_source',
-  'start_date',
-  'end_date',
-  'status',
-  'fiscal_year',
-]);
+// ─── Budget ──────────────────────────────────────────────────
 
-// ─── Budget sections ──────────────────────────────────────────
-
-export async function getBudgetSections(): Promise<BudgetSection[]> {
+export async function getBudget(fiscalYear: number): Promise<AnimationBudget | null> {
   const db = await getDb();
-  return db.select<BudgetSection[]>('SELECT * FROM budget_sections ORDER BY name', []);
-}
-
-// ─── Budget lines ─────────────────────────────────────────────
-
-export async function getBudgetLines(
-  sectionId?: number,
-  fiscalYear?: number,
-  lineType?: BudgetLineType
-): Promise<BudgetLine[]> {
-  const db = await getDb();
-  const conditions: string[] = [];
-  const params: unknown[] = [];
-
-  if (sectionId !== undefined) {
-    conditions.push('section_id = ?');
-    params.push(sectionId);
-  }
-  if (fiscalYear !== undefined) {
-    conditions.push('fiscal_year = ?');
-    params.push(fiscalYear);
-  }
-  if (lineType) {
-    conditions.push('line_type = ?');
-    params.push(lineType);
-  }
-
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  return db.select<BudgetLine[]>(
-    `SELECT * FROM budget_lines ${where} ORDER BY section_id, title_number, line_label`,
-    params
-  );
-}
-
-export async function createBudgetLine(
-  line: Omit<BudgetLine, 'id' | 'created_at'>
-): Promise<number> {
-  const db = await getDb();
-  const result = await db.execute(
-    `INSERT INTO budget_lines
-      (section_id, title_number, line_label, line_type, amount_previsionnel, amount_realise, fiscal_year, period)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      line.section_id,
-      line.title_number,
-      line.line_label,
-      line.line_type,
-      line.amount_previsionnel,
-      line.amount_realise,
-      line.fiscal_year,
-      line.period,
-    ]
-  );
-  return result.lastInsertId ?? 0;
-}
-
-export async function updateBudgetLine(
-  id: number,
-  updates: Partial<BudgetLine>
-): Promise<void> {
-  const db = await getDb();
-  const fields = Object.keys(updates).filter((k) => UPDATABLE_BUDGET_LINE_FIELDS.has(k));
-  if (fields.length === 0) return;
-
-  const setClauses = fields.map((f) => `${f} = ?`).join(', ');
-  const values: unknown[] = fields.map((f) => (updates as Record<string, unknown>)[f]);
-  values.push(id);
-
-  await db.execute(`UPDATE budget_lines SET ${setClauses} WHERE id = ?`, values);
-}
-
-export async function deleteBudgetLine(id: number): Promise<void> {
-  const db = await getDb();
-  await db.execute('DELETE FROM budget_lines WHERE id = ?', [id]);
-}
-
-export async function getBudgetSummary(
-  fiscalYear: number
-): Promise<{ section: string; totalChargesPrevu: number; totalProduitsPrevu: number; totalChargesRealise: number; totalProduitsRealise: number }[]> {
-  const db = await getDb();
-  const rows = await db.select<{ section: string; line_type: string; total_prevu: number; total_realise: number }[]>(
-    `SELECT bs.label AS section, bl.line_type,
-            SUM(bl.amount_previsionnel) AS total_prevu,
-            SUM(bl.amount_realise) AS total_realise
-     FROM budget_lines bl
-     JOIN budget_sections bs ON bl.section_id = bs.id
-     WHERE bl.fiscal_year = ?
-     GROUP BY bs.label, bl.line_type`,
+  const rows = await db.select<AnimationBudget[]>(
+    'SELECT * FROM animation_budget WHERE fiscal_year = ?',
     [fiscalYear]
   );
-
-  const map = new Map<string, { totalChargesPrevu: number; totalProduitsPrevu: number; totalChargesRealise: number; totalProduitsRealise: number }>();
-  for (const row of rows) {
-    if (!map.has(row.section)) {
-      map.set(row.section, { totalChargesPrevu: 0, totalProduitsPrevu: 0, totalChargesRealise: 0, totalProduitsRealise: 0 });
-    }
-    const entry = map.get(row.section)!;
-    if (row.line_type === 'charge') {
-      entry.totalChargesPrevu = row.total_prevu ?? 0;
-      entry.totalChargesRealise = row.total_realise ?? 0;
-    } else {
-      entry.totalProduitsPrevu = row.total_prevu ?? 0;
-      entry.totalProduitsRealise = row.total_realise ?? 0;
-    }
-  }
-
-  return Array.from(map.entries()).map(([section, data]) => ({
-    section,
-    ...data,
-  }));
+  return rows[0] ?? null;
 }
 
-// ─── Investments ──────────────────────────────────────────────
-
-export async function getInvestments(fiscalYear?: number): Promise<Investment[]> {
+export async function upsertBudget(fiscalYear: number, totalAllocated: number): Promise<void> {
   const db = await getDb();
-  if (fiscalYear !== undefined) {
-    return db.select<Investment[]>(
-      'SELECT * FROM investments WHERE fiscal_year = ? ORDER BY created_at DESC',
-      [fiscalYear]
+  await db.execute(
+    `INSERT INTO animation_budget (fiscal_year, total_allocated)
+     VALUES (?, ?)
+     ON CONFLICT(fiscal_year) DO UPDATE SET total_allocated = excluded.total_allocated`,
+    [fiscalYear, totalAllocated]
+  );
+}
+
+// ─── Expenses ────────────────────────────────────────────────
+
+export async function getExpenses(fiscalYear: number, category?: ExpenseCategory): Promise<Expense[]> {
+  const db = await getDb();
+  if (category) {
+    return db.select<Expense[]>(
+      'SELECT * FROM expenses WHERE fiscal_year = ? AND category = ? ORDER BY date DESC',
+      [fiscalYear, category]
     );
   }
-  return db.select<Investment[]>('SELECT * FROM investments ORDER BY created_at DESC', []);
+  return db.select<Expense[]>(
+    'SELECT * FROM expenses WHERE fiscal_year = ? ORDER BY date DESC',
+    [fiscalYear]
+  );
 }
 
-export async function createInvestment(
-  inv: Omit<Investment, 'id' | 'created_at'>
-): Promise<number> {
+export async function createExpense(expense: Omit<Expense, 'id' | 'created_at'>): Promise<number> {
   const db = await getDb();
   const result = await db.execute(
-    `INSERT INTO investments
-      (title, description, amount_planned, amount_committed, amount_realized, funding_source, start_date, end_date, status, fiscal_year)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO expenses (fiscal_year, title, category, amount, date, description, supplier,
+     invoice_path, linked_intervenant_id, synced_from, last_sync_at, external_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      inv.title,
-      inv.description,
-      inv.amount_planned,
-      inv.amount_committed,
-      inv.amount_realized,
-      inv.funding_source,
-      inv.start_date,
-      inv.end_date,
-      inv.status,
-      inv.fiscal_year,
+      expense.fiscal_year, expense.title, expense.category, expense.amount,
+      expense.date, expense.description, expense.supplier, expense.invoice_path,
+      expense.linked_intervenant_id, expense.synced_from ?? '', expense.last_sync_at, expense.external_id,
     ]
   );
   return result.lastInsertId ?? 0;
 }
 
-export async function updateInvestment(
-  id: number,
-  updates: Partial<Investment>
-): Promise<void> {
+export async function updateExpense(id: number, updates: Partial<Expense>): Promise<void> {
   const db = await getDb();
-  const fields = Object.keys(updates).filter((k) => UPDATABLE_INVESTMENT_FIELDS.has(k));
+  const fields = Object.keys(updates).filter((k) => UPDATABLE_EXPENSE.has(k));
   if (fields.length === 0) return;
-
   const setClauses = fields.map((f) => `${f} = ?`).join(', ');
   const values: unknown[] = fields.map((f) => (updates as Record<string, unknown>)[f]);
   values.push(id);
-
-  await db.execute(`UPDATE investments SET ${setClauses} WHERE id = ?`, values);
+  await db.execute(`UPDATE expenses SET ${setClauses} WHERE id = ?`, values);
 }
 
-export async function deleteInvestment(id: number): Promise<void> {
+export async function deleteExpense(id: number): Promise<void> {
   const db = await getDb();
-  await db.execute('DELETE FROM investments WHERE id = ?', [id]);
+  await db.execute('DELETE FROM expenses WHERE id = ?', [id]);
+}
+
+// ─── Summary ─────────────────────────────────────────────────
+
+export interface ExpenseSummary {
+  total: number;
+  count: number;
+  byCategory: Record<ExpenseCategory, number>;
+}
+
+export async function getExpenseSummary(fiscalYear: number): Promise<ExpenseSummary> {
+  const db = await getDb();
+
+  const [totalRow] = await db.select<[{ total: number; cnt: number }]>(
+    'SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as cnt FROM expenses WHERE fiscal_year = ?',
+    [fiscalYear]
+  ).catch(() => [[{ total: 0, cnt: 0 }]]);
+
+  const catRows = await db.select<{ category: string; total: number }[]>(
+    'SELECT category, COALESCE(SUM(amount), 0) as total FROM expenses WHERE fiscal_year = ? GROUP BY category',
+    [fiscalYear]
+  ).catch(() => []);
+
+  const byCategory: Record<ExpenseCategory, number> = {
+    intervenants: 0, materiel: 0, sorties: 0, fetes: 0, other: 0,
+  };
+  for (const row of catRows) {
+    if (row.category in byCategory) {
+      byCategory[row.category as ExpenseCategory] = row.total;
+    }
+  }
+
+  return { total: totalRow.total, count: totalRow.cnt, byCategory };
 }

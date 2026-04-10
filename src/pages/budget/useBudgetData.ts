@@ -1,244 +1,121 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSyncStore } from '@/stores/syncStore';
 import {
-  getBudgetSections,
-  getBudgetLines,
-  createBudgetLine,
-  updateBudgetLine,
-  deleteBudgetLine,
-  getBudgetSummary,
-  getInvestments,
-  createInvestment,
-  updateInvestment,
-  deleteInvestment,
-} from '@/db';
-import type { BudgetSection, BudgetLine, BudgetLineType, Investment } from '@/db/types';
+  getBudget, upsertBudget,
+  getExpenses, createExpense, updateExpense, deleteExpense,
+  getExpenseSummary,
+  type ExpenseSummary,
+} from '@/db/budget';
+import type { AnimationBudget, Expense, ExpenseCategory } from '@/db/types';
 
-// ─── Template lines for new fiscal years ─────────────────────
+// ─── Constants ───────────────────────────────────────────────
 
-interface TemplateLine {
-  title_number: number;
-  line_type: BudgetLineType;
-  line_label: string;
-}
+export const CATEGORIES: Record<ExpenseCategory, { label: string; color: string; bg: string }> = {
+  intervenants: { label: 'Intervenants', color: '#7C3AED', bg: '#F5F3FF' },
+  materiel:     { label: 'Matériel',     color: '#1E40AF', bg: '#EFF6FF' },
+  sorties:      { label: 'Sorties',      color: '#059669', bg: '#ECFDF5' },
+  fetes:        { label: 'Fêtes',        color: '#DC2626', bg: '#FEF2F2' },
+  other:        { label: 'Autre',        color: '#64748B', bg: '#F1F5F9' },
+};
 
-const TEMPLATE_LINES: TemplateLine[] = [
-  // Charges
-  { title_number: 1, line_type: 'charge', line_label: 'Salaires et traitements' },
-  { title_number: 1, line_type: 'charge', line_label: 'Charges sociales' },
-  { title_number: 1, line_type: 'charge', line_label: 'Personnel intérimaire' },
-  { title_number: 1, line_type: 'charge', line_label: 'Formation' },
-  { title_number: 2, line_type: 'charge', line_label: 'Médicaments' },
-  { title_number: 2, line_type: 'charge', line_label: 'Dispositifs médicaux' },
-  { title_number: 2, line_type: 'charge', line_label: 'Laboratoire' },
-  { title_number: 3, line_type: 'charge', line_label: 'Alimentation' },
-  { title_number: 3, line_type: 'charge', line_label: 'Entretien et réparations' },
-  { title_number: 3, line_type: 'charge', line_label: 'Énergie et fluides' },
-  { title_number: 3, line_type: 'charge', line_label: 'Assurances' },
-  { title_number: 3, line_type: 'charge', line_label: 'Fournitures diverses' },
-  { title_number: 4, line_type: 'charge', line_label: 'Amortissements' },
-  { title_number: 4, line_type: 'charge', line_label: 'Provisions' },
-  { title_number: 4, line_type: 'charge', line_label: 'Charges financières' },
-  // Produits
-  { title_number: 1, line_type: 'produit', line_label: 'Dotation globale / Tarification' },
-  { title_number: 2, line_type: 'produit', line_label: 'Recettes hébergement' },
-  { title_number: 2, line_type: 'produit', line_label: 'Participations résidents' },
-  { title_number: 3, line_type: 'produit', line_label: 'Produits financiers' },
+export const CATEGORY_KEYS = Object.keys(CATEGORIES) as ExpenseCategory[];
+
+// ─── Mock data ───────────────────────────────────────────────
+
+const MOCK_BUDGET: AnimationBudget = {
+  id: 1, fiscal_year: new Date().getFullYear(), total_allocated: 15000,
+  synced_from: '', last_sync_at: null, external_id: null, created_at: '',
+};
+
+const today = new Date();
+const addDays = (n: number) => new Date(today.getFullYear(), today.getMonth(), today.getDate() + n).toISOString().slice(0, 10);
+
+const MOCK_EXPENSES: Expense[] = [
+  { id: 1, fiscal_year: today.getFullYear(), title: 'Musicothérapeute - Mars', category: 'intervenants', amount: 320, date: addDays(-20), description: '2 séances musicothérapie', supplier: 'Marie Martin', invoice_path: null, linked_intervenant_id: null, synced_from: '', last_sync_at: null, external_id: null, created_at: '' },
+  { id: 2, fiscal_year: today.getFullYear(), title: 'Peinture et pinceaux', category: 'materiel', amount: 85.50, date: addDays(-15), description: 'Lot peinture acrylique + pinceaux', supplier: 'Cultura', invoice_path: null, linked_intervenant_id: null, synced_from: '', last_sync_at: null, external_id: null, created_at: '' },
+  { id: 3, fiscal_year: today.getFullYear(), title: 'Sortie Jardin Botanique', category: 'sorties', amount: 180, date: addDays(-10), description: 'Bus + entrées pour 12 résidents', supplier: 'Transport Express', invoice_path: null, linked_intervenant_id: null, synced_from: '', last_sync_at: null, external_id: null, created_at: '' },
+  { id: 4, fiscal_year: today.getFullYear(), title: 'Goûter anniversaires Mars', category: 'fetes', amount: 45, date: addDays(-8), description: 'Gâteau + boissons', supplier: 'Boulangerie Petit', invoice_path: null, linked_intervenant_id: null, synced_from: '', last_sync_at: null, external_id: null, created_at: '' },
+  { id: 5, fiscal_year: today.getFullYear(), title: 'Art-thérapeute - Avril', category: 'intervenants', amount: 250, date: addDays(-3), description: '1 séance atelier créatif', supplier: 'Sophie Duval', invoice_path: null, linked_intervenant_id: null, synced_from: '', last_sync_at: null, external_id: null, created_at: '' },
+  { id: 6, fiscal_year: today.getFullYear(), title: 'Jeux de société', category: 'materiel', amount: 62, date: addDays(-1), description: '3 jeux adaptés personnes âgées', supplier: 'Amazon', invoice_path: null, linked_intervenant_id: null, synced_from: '', last_sync_at: null, external_id: null, created_at: '' },
 ];
 
-export { TEMPLATE_LINES };
-
-// ─── Title labels ────────────────────────────────────────────
-
-export const CHARGE_TITLES: Record<number, string> = {
-  1: 'Titre 1 — Charges de personnel',
-  2: 'Titre 2 — Charges à caractère médical',
-  3: 'Titre 3 — Charges à caractère hôtelier et général',
-  4: 'Titre 4 — Amortissements, provisions, charges financières',
+const MOCK_SUMMARY: ExpenseSummary = {
+  total: 942.50, count: 6,
+  byCategory: { intervenants: 570, materiel: 147.50, sorties: 180, fetes: 45, other: 0 },
 };
-
-export const PRODUIT_TITLES: Record<number, string> = {
-  1: 'Titre 1 — Produits de la tarification',
-  2: 'Titre 2 — Autres produits relatifs à l\'exploitation',
-  3: 'Titre 3 — Produits financiers et non encaissables',
-};
-
-// ─── Summary type ────────────────────────────────────────────
-
-export interface SectionSummary {
-  section: string;
-  label: string;
-  totalCharges: number;
-  totalProduits: number;
-  result: number;
-  totalChargesRealise: number;
-  totalProduitsRealise: number;
-  resultRealise: number;
-}
 
 // ─── Hook ────────────────────────────────────────────────────
 
 export interface BudgetData {
-  sections: BudgetSection[];
-  lines: BudgetLine[];
-  summary: SectionSummary[];
-  caf: number;
+  budget: AnimationBudget | null;
+  expenses: Expense[];
+  summary: ExpenseSummary;
+  year: number;
+  setYear: (y: number) => void;
   loading: boolean;
   error: string | null;
-  selectedYear: number;
-  setSelectedYear: (y: number) => void;
-  selectedSectionId: number | null;
-  setSelectedSectionId: (id: number | null) => void;
-  refresh: () => void;
-  addLine: (line: Omit<BudgetLine, 'id' | 'created_at'>) => Promise<number>;
-  editLine: (id: number, updates: Partial<BudgetLine>) => Promise<void>;
-  removeLine: (id: number) => Promise<void>;
-  initFromTemplate: (sectionId: number, fiscalYear: number) => Promise<void>;
-  investments: Investment[];
-  addInvestment: (inv: Omit<Investment, 'id' | 'created_at'>) => Promise<number>;
-  editInvestment: (id: number, updates: Partial<Investment>) => Promise<void>;
-  removeInvestment: (id: number) => Promise<void>;
+  saveBudgetTotal: (amount: number) => Promise<void>;
+  addExpense: (expense: Omit<Expense, 'id' | 'created_at'>) => Promise<number>;
+  editExpense: (id: number, updates: Partial<Expense>) => Promise<void>;
+  removeExpense: (id: number) => Promise<void>;
+  refresh: () => Promise<void>;
 }
 
 export function useBudgetData(): BudgetData {
-  const currentYear = new Date().getFullYear();
-  const [selectedYear, setSelectedYear] = useState(currentYear);
-  const [selectedSectionId, setSelectedSectionId] = useState<number | null>(null);
-  const [sections, setSections] = useState<BudgetSection[]>([]);
-  const [lines, setLines] = useState<BudgetLine[]>([]);
-  const [summary, setSummary] = useState<SectionSummary[]>([]);
-  const [investments, setInvestments] = useState<Investment[]>([]);
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [budget, setBudget] = useState<AnimationBudget | null>(MOCK_BUDGET);
+  const [expenses, setExpenses] = useState<Expense[]>(MOCK_EXPENSES);
+  const [summary, setSummary] = useState<ExpenseSummary>(MOCK_SUMMARY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const syncStatus = useSyncStore((s) => s.modules.budget.status);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
     try {
-      const [dbSections, dbSummary] = await Promise.all([
-        getBudgetSections().catch(() => [] as BudgetSection[]),
-        getBudgetSummary(selectedYear).catch(() => []),
+      const [dbBudget, dbExpenses, dbSummary] = await Promise.all([
+        getBudget(year).catch(() => null),
+        getExpenses(year).catch(() => [] as Expense[]),
+        getExpenseSummary(year).catch(() => MOCK_SUMMARY),
       ]);
 
-      setSections(dbSections);
-
-      // Auto-select first section if none selected
-      if (!selectedSectionId && dbSections.length > 0) {
-        setSelectedSectionId(dbSections[0].id);
-      }
-
-      // Build summary with labels
-      const summaryWithLabels: SectionSummary[] = dbSections.map((s) => {
-        const match = dbSummary.find((r: { section: string }) => r.section === s.label) as unknown as Record<string, number> | undefined;
-        const cp = match?.totalChargesPrevu ?? 0;
-        const pp = match?.totalProduitsPrevu ?? 0;
-        const cr = match?.totalChargesRealise ?? 0;
-        const pr = match?.totalProduitsRealise ?? 0;
-        return {
-          section: s.name,
-          label: s.label,
-          totalCharges: cp,
-          totalProduits: pp,
-          result: pp - cp,
-          totalChargesRealise: cr,
-          totalProduitsRealise: pr,
-          resultRealise: pr - cr,
-        };
-      });
-      setSummary(summaryWithLabels);
-
-      // Load lines for selected section
-      if (selectedSectionId) {
-        const dbLines = await getBudgetLines(selectedSectionId, selectedYear).catch(() => [] as BudgetLine[]);
-        setLines(dbLines);
-      }
-
-      // Load investments
-      const dbInvestments = await getInvestments(selectedYear).catch(() => [] as Investment[]);
-      setInvestments(dbInvestments);
+      if (dbBudget) setBudget(dbBudget);
+      if (dbExpenses.length > 0) setExpenses(dbExpenses);
+      setSummary(dbSummary.count > 0 ? dbSummary : MOCK_SUMMARY);
     } catch (err) {
       setError(String(err));
     } finally {
       setLoading(false);
     }
-  }, [selectedYear, selectedSectionId]);
+  }, [year]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData, syncStatus]);
 
-  // CAF = sum of results + amortissements + provisions (title 4 charges)
-  const caf = summary.reduce((acc, s) => acc + s.result, 0)
-    + lines
-      .filter((l) => l.line_type === 'charge' && l.title_number === 4)
-      .reduce((acc, l) => acc + l.amount_previsionnel, 0);
+  const saveBudgetTotal = useCallback(async (amount: number) => {
+    await upsertBudget(year, amount).catch(() => {});
+    setBudget((prev) => prev ? { ...prev, total_allocated: amount } : { id: 0, fiscal_year: year, total_allocated: amount, synced_from: '', last_sync_at: null, external_id: null, created_at: '' });
+  }, [year]);
 
-  const addLine = useCallback(async (line: Omit<BudgetLine, 'id' | 'created_at'>) => {
-    const id = await createBudgetLine(line);
-    await loadData();
+  const addExpense = useCallback(async (expense: Omit<Expense, 'id' | 'created_at'>) => {
+    const id = await createExpense(expense).catch(() => Date.now());
+    setExpenses((prev) => [{ ...expense, id, created_at: new Date().toISOString() }, ...prev]);
+    const newSummary = await getExpenseSummary(year).catch(() => summary);
+    setSummary(newSummary);
     return id;
-  }, [loadData]);
+  }, [year, summary]);
 
-  const editLine = useCallback(async (id: number, updates: Partial<BudgetLine>) => {
-    await updateBudgetLine(id, updates);
-    await loadData();
-  }, [loadData]);
+  const editExpense = useCallback(async (id: number, updates: Partial<Expense>) => {
+    await updateExpense(id, updates).catch(() => {});
+    setExpenses((prev) => prev.map((e) => e.id === id ? { ...e, ...updates } : e));
+    const newSummary = await getExpenseSummary(year).catch(() => summary);
+    setSummary(newSummary);
+  }, [year, summary]);
 
-  const removeLine = useCallback(async (id: number) => {
-    await deleteBudgetLine(id);
-    await loadData();
-  }, [loadData]);
+  const removeExpense = useCallback(async (id: number) => {
+    await deleteExpense(id).catch(() => {});
+    setExpenses((prev) => prev.filter((e) => e.id !== id));
+    const newSummary = await getExpenseSummary(year).catch(() => summary);
+    setSummary(newSummary);
+  }, [year, summary]);
 
-  const addInvestment = useCallback(async (inv: Omit<Investment, 'id' | 'created_at'>) => {
-    const id = await createInvestment(inv);
-    await loadData();
-    return id;
-  }, [loadData]);
-
-  const editInvestment = useCallback(async (id: number, updates: Partial<Investment>) => {
-    await updateInvestment(id, updates);
-    await loadData();
-  }, [loadData]);
-
-  const removeInvestment = useCallback(async (id: number) => {
-    await deleteInvestment(id);
-    await loadData();
-  }, [loadData]);
-
-  const initFromTemplate = useCallback(async (sectionId: number, fiscalYear: number) => {
-    for (const tpl of TEMPLATE_LINES) {
-      await createBudgetLine({
-        section_id: sectionId,
-        title_number: tpl.title_number,
-        line_label: tpl.line_label,
-        line_type: tpl.line_type,
-        amount_previsionnel: 0,
-        amount_realise: 0,
-        fiscal_year: fiscalYear,
-        period: null,
-      });
-    }
-    await loadData();
-  }, [loadData]);
-
-  return {
-    sections,
-    lines,
-    summary,
-    caf,
-    loading,
-    error,
-    selectedYear,
-    setSelectedYear,
-    selectedSectionId,
-    setSelectedSectionId,
-    refresh: loadData,
-    addLine,
-    editLine,
-    removeLine,
-    initFromTemplate,
-    investments,
-    addInvestment,
-    editInvestment,
-    removeInvestment,
-  };
+  return { budget, expenses, summary, year, setYear, loading, error, saveBudgetTotal, addExpense, editExpense, removeExpense, refresh: loadData };
 }

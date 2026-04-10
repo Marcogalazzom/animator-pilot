@@ -31,42 +31,33 @@ export interface ImportRecord {
   status: ImportStatus;
 }
 
-// ─── Budget ───────────────────────────────────────────────────
-export type BudgetLineType = 'charge' | 'produit';
-export type InvestmentStatus = 'planned' | 'in_progress' | 'completed';
+// ─── Budget Animation ────────────────────────────────────────
+export type ExpenseCategory = 'intervenants' | 'materiel' | 'sorties' | 'fetes' | 'other';
 
-export interface BudgetSection {
+export interface AnimationBudget {
   id: number;
-  name: string;
-  label: string;
-  created_at: string;
-}
-
-export interface BudgetLine {
-  id: number;
-  section_id: number;
-  title_number: number;
-  line_label: string;
-  line_type: BudgetLineType;
-  amount_previsionnel: number;
-  amount_realise: number;
   fiscal_year: number;
-  period: string | null;
+  total_allocated: number;
+  synced_from: string;
+  last_sync_at: string | null;
+  external_id: string | null;
   created_at: string;
 }
 
-export interface Investment {
+export interface Expense {
   id: number;
+  fiscal_year: number;
   title: string;
+  category: ExpenseCategory;
+  amount: number;
+  date: string;
   description: string;
-  amount_planned: number;
-  amount_committed: number;
-  amount_realized: number;
-  funding_source: string;
-  start_date: string | null;
-  end_date: string | null;
-  status: InvestmentStatus;
-  fiscal_year: number;
+  supplier: string;
+  invoice_path: string | null;
+  linked_intervenant_id: string | null;
+  synced_from: string;
+  last_sync_at: string | null;
+  external_id: string | null;
   created_at: string;
 }
 
@@ -182,7 +173,7 @@ export interface Activity {
 }
 
 // ─── Sync ────────────────────────────────────────────────────
-export type SyncModule = 'activities' | 'inventory' | 'staff';
+export type SyncModule = 'activities' | 'inventory' | 'staff' | 'budget';
 export type SyncStatus = 'idle' | 'syncing' | 'success' | 'error';
 
 export interface SyncLog {
