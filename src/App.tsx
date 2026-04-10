@@ -12,6 +12,8 @@ const Residents   = lazy(() => import("@/pages/Residents"));
 const Inventory   = lazy(() => import("@/pages/Inventory"));
 const Staff       = lazy(() => import("@/pages/Staff"));
 const Photos      = lazy(() => import("@/pages/Photos"));
+const Journal     = lazy(() => import("@/pages/Journal"));
+const Suppliers   = lazy(() => import("@/pages/Suppliers"));
 const Import      = lazy(() => import("@/pages/Import"));
 const Settings    = lazy(() => import("@/pages/Settings"));
 
@@ -37,6 +39,8 @@ export default function App() {
             <Route path="/inventory"   element={<Inventory />} />
             <Route path="/staff"       element={<Staff />} />
             <Route path="/photos"      element={<Photos />} />
+            <Route path="/journal"     element={<Journal />} />
+            <Route path="/suppliers"   element={<Suppliers />} />
             <Route path="/import"      element={<Import />} />
             <Route path="/settings"    element={<Settings />} />
           </Routes>

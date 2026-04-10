@@ -153,6 +153,35 @@ CREATE INDEX IF NOT EXISTS idx_expenses_year ON expenses(fiscal_year);
 CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);
 CREATE INDEX IF NOT EXISTS idx_expenses_external ON expenses(external_id);
 
+-- ─── Carnet de bord (journal privé, non synchronisé) ────────
+CREATE TABLE IF NOT EXISTS journal (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  date            TEXT    NOT NULL,
+  content         TEXT    NOT NULL DEFAULT '',
+  mood            TEXT    NOT NULL DEFAULT 'neutral',
+  tags            TEXT    NOT NULL DEFAULT '',
+  created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_journal_date ON journal(date);
+
+-- ─── Contacts fournisseurs ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS suppliers (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  name            TEXT    NOT NULL,
+  category        TEXT    NOT NULL DEFAULT 'other',
+  contact_name    TEXT    NOT NULL DEFAULT '',
+  phone           TEXT    NOT NULL DEFAULT '',
+  email           TEXT    NOT NULL DEFAULT '',
+  address         TEXT    NOT NULL DEFAULT '',
+  website         TEXT    NOT NULL DEFAULT '',
+  notes           TEXT    NOT NULL DEFAULT '',
+  is_favorite     INTEGER NOT NULL DEFAULT 0,
+  created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_suppliers_category ON suppliers(category);
+
 -- ─── Sync settings defaults ─────────────────────────────────
 INSERT OR IGNORE INTO app_settings (key, value) VALUES ('sync_email', '');
 INSERT OR IGNORE INTO app_settings (key, value) VALUES ('sync_auto_enabled', 'true');

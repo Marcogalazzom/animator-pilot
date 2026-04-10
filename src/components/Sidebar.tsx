@@ -12,6 +12,8 @@ import {
   Package,
   Users,
   Camera,
+  BookOpen,
+  Store,
   Upload,
   Settings,
   ChevronDown,
@@ -66,6 +68,8 @@ const navGroups: NavGroup[] = [
     id: "outils",
     label: "Outils",
     items: [
+      { to: "/journal", icon: <BookOpen size={18} />, label: "Carnet de bord" },
+      { to: "/suppliers", icon: <Store size={18} />, label: "Fournisseurs" },
       { to: "/import", icon: <Upload size={18} />, label: "Import" },
     ],
   },

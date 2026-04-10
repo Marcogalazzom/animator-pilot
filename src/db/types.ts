@@ -61,6 +61,37 @@ export interface Expense {
   created_at: string;
 }
 
+// ─── Carnet de bord (journal privé) ──────────────────────────
+
+export type JournalMood = 'great' | 'good' | 'neutral' | 'difficult' | 'bad';
+
+export interface JournalEntry {
+  id: number;
+  date: string;
+  content: string;
+  mood: JournalMood;
+  tags: string;
+  created_at: string;
+}
+
+// ─── Contacts fournisseurs ───────────────────────────────────
+
+export type SupplierCategory = 'alimentation' | 'materiel' | 'transport' | 'spectacle' | 'formation' | 'location' | 'other';
+
+export interface Supplier {
+  id: number;
+  name: string;
+  category: SupplierCategory;
+  contact_name: string;
+  phone: string;
+  email: string;
+  address: string;
+  website: string;
+  notes: string;
+  is_favorite: number;
+  created_at: string;
+}
+
 // ─── Documents (Notes / Comptes rendus) ─────────────────────
 export type DocType = 'note_service' | 'cr_animation' | 'cr_equipe' | 'cr_reunion' | 'cr_projet' | 'other';
 
