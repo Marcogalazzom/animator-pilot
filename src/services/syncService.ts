@@ -1,94 +1,109 @@
 /**
  * Sync Service — synchronises Activities, Inventory and Staff
- * with the external planning-ehpad API.
+ * with Firebase Firestore (planning-ehpad project).
  *
- * API contract (planning-ehpad exposes):
- *   GET  /api/activities   → Activity[]
- *   GET  /api/inventory    → InventoryItem[]
- *   GET  /api/staff        → StaffMember[]
- *   POST /api/activities   → push local changes
- *   POST /api/inventory    → push local changes
+ * Firestore collections:
+ *   activities   → local activities table
+ *   inventory    → local inventory table
+ *   intervenants → local staff table
  *
- * Each endpoint accepts ?since=ISO_DATE for incremental sync.
+ * Auth: email/password via Firebase Auth (required for inventory reads).
+ * Plan Spark: no Cloud Functions, direct SDK access.
  */
 
-import { getSetting } from '@/db/settings';
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+  addDoc,
+  type DocumentData,
+} from 'firebase/firestore';
+import { firestore, auth } from './firebase';
 import { getDb } from '@/db/database';
 import { createSyncLog, completeSyncLog, getLastSync } from '@/db/sync';
-import type { Activity, InventoryItem, StaffMember, SyncModule } from '@/db/types';
+import { getSetting } from '@/db/settings';
+import type { Activity, SyncModule } from '@/db/types';
 
-// ─── Types for API responses ─────────────────────────────────
+// ─── Activity type mapping (Firestore → local) ──────────────
 
-interface ApiActivity {
-  id: string;
-  title: string;
-  activity_type: string;
-  description: string;
-  date: string;
-  time_start: string | null;
-  time_end: string | null;
-  location: string;
-  max_participants: number;
-  actual_participants: number;
-  animator_name: string;
-  status: string;
-  materials_needed: string;
-  notes: string;
+const ACTIVITY_TYPE_MAP: Record<string, string> = {
+  sport: 'sport',
+  cognitive: 'jeux',
+  creative: 'atelier_creatif',
+  vr: 'other',
+  boardgames: 'jeux',
+  music: 'musique',
+  food: 'cuisine',
+  social: 'intergenerationnel',
+  outing: 'sortie',
+  festive: 'fete',
+  sensory: 'bien_etre',
+  animal: 'other',
+  religious: 'other',
+  cinema: 'other',
+  reading: 'lecture',
+  press: 'lecture',
+  volleyball: 'sport',
+};
+
+// Reverse mapping (local → Firestore) for push
+const ACTIVITY_TYPE_REVERSE: Record<string, string> = {
+  sport: 'sport',
+  jeux: 'boardgames',
+  atelier_creatif: 'creative',
+  musique: 'music',
+  cuisine: 'food',
+  intergenerationnel: 'social',
+  sortie: 'outing',
+  fete: 'festive',
+  bien_etre: 'sensory',
+  lecture: 'reading',
+  other: 'cognitive',
+};
+
+// ─── Day / week helpers ──────────────────────────────────────
+
+const DAY_OFFSET: Record<string, number> = {
+  Lundi: 0, Mardi: 1, Mercredi: 2, Jeudi: 3,
+  Vendredi: 4, Samedi: 5, Dimanche: 6,
+};
+
+const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+
+function computeDate(weekId: string, day: string): string {
+  const monday = new Date(weekId + 'T00:00:00');
+  monday.setDate(monday.getDate() + (DAY_OFFSET[day] ?? 0));
+  return monday.toISOString().slice(0, 10);
 }
 
-interface ApiInventoryItem {
-  id: string;
-  name: string;
-  category: string;
-  quantity: number;
-  condition: string;
-  location: string;
-  notes: string;
+function computeWeekIdAndDay(dateStr: string): { weekId: string; day: string } {
+  const d = new Date(dateStr + 'T00:00:00');
+  const dow = d.getDay(); // 0=Sun
+  const mondayOffset = dow === 0 ? -6 : 1 - dow;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + mondayOffset);
+  const weekId = monday.toISOString().slice(0, 10);
+  const dayIndex = dow === 0 ? 6 : dow - 1;
+  return { weekId, day: DAY_NAMES[dayIndex] };
 }
 
-interface ApiStaffMember {
-  id: string;
-  first_name: string;
-  last_name: string;
-  role: string;
-  phone: string;
-  email: string;
-  service: string;
-  is_available: boolean;
-  notes: string;
-}
+// ─── Inventory condition mapping ─────────────────────────────
 
-// ─── HTTP helper ─────────────────────────────────────────────
+const CONDITION_MAP: Record<string, string> = {
+  good: 'bon',
+  worn: 'usage',
+  to_replace: 'a_remplacer',
+  out_of_service: 'a_remplacer',
+};
 
-async function getSyncConfig(): Promise<{ url: string; apiKey: string } | null> {
-  const url = await getSetting('sync_url').catch(() => null);
-  const apiKey = await getSetting('sync_api_key').catch(() => null);
-  if (!url) return null;
-  return { url: url.replace(/\/$/, ''), apiKey: apiKey ?? '' };
-}
+// ─── Staff role mapping ──────────────────────────────────────
 
-async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const config = await getSyncConfig();
-  if (!config) throw new Error('URL de synchronisation non configurée');
-
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-  };
-  if (config.apiKey) {
-    headers['Authorization'] = `Bearer ${config.apiKey}`;
-  }
-
-  const response = await fetch(`${config.url}${endpoint}`, {
-    ...options,
-    headers: { ...headers, ...options?.headers },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Erreur API ${response.status}: ${response.statusText}`);
-  }
-
-  return response.json();
+function mapStaffRole(firestoreType: string): string {
+  if (firestoreType === 'benevole') return 'benevole';
+  if (firestoreType === 'salarie') return 'other';
+  if (firestoreType === 'liberal') return 'other';
+  return 'other';
 }
 
 // ─── Sync Activities ─────────────────────────────────────────
@@ -99,49 +114,55 @@ export async function syncActivities(): Promise<{ synced: number; failed: number
   let failed = 0;
 
   try {
-    const lastSync = await getLastSync('activities');
-    const since = lastSync?.finished_at ?? '';
-    const query = since ? `?since=${encodeURIComponent(since)}` : '';
-
-    const remoteActivities = await apiFetch<ApiActivity[]>(`/api/activities${query}`);
+    const lastSyncRecord = await getLastSync('activities');
     const db = await getDb();
     const now = new Date().toISOString();
 
-    for (const remote of remoteActivities) {
+    // ── PULL from Firestore ──
+    const activitiesRef = collection(firestore, 'activities');
+    let q;
+    if (lastSyncRecord?.finished_at) {
+      const sinceMs = new Date(lastSyncRecord.finished_at).getTime();
+      q = query(activitiesRef, where('createdAt', '>', sinceMs));
+    } else {
+      q = query(activitiesRef);
+    }
+
+    const snapshot = await getDocs(q);
+
+    for (const docSnap of snapshot.docs) {
       try {
-        // Check if already exists by external_id
+        const data = docSnap.data();
+        const date = computeDate(data.weekId ?? '', data.day ?? '');
+        const activityType = ACTIVITY_TYPE_MAP[data.type] ?? 'other';
+        const status = data.cancelled ? 'cancelled' : 'planned';
+        const title = data.title ?? '';
+        const timeStart = data.time ?? null;
+        const location = data.desc ?? '';
+        const animatorName = data.intervenant ?? '';
+        const typeLabel = data.typeLabel ?? '';
+        const notes = typeLabel ? `${typeLabel}` : '';
+
         const existing = await db.select<{ id: number }[]>(
-          `SELECT id FROM activities WHERE external_id = ?`,
-          [remote.id]
+          'SELECT id FROM activities WHERE external_id = ?',
+          [docSnap.id]
         );
 
         if (existing.length > 0) {
-          // Update existing
           await db.execute(
-            `UPDATE activities SET title=?, activity_type=?, description=?, date=?, time_start=?,
-             time_end=?, location=?, max_participants=?, actual_participants=?, animator_name=?,
-             status=?, materials_needed=?, notes=?, synced_from='planning-ehpad', last_sync_at=?
-             WHERE external_id = ?`,
-            [
-              remote.title, remote.activity_type, remote.description, remote.date,
-              remote.time_start, remote.time_end, remote.location, remote.max_participants,
-              remote.actual_participants, remote.animator_name, remote.status,
-              remote.materials_needed, remote.notes, now, remote.id,
-            ]
+            `UPDATE activities SET title=?, activity_type=?, description=?, date=?,
+             time_start=?, location=?, animator_name=?, status=?, notes=?,
+             synced_from='planning-ehpad', last_sync_at=?, is_shared=1
+             WHERE external_id=?`,
+            [title, activityType, '', date, timeStart, location, animatorName, status, notes, now, docSnap.id]
           );
         } else {
-          // Insert new
           await db.execute(
             `INSERT INTO activities (title, activity_type, description, date, time_start, time_end,
-             location, max_participants, actual_participants, animator_name, status, materials_needed,
-             notes, synced_from, last_sync_at, external_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'planning-ehpad', ?, ?)`,
-            [
-              remote.title, remote.activity_type, remote.description, remote.date,
-              remote.time_start, remote.time_end, remote.location, remote.max_participants,
-              remote.actual_participants, remote.animator_name, remote.status,
-              remote.materials_needed, remote.notes, now, remote.id,
-            ]
+             location, max_participants, actual_participants, animator_name, status,
+             materials_needed, notes, synced_from, last_sync_at, external_id, is_shared)
+             VALUES (?, ?, '', ?, ?, NULL, ?, 0, 0, ?, ?, '', ?, 'planning-ehpad', ?, ?, 1)`,
+            [title, activityType, date, timeStart, location, animatorName, status, notes, now, docSnap.id]
           );
         }
         synced++;
@@ -150,41 +171,50 @@ export async function syncActivities(): Promise<{ synced: number; failed: number
       }
     }
 
-    // Also push local activities that are NOT synced (created locally)
+    // ── PUSH local shared activities to Firestore ──
     const localOnly = await db.select<Activity[]>(
-      `SELECT * FROM activities WHERE synced_from = '' OR synced_from IS NULL`,
+      `SELECT * FROM activities WHERE (synced_from = '' OR synced_from IS NULL) AND is_shared = 1`,
       []
     );
 
-    if (localOnly.length > 0) {
+    for (const a of localOnly) {
       try {
-        await apiFetch('/api/activities', {
-          method: 'POST',
-          body: JSON.stringify(localOnly.map(a => ({
-            title: a.title,
-            activity_type: a.activity_type,
-            description: a.description,
-            date: a.date,
-            time_start: a.time_start,
-            time_end: a.time_end,
-            location: a.location,
-            max_participants: a.max_participants,
-            actual_participants: a.actual_participants,
-            animator_name: a.animator_name,
-            status: a.status,
-            materials_needed: a.materials_needed,
-            notes: a.notes,
-          }))),
-        });
-        // Mark them as synced
-        for (const a of localOnly) {
-          await db.execute(
-            `UPDATE activities SET synced_from = 'planning-ehpad', last_sync_at = ? WHERE id = ?`,
-            [now, a.id]
-          );
+        const { weekId, day } = computeWeekIdAndDay(a.date);
+        const firestoreType = ACTIVITY_TYPE_REVERSE[a.activity_type] ?? 'cognitive';
+
+        const docData: Record<string, unknown> = {
+          title: a.title,
+          type: firestoreType,
+          day,
+          weekId,
+          time: a.time_start ?? '',
+          desc: a.location,
+          intervenant: a.animator_name,
+          cancelled: a.status === 'cancelled',
+          unit: 'main',
+          isRecurring: false,
+          createdAt: Date.now(),
+        };
+
+        // If user is authenticated, try to add lastModifiedBy
+        if (auth.currentUser) {
+          docData.lastModifiedBy = {
+            uid: auth.currentUser.uid,
+            email: auth.currentUser.email ?? '',
+          };
         }
+
+        const docRef = await addDoc(collection(firestore, 'activities'), docData);
+
+        // Mark as synced locally
+        await db.execute(
+          `UPDATE activities SET synced_from='planning-ehpad', last_sync_at=?, external_id=? WHERE id=?`,
+          [now, docRef.id, a.id]
+        );
+        synced++;
       } catch {
-        // Push failed, not critical
+        // Push failed — not critical, will retry next sync
+        failed++;
       }
     }
 
@@ -200,37 +230,52 @@ export async function syncActivities(): Promise<{ synced: number; failed: number
 // ─── Sync Inventory ──────────────────────────────────────────
 
 export async function syncInventory(): Promise<{ synced: number; failed: number }> {
+  if (!auth.currentUser) {
+    throw new Error('Connexion Firebase requise pour synchroniser l\'inventaire');
+  }
+
   const logId = await createSyncLog('inventory', 'pull');
   let synced = 0;
   let failed = 0;
 
   try {
-    const lastSync = await getLastSync('inventory');
-    const since = lastSync?.finished_at ?? '';
-    const query = since ? `?since=${encodeURIComponent(since)}` : '';
-
-    const remoteItems = await apiFetch<ApiInventoryItem[]>(`/api/inventory${query}`);
     const db = await getDb();
     const now = new Date().toISOString();
 
-    for (const remote of remoteItems) {
+    const snapshot = await getDocs(collection(firestore, 'inventory'));
+
+    for (const docSnap of snapshot.docs) {
       try {
+        const data = docSnap.data();
+        const name = data.name ?? '';
+        const category = data.category ?? 'other';
+        const inventoryType = data.type ?? 'consumable'; // consumable or durable
+        const quantity = data.quantity ?? (inventoryType === 'durable' ? 1 : 0);
+        const condition = inventoryType === 'durable'
+          ? (CONDITION_MAP[data.condition] ?? 'bon')
+          : 'bon';
+        const location = data.unit ?? '';
+        const notes = data.notes ?? '';
+
         const existing = await db.select<{ id: number }[]>(
-          `SELECT id FROM inventory WHERE external_id = ?`,
-          [remote.id]
+          'SELECT id FROM inventory WHERE external_id = ?',
+          [docSnap.id]
         );
 
         if (existing.length > 0) {
           await db.execute(
-            `UPDATE inventory SET name=?, category=?, quantity=?, condition=?, location=?,
-             notes=?, synced_from='planning-ehpad', last_sync_at=? WHERE external_id = ?`,
-            [remote.name, remote.category, remote.quantity, remote.condition, remote.location, remote.notes, now, remote.id]
+            `UPDATE inventory SET name=?, category=?, quantity=?, condition=?,
+             location=?, notes=?, inventory_type=?,
+             synced_from='planning-ehpad', last_sync_at=?
+             WHERE external_id=?`,
+            [name, category, quantity, condition, location, notes, inventoryType, now, docSnap.id]
           );
         } else {
           await db.execute(
-            `INSERT INTO inventory (name, category, quantity, condition, location, notes, synced_from, last_sync_at, external_id)
-             VALUES (?, ?, ?, ?, ?, ?, 'planning-ehpad', ?, ?)`,
-            [remote.name, remote.category, remote.quantity, remote.condition, remote.location, remote.notes, now, remote.id]
+            `INSERT INTO inventory (name, category, quantity, condition, location, notes,
+             inventory_type, synced_from, last_sync_at, external_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'planning-ehpad', ?, ?)`,
+            [name, category, quantity, condition, location, notes, inventoryType, now, docSnap.id]
           );
         }
         synced++;
@@ -248,7 +293,7 @@ export async function syncInventory(): Promise<{ synced: number; failed: number 
   return { synced, failed };
 }
 
-// ─── Sync Staff ──────────────────────────────────────────────
+// ─── Sync Staff (intervenants) ───────────────────────────────
 
 export async function syncStaff(): Promise<{ synced: number; failed: number }> {
   const logId = await createSyncLog('staff', 'pull');
@@ -256,39 +301,53 @@ export async function syncStaff(): Promise<{ synced: number; failed: number }> {
   let failed = 0;
 
   try {
-    const lastSync = await getLastSync('staff');
-    const since = lastSync?.finished_at ?? '';
-    const query = since ? `?since=${encodeURIComponent(since)}` : '';
-
-    const remoteMembers = await apiFetch<ApiStaffMember[]>(`/api/staff${query}`);
+    const lastSyncRecord = await getLastSync('staff');
     const db = await getDb();
     const now = new Date().toISOString();
 
-    for (const remote of remoteMembers) {
+    const intervenantsRef = collection(firestore, 'intervenants');
+    let q;
+    if (lastSyncRecord?.finished_at) {
+      // intervenants has updatedAt → use for incremental sync
+      const sinceDate = new Date(lastSyncRecord.finished_at);
+      q = query(intervenantsRef, where('actif', '==', true), where('updatedAt', '>', sinceDate));
+    } else {
+      q = query(intervenantsRef, where('actif', '==', true));
+    }
+
+    const snapshot = await getDocs(q);
+
+    for (const docSnap of snapshot.docs) {
       try {
+        const data = docSnap.data();
+        const firstName = data.prenom ?? '';
+        const lastName = data.nom ?? '';
+        const role = mapStaffRole(data.type ?? '');
+        const phone = data.tel ?? '';
+        const email = data.email ?? '';
+        const service = Array.isArray(data.specialites) ? data.specialites.join(', ') : '';
+        const isAvailable = data.actif ? 1 : 0;
+        const notes = data.notes ?? '';
+
         const existing = await db.select<{ id: number }[]>(
-          `SELECT id FROM staff WHERE external_id = ?`,
-          [remote.id]
+          'SELECT id FROM staff WHERE external_id = ?',
+          [docSnap.id]
         );
 
         if (existing.length > 0) {
           await db.execute(
             `UPDATE staff SET first_name=?, last_name=?, role=?, phone=?, email=?,
-             service=?, is_available=?, notes=?, synced_from='planning-ehpad', last_sync_at=?
-             WHERE external_id = ?`,
-            [
-              remote.first_name, remote.last_name, remote.role, remote.phone, remote.email,
-              remote.service, remote.is_available ? 1 : 0, remote.notes, now, remote.id,
-            ]
+             service=?, is_available=?, notes=?,
+             synced_from='planning-ehpad', last_sync_at=?
+             WHERE external_id=?`,
+            [firstName, lastName, role, phone, email, service, isAvailable, notes, now, docSnap.id]
           );
         } else {
           await db.execute(
-            `INSERT INTO staff (first_name, last_name, role, phone, email, service, is_available, notes, synced_from, last_sync_at, external_id)
+            `INSERT INTO staff (first_name, last_name, role, phone, email, service,
+             is_available, notes, synced_from, last_sync_at, external_id)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'planning-ehpad', ?, ?)`,
-            [
-              remote.first_name, remote.last_name, remote.role, remote.phone, remote.email,
-              remote.service, remote.is_available ? 1 : 0, remote.notes, now, remote.id,
-            ]
+            [firstName, lastName, role, phone, email, service, isAvailable, notes, now, docSnap.id]
           );
         }
         synced++;
@@ -318,16 +377,16 @@ export interface SyncResult {
 export async function syncAll(): Promise<SyncResult[]> {
   const results: SyncResult[] = [];
 
-  for (const syncFn of [
+  for (const { module, fn } of [
     { module: 'activities' as SyncModule, fn: syncActivities },
     { module: 'inventory' as SyncModule, fn: syncInventory },
     { module: 'staff' as SyncModule, fn: syncStaff },
   ]) {
     try {
-      const result = await syncFn.fn();
-      results.push({ module: syncFn.module, ...result });
+      const result = await fn();
+      results.push({ module, ...result });
     } catch (err) {
-      results.push({ module: syncFn.module, synced: 0, failed: 0, error: String(err) });
+      results.push({ module, synced: 0, failed: 0, error: String(err) });
     }
   }
 
@@ -338,6 +397,5 @@ export async function syncAll(): Promise<SyncResult[]> {
 
 export async function shouldAutoSync(): Promise<boolean> {
   const enabled = await getSetting('sync_auto_enabled').catch(() => 'true');
-  const url = await getSetting('sync_url').catch(() => '');
-  return enabled === 'true' && !!url;
+  return enabled === 'true' && auth.currentUser !== null;
 }

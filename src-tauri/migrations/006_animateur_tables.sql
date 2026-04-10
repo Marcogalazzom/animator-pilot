@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS activities (
   synced_from     TEXT    NOT NULL DEFAULT '',
   last_sync_at    TEXT,
   external_id     TEXT,
+  is_shared       INTEGER NOT NULL DEFAULT 1,
   created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -40,6 +41,7 @@ CREATE TABLE IF NOT EXISTS inventory (
   condition       TEXT    NOT NULL DEFAULT 'bon',
   location        TEXT    NOT NULL DEFAULT '',
   notes           TEXT    NOT NULL DEFAULT '',
+  inventory_type  TEXT    NOT NULL DEFAULT 'consumable',
   synced_from     TEXT    NOT NULL DEFAULT '',
   last_sync_at    TEXT,
   external_id     TEXT,
@@ -119,7 +121,6 @@ CREATE INDEX IF NOT EXISTS idx_sync_log_module ON sync_log(module);
 CREATE INDEX IF NOT EXISTS idx_sync_log_status ON sync_log(status);
 
 -- ─── Sync settings defaults ─────────────────────────────────
-INSERT OR IGNORE INTO app_settings (key, value) VALUES ('sync_url', '');
-INSERT OR IGNORE INTO app_settings (key, value) VALUES ('sync_api_key', '');
+INSERT OR IGNORE INTO app_settings (key, value) VALUES ('sync_email', '');
 INSERT OR IGNORE INTO app_settings (key, value) VALUES ('sync_auto_enabled', 'true');
 INSERT OR IGNORE INTO app_settings (key, value) VALUES ('sync_interval_minutes', '15');

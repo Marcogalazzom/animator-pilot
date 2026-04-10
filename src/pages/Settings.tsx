@@ -1,16 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Building2, Database, Info, RefreshCw,
-  Save, CheckCircle2, HardDrive, Globe,
+  Save, CheckCircle2, HardDrive, Globe, LogIn, LogOut,
 } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
 import { useSyncStore } from '@/stores/syncStore';
 import { getSetting, setSetting } from '@/db';
 import { getDb } from '@/db/database';
+import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged, type User } from '@/services/firebase';
 
 // ─── Types ────────────────────────────────────────────────────
-
-type ToastKind = 'success' | 'error';
 
 interface DbStats {
   projects:    number;
@@ -31,13 +30,23 @@ export default function Settings() {
   // Settings state
   const [etablissement, setEtablissement] = useState('Mon EHPAD');
   const [animatrice, setAnimatrice]       = useState('Marie Dupont');
-  const [syncUrl, setSyncUrl]             = useState('');
-  const [syncApiKey, setSyncApiKey]       = useState('');
+  const [syncEmail, setSyncEmail]         = useState('');
+  const [syncPassword, setSyncPassword]   = useState('');
   const [syncAutoEnabled, setSyncAutoEnabled] = useState(true);
   const [syncInterval, setSyncInterval]   = useState('15');
+  const [firebaseUser, setFirebaseUser]   = useState<User | null>(auth.currentUser);
+  const [authLoading, setAuthLoading]     = useState(false);
   const [dbStats, setDbStats]             = useState<DbStats>({ projects: 0, activities: 0, residents: 0, albums: 0, inventory: 0 });
   const [loading, setLoading]             = useState(true);
   const [saving, setSaving]               = useState(false);
+
+  // Listen to Firebase auth state
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+    });
+    return unsubscribe;
+  }, []);
 
   // Load settings
   useEffect(() => {
@@ -45,19 +54,17 @@ export default function Settings() {
 
     async function load() {
       try {
-        const [etab, anim, sUrl, sKey, sAuto, sInt] = await Promise.all([
+        const [etab, anim, sEmail, sAuto, sInt] = await Promise.all([
           getSetting('etablissement_name').catch(() => null),
           getSetting('animatrice_name').catch(() => null),
-          getSetting('sync_url').catch(() => null),
-          getSetting('sync_api_key').catch(() => null),
+          getSetting('sync_email').catch(() => null),
           getSetting('sync_auto_enabled').catch(() => null),
           getSetting('sync_interval_minutes').catch(() => null),
         ]);
         if (cancelled) return;
         if (etab) setEtablissement(etab);
         if (anim) setAnimatrice(anim);
-        if (sUrl) setSyncUrl(sUrl);
-        if (sKey) setSyncApiKey(sKey);
+        if (sEmail) setSyncEmail(sEmail);
         if (sAuto !== null) setSyncAutoEnabled(sAuto === 'true');
         if (sInt) setSyncInterval(sInt);
 
@@ -93,8 +100,7 @@ export default function Settings() {
     try {
       await setSetting('etablissement_name', etablissement);
       await setSetting('animatrice_name', animatrice);
-      await setSetting('sync_url', syncUrl);
-      await setSetting('sync_api_key', syncApiKey);
+      await setSetting('sync_email', syncEmail);
       await setSetting('sync_auto_enabled', syncAutoEnabled ? 'true' : 'false');
       await setSetting('sync_interval_minutes', syncInterval);
       addToast('Paramètres enregistrés', 'success');
@@ -103,7 +109,33 @@ export default function Settings() {
     } finally {
       setSaving(false);
     }
-  }, [etablissement, animatrice, syncUrl, syncApiKey, syncAutoEnabled, syncInterval, addToast]);
+  }, [etablissement, animatrice, syncEmail, syncAutoEnabled, syncInterval, addToast]);
+
+  const handleFirebaseLogin = useCallback(async () => {
+    if (!syncEmail || !syncPassword) {
+      addToast('Veuillez entrer email et mot de passe', 'error');
+      return;
+    }
+    setAuthLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, syncEmail, syncPassword);
+      setSyncPassword('');
+      addToast('Connecté à planning-ehpad', 'success');
+    } catch (err) {
+      addToast(`Erreur de connexion : ${String(err).replace('FirebaseError: ', '')}`, 'error');
+    } finally {
+      setAuthLoading(false);
+    }
+  }, [syncEmail, syncPassword, addToast]);
+
+  const handleFirebaseLogout = useCallback(async () => {
+    try {
+      await signOut(auth);
+      addToast('Déconnecté', 'info');
+    } catch {
+      addToast('Erreur de déconnexion', 'error');
+    }
+  }, [addToast]);
 
   if (loading) {
     return (
@@ -222,33 +254,86 @@ export default function Settings() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
-            URL de l'API planning-ehpad
-            <input
-              value={syncUrl}
-              onChange={(e) => setSyncUrl(e.target.value)}
-              placeholder="https://planning-ehpad.exemple.fr"
-              style={{
-                width: '100%', padding: '8px 10px', marginTop: '4px',
-                border: '1px solid var(--color-border)', borderRadius: '6px',
-                fontSize: '13px', fontFamily: 'var(--font-sans)',
-              }}
-            />
-          </label>
-          <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
-            Clé API (optionnelle)
-            <input
-              value={syncApiKey}
-              onChange={(e) => setSyncApiKey(e.target.value)}
-              type="password"
-              placeholder="Bearer token"
-              style={{
-                width: '100%', padding: '8px 10px', marginTop: '4px',
-                border: '1px solid var(--color-border)', borderRadius: '6px',
-                fontSize: '13px', fontFamily: 'var(--font-sans)',
-              }}
-            />
-          </label>
+          {/* Auth status */}
+          <div style={{
+            padding: '12px 16px', borderRadius: '8px',
+            backgroundColor: firebaseUser ? 'rgba(5,150,105,0.06)' : 'rgba(220,38,38,0.06)',
+            border: `1px solid ${firebaseUser ? 'rgba(5,150,105,0.2)' : 'rgba(220,38,38,0.2)'}`,
+            display: 'flex', alignItems: 'center', gap: '10px',
+          }}>
+            <div style={{
+              width: '8px', height: '8px', borderRadius: '50%',
+              backgroundColor: firebaseUser ? 'var(--color-success)' : 'var(--color-danger)',
+            }} />
+            <span style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)', color: firebaseUser ? 'var(--color-success)' : 'var(--color-danger)', flex: 1 }}>
+              {firebaseUser ? `Connecté : ${firebaseUser.email}` : 'Non connecté'}
+            </span>
+            {firebaseUser && (
+              <button
+                onClick={handleFirebaseLogout}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '4px',
+                  padding: '4px 10px', background: 'none', border: '1px solid var(--color-border)',
+                  borderRadius: '4px', fontSize: '11px', fontWeight: 500, fontFamily: 'var(--font-sans)',
+                  color: 'var(--color-text-secondary)', cursor: 'pointer',
+                }}
+              >
+                <LogOut size={11} /> Déconnexion
+              </button>
+            )}
+          </div>
+
+          {/* Login form (hidden when connected) */}
+          {!firebaseUser && (
+            <>
+              <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
+                Email (compte planning-ehpad)
+                <input
+                  value={syncEmail}
+                  onChange={(e) => setSyncEmail(e.target.value)}
+                  type="email"
+                  placeholder="animatrice@ehpad.fr"
+                  style={{
+                    width: '100%', padding: '8px 10px', marginTop: '4px',
+                    border: '1px solid var(--color-border)', borderRadius: '6px',
+                    fontSize: '13px', fontFamily: 'var(--font-sans)',
+                  }}
+                />
+              </label>
+              <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
+                Mot de passe
+                <input
+                  value={syncPassword}
+                  onChange={(e) => setSyncPassword(e.target.value)}
+                  type="password"
+                  placeholder="Mot de passe planning-ehpad"
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleFirebaseLogin(); }}
+                  style={{
+                    width: '100%', padding: '8px 10px', marginTop: '4px',
+                    border: '1px solid var(--color-border)', borderRadius: '6px',
+                    fontSize: '13px', fontFamily: 'var(--font-sans)',
+                  }}
+                />
+              </label>
+              <button
+                onClick={handleFirebaseLogin}
+                disabled={authLoading}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  padding: '8px 16px', backgroundColor: '#7C3AED',
+                  color: '#fff', border: 'none', borderRadius: '6px',
+                  fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-sans)',
+                  cursor: authLoading ? 'not-allowed' : 'pointer', width: 'fit-content',
+                  opacity: authLoading ? 0.7 : 1,
+                }}
+              >
+                <LogIn size={14} />
+                {authLoading ? 'Connexion...' : 'Se connecter'}
+              </button>
+            </>
+          )}
+
+          {/* Auto-sync settings */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <input
@@ -256,7 +341,7 @@ export default function Settings() {
                 checked={syncAutoEnabled}
                 onChange={(e) => setSyncAutoEnabled(e.target.checked)}
               />
-              Synchronisation automatique
+              Sync automatique
             </label>
             <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
               Intervalle (minutes)
@@ -273,8 +358,8 @@ export default function Settings() {
             </label>
           </div>
           <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
-            Les activités, l'inventaire et l'annuaire seront synchronisés depuis le site planning-ehpad.
-            Les modifications locales sont aussi poussées vers le site.
+            Activités partagées, inventaire et annuaire sont synchronisés avec Firestore (planning-ehpad).
+            Les activités personnelles (réunions, RDV) restent locales.
           </p>
         </div>
       </div>

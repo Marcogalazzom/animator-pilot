@@ -45,14 +45,14 @@ const today = new Date();
 const addDays = (n: number) => new Date(today.getFullYear(), today.getMonth(), today.getDate() + n).toISOString().slice(0, 10);
 
 const MOCK_ACTIVITIES: Activity[] = [
-  { id: 1, title: 'Atelier peinture aquarelle', activity_type: 'atelier_creatif', description: 'Peinture de paysages printaniers', date: addDays(1), time_start: '10:00', time_end: '11:30', location: 'Salle animation', max_participants: 12, actual_participants: 0, animator_name: 'Marie Dupont', status: 'planned', materials_needed: 'Papier aquarelle, pinceaux, peintures', notes: '', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, created_at: '' },
-  { id: 2, title: 'Loto musical', activity_type: 'jeux', description: 'Loto avec extraits musicaux des années 60-70', date: addDays(2), time_start: '14:30', time_end: '16:00', location: 'Salle polyvalente', max_participants: 30, actual_participants: 0, animator_name: 'Marie Dupont', status: 'planned', materials_needed: 'Cartons de loto, enceinte', notes: '', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, created_at: '' },
-  { id: 3, title: 'Gym douce', activity_type: 'sport', description: 'Exercices adaptés en position assise', date: addDays(3), time_start: '09:30', time_end: '10:30', location: 'Salle de gym', max_participants: 15, actual_participants: 0, animator_name: 'Claire Moreau', status: 'planned', materials_needed: 'Ballons mousse, élastiques', notes: '', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, created_at: '' },
-  { id: 4, title: 'Lecture en groupe', activity_type: 'lecture', description: 'Lecture à voix haute — "Le Petit Prince"', date: addDays(0), time_start: '15:00', time_end: '16:00', location: 'Bibliothèque', max_participants: 10, actual_participants: 8, animator_name: 'Marie Dupont', status: 'in_progress', materials_needed: '', notes: '', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, created_at: '' },
-  { id: 5, title: 'Concert chorale école primaire', activity_type: 'intergenerationnel', description: 'Concert avec les enfants de l\'école Jean Moulin', date: addDays(7), time_start: '14:00', time_end: '15:30', location: 'Hall d\'accueil', max_participants: 50, actual_participants: 0, animator_name: 'Marie Dupont', status: 'planned', materials_needed: 'Chaises, sonorisation', notes: 'Contacter directrice école', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, created_at: '' },
-  { id: 6, title: 'Atelier cuisine — Tarte aux pommes', activity_type: 'cuisine', description: 'Réalisation d\'une tarte aux pommes', date: addDays(-1), time_start: '10:00', time_end: '12:00', location: 'Cuisine pédagogique', max_participants: 8, actual_participants: 7, animator_name: 'Marie Dupont', status: 'completed', materials_needed: 'Ingrédients, tabliers, moules', notes: 'Très bonne participation !', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, created_at: '' },
-  { id: 7, title: 'Séance de relaxation', activity_type: 'bien_etre', description: 'Méditation guidée et relaxation musicale', date: addDays(4), time_start: '11:00', time_end: '11:45', location: 'Salon calme', max_participants: 8, actual_participants: 0, animator_name: 'Marie Dupont', status: 'planned', materials_needed: 'Musique douce, coussins', notes: '', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, created_at: '' },
-  { id: 8, title: 'Fête des anniversaires — Avril', activity_type: 'fete', description: 'Goûter d\'anniversaire pour les résidents nés en avril', date: addDays(10), time_start: '15:00', time_end: '17:00', location: 'Salle polyvalente', max_participants: 40, actual_participants: 0, animator_name: 'Marie Dupont', status: 'planned', materials_needed: 'Gâteau, boissons, décorations', notes: '3 anniversaires ce mois', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, created_at: '' },
+  { id: 1, title: 'Atelier peinture aquarelle', activity_type: 'atelier_creatif', description: 'Peinture de paysages printaniers', date: addDays(1), time_start: '10:00', time_end: '11:30', location: 'Salle animation', max_participants: 12, actual_participants: 0, animator_name: 'Marie Dupont', status: 'planned', materials_needed: 'Papier aquarelle, pinceaux, peintures', notes: '', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, is_shared: 1, created_at: '' },
+  { id: 2, title: 'Loto musical', activity_type: 'jeux', description: 'Loto avec extraits musicaux des années 60-70', date: addDays(2), time_start: '14:30', time_end: '16:00', location: 'Salle polyvalente', max_participants: 30, actual_participants: 0, animator_name: 'Marie Dupont', status: 'planned', materials_needed: 'Cartons de loto, enceinte', notes: '', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, is_shared: 1, created_at: '' },
+  { id: 3, title: 'Gym douce', activity_type: 'sport', description: 'Exercices adaptés en position assise', date: addDays(3), time_start: '09:30', time_end: '10:30', location: 'Salle de gym', max_participants: 15, actual_participants: 0, animator_name: 'Claire Moreau', status: 'planned', materials_needed: 'Ballons mousse, élastiques', notes: '', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, is_shared: 1, created_at: '' },
+  { id: 4, title: 'Lecture en groupe', activity_type: 'lecture', description: 'Lecture à voix haute — "Le Petit Prince"', date: addDays(0), time_start: '15:00', time_end: '16:00', location: 'Bibliothèque', max_participants: 10, actual_participants: 8, animator_name: 'Marie Dupont', status: 'in_progress', materials_needed: '', notes: '', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, is_shared: 1, created_at: '' },
+  { id: 5, title: 'Concert chorale école primaire', activity_type: 'intergenerationnel', description: 'Concert avec les enfants de l\'école Jean Moulin', date: addDays(7), time_start: '14:00', time_end: '15:30', location: 'Hall d\'accueil', max_participants: 50, actual_participants: 0, animator_name: 'Marie Dupont', status: 'planned', materials_needed: 'Chaises, sonorisation', notes: 'Contacter directrice école', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, is_shared: 1, created_at: '' },
+  { id: 6, title: 'Atelier cuisine — Tarte aux pommes', activity_type: 'cuisine', description: 'Réalisation d\'une tarte aux pommes', date: addDays(-1), time_start: '10:00', time_end: '12:00', location: 'Cuisine pédagogique', max_participants: 8, actual_participants: 7, animator_name: 'Marie Dupont', status: 'completed', materials_needed: 'Ingrédients, tabliers, moules', notes: 'Très bonne participation !', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, is_shared: 1, created_at: '' },
+  { id: 7, title: 'Séance de relaxation', activity_type: 'bien_etre', description: 'Méditation guidée et relaxation musicale', date: addDays(4), time_start: '11:00', time_end: '11:45', location: 'Salon calme', max_participants: 8, actual_participants: 0, animator_name: 'Marie Dupont', status: 'planned', materials_needed: 'Musique douce, coussins', notes: '', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, is_shared: 1, created_at: '' },
+  { id: 8, title: 'Fête des anniversaires — Avril', activity_type: 'fete', description: 'Goûter d\'anniversaire pour les résidents nés en avril', date: addDays(10), time_start: '15:00', time_end: '17:00', location: 'Salle polyvalente', max_participants: 40, actual_participants: 0, animator_name: 'Marie Dupont', status: 'planned', materials_needed: 'Gâteau, boissons, décorations', notes: '3 anniversaires ce mois', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, is_shared: 1, created_at: '' },
 ];
 
 // ─── Component ───────────────────────────────────────────────
@@ -63,6 +63,7 @@ export default function Activities() {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<ActivityType | ''>('');
   const [filterStatus, setFilterStatus] = useState<ActivityStatus | ''>('');
+  const [filterShared, setFilterShared] = useState<'all' | 'shared' | 'perso'>('all');
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const addToast = useToastStore((s) => s.addToast);
@@ -80,6 +81,8 @@ export default function Activities() {
   const filtered = activities.filter((a) => {
     if (filterType && a.activity_type !== filterType) return false;
     if (filterStatus && a.status !== filterStatus) return false;
+    if (filterShared === 'shared' && !a.is_shared) return false;
+    if (filterShared === 'perso' && a.is_shared) return false;
     if (search && !a.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -105,6 +108,7 @@ export default function Activities() {
       materials_needed: fd.get('materials_needed') as string,
       notes: fd.get('notes') as string,
       linked_project_id: null,
+      is_shared: fd.get('is_shared') === 'on' ? 1 : 0,
     };
 
     try {
@@ -194,6 +198,19 @@ export default function Activities() {
           </select>
           <ChevronDown size={12} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--color-text-secondary)' }} />
         </div>
+        <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '2px' }}>
+          {([['all', 'Toutes'], ['shared', 'Partagées'], ['perso', 'Perso']] as const).map(([key, label]) => (
+            <button key={key} onClick={() => setFilterShared(key)}
+              style={{
+                padding: '5px 10px', borderRadius: '4px', border: 'none', fontSize: '12px', fontWeight: 500,
+                fontFamily: 'var(--font-sans)', cursor: 'pointer',
+                backgroundColor: filterShared === key ? '#7C3AED' : 'transparent',
+                color: filterShared === key ? '#fff' : 'var(--color-text-secondary)',
+              }}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Activities list */}
@@ -227,6 +244,11 @@ export default function Activities() {
                   {a.synced_from && (
                     <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--color-success)', backgroundColor: 'rgba(5,150,105,0.08)', padding: '1px 5px', borderRadius: '3px' }}>
                       SYNC
+                    </span>
+                  )}
+                  {!a.is_shared && (
+                    <span style={{ fontSize: '10px', fontWeight: 600, color: '#D97706', backgroundColor: 'rgba(217,119,6,0.08)', padding: '1px 5px', borderRadius: '3px' }}>
+                      PERSO
                     </span>
                   )}
                 </div>
@@ -344,6 +366,15 @@ export default function Activities() {
               <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
                 Notes
                 <textarea name="notes" rows={2} defaultValue={editActivity?.notes ?? ''} style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px', resize: 'vertical' }} />
+              </label>
+              <label style={{
+                fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)',
+                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '10px 12px', borderRadius: '6px',
+                backgroundColor: 'rgba(124,58,237,0.04)', border: '1px solid rgba(124,58,237,0.15)',
+              }}>
+                <input name="is_shared" type="checkbox" defaultChecked={editActivity ? editActivity.is_shared === 1 : true} />
+                <span>Activité partagée <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)' }}> — visible sur le site planning-ehpad. Décochez pour les réunions ou RDV perso.</span></span>
               </label>
               <button type="submit" style={{
                 padding: '10px', backgroundColor: 'var(--color-primary)', color: '#fff',

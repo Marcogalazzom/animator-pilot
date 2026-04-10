@@ -97,6 +97,7 @@ export interface InventoryItem {
   condition: InventoryCondition;
   location: string;
   notes: string;
+  inventory_type: 'consumable' | 'durable';
   synced_from: string;
   last_sync_at: string | null;
   external_id: string | null;
@@ -176,6 +177,7 @@ export interface Activity {
   synced_from: string;
   last_sync_at: string | null;
   external_id: string | null;
+  is_shared: number;
   created_at: string;
 }
 
