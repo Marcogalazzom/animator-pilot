@@ -1,17 +1,17 @@
 import { getDb } from './database';
-import type { Resident, ResidentAutonomy } from './types';
+import type { Resident } from './types';
 
-const UPDATABLE_FIELDS = new Set(['first_name', 'last_name', 'room_number', 'autonomy_level', 'interests', 'notes', 'arrival_date']);
+const UPDATABLE_FIELDS = new Set(['display_name', 'room_number', 'interests', 'animation_notes', 'participation_level']);
 
-export async function getResidents(autonomyLevel?: ResidentAutonomy): Promise<Resident[]> {
+export async function getResidents(participationLevel?: Resident['participation_level']): Promise<Resident[]> {
   const db = await getDb();
-  if (autonomyLevel) {
+  if (participationLevel) {
     return db.select<Resident[]>(
-      'SELECT * FROM residents WHERE autonomy_level = ? ORDER BY last_name ASC, first_name ASC',
-      [autonomyLevel]
+      'SELECT * FROM residents WHERE participation_level = ? ORDER BY display_name ASC',
+      [participationLevel]
     );
   }
-  return db.select<Resident[]>('SELECT * FROM residents ORDER BY last_name ASC, first_name ASC', []);
+  return db.select<Resident[]>('SELECT * FROM residents ORDER BY display_name ASC', []);
 }
 
 export async function getResident(id: number): Promise<Resident | null> {
@@ -23,9 +23,9 @@ export async function getResident(id: number): Promise<Resident | null> {
 export async function createResident(resident: Omit<Resident, 'id' | 'created_at'>): Promise<number> {
   const db = await getDb();
   const result = await db.execute(
-    `INSERT INTO residents (first_name, last_name, room_number, autonomy_level, interests, notes, arrival_date)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [resident.first_name, resident.last_name, resident.room_number, resident.autonomy_level, resident.interests, resident.notes, resident.arrival_date]
+    `INSERT INTO residents (display_name, room_number, interests, animation_notes, participation_level)
+     VALUES (?, ?, ?, ?, ?)`,
+    [resident.display_name, resident.room_number, resident.interests, resident.animation_notes, resident.participation_level]
   );
   return result.lastInsertId ?? 0;
 }

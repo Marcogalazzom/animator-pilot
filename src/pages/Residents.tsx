@@ -4,30 +4,30 @@ import {
 } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
 import { getResidents, createResident, updateResident, deleteResident } from '@/db/residents';
-import type { Resident, ResidentAutonomy } from '@/db/types';
+import type { Resident } from '@/db/types';
 
 // ─── Constants ───────────────────────────────────────────────
 
-const AUTONOMY_LEVELS: Record<ResidentAutonomy, { label: string; color: string; bg: string }> = {
-  gir1: { label: 'GIR 1', color: '#DC2626', bg: '#FEF2F2' },
-  gir2: { label: 'GIR 2', color: '#EA580C', bg: '#FFF7ED' },
-  gir3: { label: 'GIR 3', color: '#D97706', bg: '#FFFBEB' },
-  gir4: { label: 'GIR 4', color: '#1E40AF', bg: '#EFF6FF' },
-  gir5: { label: 'GIR 5', color: '#059669', bg: '#ECFDF5' },
-  gir6: { label: 'GIR 6', color: '#059669', bg: '#ECFDF5' },
+type ParticipationLevel = Resident['participation_level'];
+
+const PARTICIPATION: Record<ParticipationLevel, { label: string; color: string; bg: string }> = {
+  active:     { label: 'Actif',       color: '#059669', bg: '#ECFDF5' },
+  moderate:   { label: 'Modéré',      color: '#1E40AF', bg: '#EFF6FF' },
+  occasional: { label: 'Occasionnel', color: '#D97706', bg: '#FFFBEB' },
+  observer:   { label: 'Observateur', color: '#64748B', bg: '#F1F5F9' },
 };
 
-const GIR_KEYS = Object.keys(AUTONOMY_LEVELS) as ResidentAutonomy[];
+const PARTICIPATION_KEYS = Object.keys(PARTICIPATION) as ParticipationLevel[];
 
 const MOCK_RESIDENTS: Resident[] = [
-  { id: 1, first_name: 'Madeleine', last_name: 'Dubois', room_number: '101', autonomy_level: 'gir4', interests: 'Peinture, musique, lecture', notes: 'Aime les activités créatives', arrival_date: '2024-03-15', created_at: '' },
-  { id: 2, first_name: 'Georges', last_name: 'Moreau', room_number: '105', autonomy_level: 'gir3', interests: 'Jardinage, jeux de cartes, pétanque', notes: '', arrival_date: '2023-11-01', created_at: '' },
-  { id: 3, first_name: 'Yvette', last_name: 'Laurent', room_number: '203', autonomy_level: 'gir5', interests: 'Chant, couture, cuisine', notes: 'Participante très active', arrival_date: '2025-01-10', created_at: '' },
-  { id: 4, first_name: 'Henri', last_name: 'Petit', room_number: '112', autonomy_level: 'gir2', interests: 'Musique douce, lecture à voix haute', notes: 'Adapter les activités — mobilité réduite', arrival_date: '2024-06-20', created_at: '' },
-  { id: 5, first_name: 'Simone', last_name: 'Garcia', room_number: '210', autonomy_level: 'gir4', interests: 'Loto, mots croisés, promenade', notes: '', arrival_date: '2025-06-01', created_at: '' },
-  { id: 6, first_name: 'Marcel', last_name: 'Bernard', room_number: '108', autonomy_level: 'gir3', interests: 'Histoires, films, jeux de société', notes: 'Ancien menuisier — intéressé par le bricolage', arrival_date: '2024-09-15', created_at: '' },
-  { id: 7, first_name: 'Jeannine', last_name: 'Thomas', room_number: '215', autonomy_level: 'gir6', interests: 'Yoga doux, jardinage, photographie', notes: 'Très autonome, peut aider lors des ateliers', arrival_date: '2025-09-01', created_at: '' },
-  { id: 8, first_name: 'Raymond', last_name: 'Robert', room_number: '104', autonomy_level: 'gir4', interests: 'Musique, chorale, dominos', notes: '', arrival_date: '2025-02-14', created_at: '' },
+  { id: 1, display_name: 'Madeleine', room_number: '101', interests: 'Peinture, musique, lecture', animation_notes: 'Aime les activités créatives', participation_level: 'active', created_at: '' },
+  { id: 2, display_name: 'Georges', room_number: '105', interests: 'Jardinage, jeux de cartes, pétanque', animation_notes: '', participation_level: 'active', created_at: '' },
+  { id: 3, display_name: 'Yvette', room_number: '203', interests: 'Chant, couture, cuisine', animation_notes: 'Participante très active, peut aider', participation_level: 'active', created_at: '' },
+  { id: 4, display_name: 'Henri', room_number: '112', interests: 'Musique douce, lecture à voix haute', animation_notes: 'Adapter les activités — mobilité réduite', participation_level: 'occasional', created_at: '' },
+  { id: 5, display_name: 'Simone', room_number: '210', interests: 'Loto, mots croisés, promenade', animation_notes: '', participation_level: 'moderate', created_at: '' },
+  { id: 6, display_name: 'Marcel', room_number: '108', interests: 'Histoires, films, jeux de société', animation_notes: 'Ancien menuisier — intéressé par le bricolage', participation_level: 'moderate', created_at: '' },
+  { id: 7, display_name: 'Jeannine', room_number: '215', interests: 'Yoga doux, jardinage, photographie', animation_notes: 'Très autonome, peut aider lors des ateliers', participation_level: 'active', created_at: '' },
+  { id: 8, display_name: 'Raymond', room_number: '104', interests: 'Musique, chorale, dominos', animation_notes: '', participation_level: 'moderate', created_at: '' },
 ];
 
 // ─── Component ───────────────────────────────────────────────
@@ -36,7 +36,7 @@ export default function Residents() {
   const [residents, setResidents] = useState<Resident[]>(MOCK_RESIDENTS);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filterGir, setFilterGir] = useState<ResidentAutonomy | ''>('');
+  const [filterParticipation, setFilterParticipation] = useState<ParticipationLevel | ''>('');
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const addToast = useToastStore((s) => s.addToast);
@@ -50,10 +50,10 @@ export default function Residents() {
   }, []);
 
   const filtered = residents.filter((r) => {
-    if (filterGir && r.autonomy_level !== filterGir) return false;
+    if (filterParticipation && r.participation_level !== filterParticipation) return false;
     if (search) {
       const q = search.toLowerCase();
-      return `${r.first_name} ${r.last_name}`.toLowerCase().includes(q)
+      return r.display_name.toLowerCase().includes(q)
         || r.room_number.toLowerCase().includes(q)
         || r.interests.toLowerCase().includes(q);
     }
@@ -67,13 +67,11 @@ export default function Residents() {
     const fd = new FormData(form);
 
     const data = {
-      first_name: fd.get('first_name') as string,
-      last_name: fd.get('last_name') as string,
+      display_name: fd.get('display_name') as string,
       room_number: fd.get('room_number') as string,
-      autonomy_level: fd.get('autonomy_level') as ResidentAutonomy,
       interests: fd.get('interests') as string,
-      notes: fd.get('notes') as string,
-      arrival_date: (fd.get('arrival_date') as string) || null,
+      animation_notes: fd.get('animation_notes') as string,
+      participation_level: fd.get('participation_level') as ParticipationLevel,
     };
 
     try {
@@ -111,7 +109,7 @@ export default function Residents() {
             Résidents
           </h1>
           <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)', margin: '4px 0 0', fontFamily: 'var(--font-sans)' }}>
-            Suivi des résidents pour l'animation — {residents.length} résidents
+            Suivi pour l'animation — {residents.length} résidents (prénoms uniquement, aucune donnée médicale)
           </p>
         </div>
         <button
@@ -132,7 +130,7 @@ export default function Residents() {
         <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: '300px' }}>
           <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)' }} />
           <input
-            type="text" placeholder="Rechercher un nom, chambre, intérêt..." value={search}
+            type="text" placeholder="Rechercher un prénom, chambre, intérêt..." value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{
               width: '100%', padding: '8px 10px 8px 32px',
@@ -143,16 +141,16 @@ export default function Residents() {
         </div>
         <div style={{ position: 'relative' }}>
           <select
-            value={filterGir}
-            onChange={(e) => setFilterGir(e.target.value as ResidentAutonomy | '')}
+            value={filterParticipation}
+            onChange={(e) => setFilterParticipation(e.target.value as ParticipationLevel | '')}
             style={{
               padding: '8px 28px 8px 10px', border: '1px solid var(--color-border)',
               borderRadius: '6px', fontSize: '13px', fontFamily: 'var(--font-sans)',
               backgroundColor: 'var(--color-surface)', appearance: 'none', cursor: 'pointer',
             }}
           >
-            <option value="">Tous les GIR</option>
-            {GIR_KEYS.map((k) => <option key={k} value={k}>{AUTONOMY_LEVELS[k].label}</option>)}
+            <option value="">Tous niveaux</option>
+            {PARTICIPATION_KEYS.map((k) => <option key={k} value={k}>{PARTICIPATION[k].label}</option>)}
           </select>
           <ChevronDown size={12} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--color-text-secondary)' }} />
         </div>
@@ -165,25 +163,25 @@ export default function Residents() {
         ) : filtered.length === 0 ? (
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px', padding: '20px' }}>Aucun résultat</p>
         ) : filtered.map((r) => {
-          const gir = AUTONOMY_LEVELS[r.autonomy_level];
+          const lvl = PARTICIPATION[r.participation_level];
           return (
             <div key={r.id} style={{
               backgroundColor: 'var(--color-surface)', borderRadius: '8px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.06)', padding: '16px',
-              borderLeft: `3px solid ${gir.color}`,
+              borderLeft: `3px solid ${lvl.color}`,
               display: 'flex', flexDirection: 'column', gap: '8px',
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <p style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: 'var(--color-text-primary)', fontFamily: 'var(--font-sans)' }}>
-                    {r.first_name} {r.last_name}
+                    {r.display_name}
                   </p>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
                       <Home size={11} /> Ch. {r.room_number}
                     </span>
-                    <span style={{ fontSize: '12px', fontWeight: 500, color: gir.color, backgroundColor: gir.bg, padding: '1px 6px', borderRadius: '4px' }}>
-                      {gir.label}
+                    <span style={{ fontSize: '12px', fontWeight: 500, color: lvl.color, backgroundColor: lvl.bg, padding: '1px 6px', borderRadius: '4px' }}>
+                      {lvl.label}
                     </span>
                   </div>
                 </div>
@@ -211,8 +209,8 @@ export default function Residents() {
                 </div>
               )}
 
-              {r.notes && (
-                <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-text-secondary)', fontStyle: 'italic' }}>{r.notes}</p>
+              {r.animation_notes && (
+                <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-text-secondary)', fontStyle: 'italic' }}>{r.animation_notes}</p>
               )}
             </div>
           );
@@ -239,40 +237,33 @@ export default function Residents() {
               </button>
             </div>
             <form ref={formRef} onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px' }}>
                 <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
-                  Prénom
-                  <input name="first_name" defaultValue={editResident?.first_name ?? ''} required style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }} />
+                  Prénom ou surnom
+                  <input name="display_name" defaultValue={editResident?.display_name ?? ''} required placeholder="Prénom uniquement" style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }} />
                 </label>
-                <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
-                  Nom
-                  <input name="last_name" defaultValue={editResident?.last_name ?? ''} required style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }} />
-                </label>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
                 <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
                   Chambre
                   <input name="room_number" defaultValue={editResident?.room_number ?? ''} style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }} />
                 </label>
-                <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
-                  GIR
-                  <select name="autonomy_level" defaultValue={editResident?.autonomy_level ?? 'gir4'} style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}>
-                    {GIR_KEYS.map((k) => <option key={k} value={k}>{AUTONOMY_LEVELS[k].label}</option>)}
-                  </select>
-                </label>
-                <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
-                  Arrivée
-                  <input name="arrival_date" type="date" defaultValue={editResident?.arrival_date ?? ''} style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }} />
-                </label>
               </div>
+              <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
+                Niveau de participation
+                <select name="participation_level" defaultValue={editResident?.participation_level ?? 'moderate'} style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}>
+                  {PARTICIPATION_KEYS.map((k) => <option key={k} value={k}>{PARTICIPATION[k].label}</option>)}
+                </select>
+              </label>
               <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
                 Centres d'intérêt (séparés par des virgules)
                 <input name="interests" defaultValue={editResident?.interests ?? ''} placeholder="Peinture, musique, jardinage..." style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }} />
               </label>
               <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
                 Notes pour l'animation
-                <textarea name="notes" rows={2} defaultValue={editResident?.notes ?? ''} style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px', resize: 'vertical' }} />
+                <textarea name="animation_notes" rows={2} defaultValue={editResident?.animation_notes ?? ''} style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px', resize: 'vertical' }} />
               </label>
+              <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-text-secondary)', fontStyle: 'italic' }}>
+                Aucune donnée médicale ni personnelle sensible n'est stockée. Utilisez uniquement le prénom.
+              </p>
               <button type="submit" style={{
                 padding: '10px', backgroundColor: 'var(--color-primary)', color: '#fff',
                 border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600,

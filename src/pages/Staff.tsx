@@ -4,9 +4,11 @@ import {
   ChevronDown, Phone, Mail, Pencil, UserCheck, UserX,
 } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
+import { useSyncStore } from '@/stores/syncStore';
 import {
   getStaffMembers, createStaffMember, updateStaffMember, deleteStaffMember,
 } from '@/db/staff';
+import { SyncButton, SyncStatus } from '@/components/SyncIndicator';
 import type { StaffMember, StaffRole } from '@/db/types';
 
 // ─── Constants ───────────────────────────────────────────────
@@ -49,6 +51,7 @@ export default function Staff() {
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const addToast = useToastStore((s) => s.addToast);
+  const syncStatus = useSyncStore((s) => s.modules.staff.status);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -56,7 +59,7 @@ export default function Staff() {
       .then((rows) => { if (rows.length > 0) setMembers(rows); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [syncStatus]);
 
   const filtered = members.filter((m) => {
     if (filterRole && m.role !== filterRole) return false;
@@ -129,20 +132,10 @@ export default function Staff() {
           <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)', margin: '4px 0 0', fontFamily: 'var(--font-sans)' }}>
             Équipe et contacts — {syncedCount > 0 && <span style={{ color: 'var(--color-success)' }}>{syncedCount} synchronisés avec planning-ehpad</span>}
           </p>
+          <SyncStatus module="staff" />
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={() => addToast('Synchronisation avec planning-ehpad...', 'info')}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: '6px',
-              padding: '8px 14px', backgroundColor: 'transparent',
-              color: 'var(--color-primary)', border: '1.5px solid var(--color-primary)',
-              borderRadius: '6px', fontSize: '13px', fontWeight: 600,
-              fontFamily: 'var(--font-sans)', cursor: 'pointer',
-            }}
-          >
-            <RefreshCw size={14} /> Synchroniser
-          </button>
+          <SyncButton module="staff" />
           <button
             onClick={() => { setEditId(null); setShowForm(true); }}
             style={{

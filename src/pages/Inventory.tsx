@@ -4,9 +4,11 @@ import {
   ChevronDown, AlertTriangle, Check, Pencil,
 } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
+import { useSyncStore } from '@/stores/syncStore';
 import {
   getInventoryItems, createInventoryItem, updateInventoryItem, deleteInventoryItem,
 } from '@/db/inventory';
+import { SyncButton, SyncStatus } from '@/components/SyncIndicator';
 import type { InventoryItem, InventoryCategory, InventoryCondition } from '@/db/types';
 
 // ─── Constants ───────────────────────────────────────────────
@@ -54,6 +56,7 @@ export default function Inventory() {
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const addToast = useToastStore((s) => s.addToast);
+  const syncStatus = useSyncStore((s) => s.modules.inventory.status);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -61,7 +64,7 @@ export default function Inventory() {
       .then((rows) => { if (rows.length > 0) setItems(rows); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [syncStatus]);
 
   const filtered = items.filter((item) => {
     if (filterCat && item.category !== filterCat) return false;
@@ -130,21 +133,11 @@ export default function Inventory() {
           <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)', margin: '4px 0 0', fontFamily: 'var(--font-sans)' }}>
             Matériel et fournitures d'animation — {syncedCount > 0 && <span style={{ color: 'var(--color-success)' }}>{syncedCount} synchronisés depuis planning-ehpad</span>}
           </p>
+          <SyncStatus module="inventory" />
         </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={() => addToast('Synchronisation depuis planning-ehpad...', 'info')}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: '6px',
-              padding: '8px 14px', backgroundColor: 'transparent',
-              color: 'var(--color-primary)', border: '1.5px solid var(--color-primary)',
-              borderRadius: '6px', fontSize: '13px', fontWeight: 600,
-              fontFamily: 'var(--font-sans)', cursor: 'pointer',
-            }}
-          >
-            <RefreshCw size={14} /> Synchroniser
-          </button>
+          <SyncButton module="inventory" />
           <button
             onClick={() => { setEditId(null); setShowForm(true); }}
             style={{

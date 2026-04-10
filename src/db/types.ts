@@ -99,6 +99,7 @@ export interface InventoryItem {
   notes: string;
   synced_from: string;
   last_sync_at: string | null;
+  external_id: string | null;
   created_at: string;
 }
 
@@ -117,6 +118,7 @@ export interface StaffMember {
   notes: string;
   synced_from: string;
   last_sync_at: string | null;
+  external_id: string | null;
   created_at: string;
 }
 
@@ -140,18 +142,14 @@ export interface Photo {
   created_at: string;
 }
 
-// ─── Résidents (suivi animation) ─────────────────────────────
-export type ResidentAutonomy = 'gir1' | 'gir2' | 'gir3' | 'gir4' | 'gir5' | 'gir6';
-
+// ─── Résidents (suivi animation — sans données médicales/RGPD) ─
 export interface Resident {
   id: number;
-  first_name: string;
-  last_name: string;
+  display_name: string;
   room_number: string;
-  autonomy_level: ResidentAutonomy;
   interests: string;
-  notes: string;
-  arrival_date: string | null;
+  animation_notes: string;
+  participation_level: 'active' | 'moderate' | 'occasional' | 'observer';
   created_at: string;
 }
 
@@ -175,7 +173,26 @@ export interface Activity {
   materials_needed: string;
   notes: string;
   linked_project_id: number | null;
+  synced_from: string;
+  last_sync_at: string | null;
+  external_id: string | null;
   created_at: string;
+}
+
+// ─── Sync ────────────────────────────────────────────────────
+export type SyncModule = 'activities' | 'inventory' | 'staff';
+export type SyncStatus = 'idle' | 'syncing' | 'success' | 'error';
+
+export interface SyncLog {
+  id: number;
+  module: SyncModule;
+  direction: 'pull' | 'push';
+  items_synced: number;
+  items_failed: number;
+  started_at: string;
+  finished_at: string | null;
+  status: SyncStatus;
+  error_message: string | null;
 }
 
 // ─── Alertes ─────────────────────────────────────────────────

@@ -33,12 +33,18 @@ pub fn run() {
             sql: include_str!("../migrations/005_phase4.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 6,
+            description: "pilot animateur tables: activities, inventory, staff, residents, photos, sync",
+            sql: include_str!("../migrations/006_animateur_tables.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
         .plugin(
             tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:ehpad-pilot.db", migrations)
+                .add_migrations("sqlite:pilot-animateur.db", migrations)
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())

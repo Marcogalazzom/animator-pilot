@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, useEffect } from "react";
 import { Settings, Bell } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import AlertDropdown from "@/components/AlertDropdown";
+import { SyncBadge } from "@/components/SyncIndicator";
 import { getUnreadAlertCount } from "@/db/alerts";
 
 function formatFrenchDate(date: Date): string {
@@ -72,8 +73,11 @@ export default function Header() {
         </span>
       </div>
 
-      {/* Right: bell icon + settings icon */}
+      {/* Right: sync + bell + settings */}
       <div className="flex items-center gap-1">
+        {/* Sync badge */}
+        <SyncBadge />
+
         {/* Bell with dropdown */}
         <div ref={bellRef} style={{ position: "relative" }}>
           <button

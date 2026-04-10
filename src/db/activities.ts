@@ -5,6 +5,7 @@ const UPDATABLE_FIELDS = new Set([
   'title', 'activity_type', 'description', 'date', 'time_start', 'time_end',
   'location', 'max_participants', 'actual_participants', 'animator_name',
   'status', 'materials_needed', 'notes', 'linked_project_id',
+  'synced_from', 'last_sync_at', 'external_id',
 ]);
 
 export async function getActivities(status?: ActivityStatus): Promise<Activity[]> {

@@ -111,7 +111,7 @@ export default function Import() {
       {/* Import types info */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
         {[
-          { label: 'Résidents', desc: 'Nom, prénom, chambre, GIR, intérêts', color: '#DC2626' },
+          { label: 'Résidents', desc: 'Prénom, chambre, intérêts, participation', color: '#DC2626' },
           { label: 'Inventaire', desc: 'Article, catégorie, quantité, état', color: '#D97706' },
           { label: 'Activités', desc: 'Titre, type, date, lieu, participants', color: '#7C3AED' },
           { label: 'Personnel', desc: 'Nom, rôle, téléphone, email', color: '#059669' },
