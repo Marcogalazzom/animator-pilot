@@ -1,5 +1,5 @@
 import { getDb } from './database';
-import type { Activity, ActivityType, ActivityStatus } from './types';
+import type { Activity, ActivityStatus } from './types';
 
 const UPDATABLE_FIELDS = new Set([
   'title', 'activity_type', 'description', 'date', 'time_start', 'time_end',
@@ -76,30 +76,30 @@ export async function getActivityStats(): Promise<{
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const yearStart = `${now.getFullYear()}-01-01`;
 
-  const [monthRow] = await db.select<[{ cnt: number }]>(
+  const monthRows = await db.select<{ cnt: number }[]>(
     "SELECT COUNT(*) as cnt FROM activities WHERE date >= ? AND status != 'cancelled'",
     [monthStart]
-  ).catch(() => [[{ cnt: 0 }]]);
+  ).catch(() => [{ cnt: 0 }]);
 
-  const [partRow] = await db.select<[{ total: number }]>(
+  const partRows = await db.select<{ total: number }[]>(
     "SELECT COALESCE(SUM(actual_participants), 0) as total FROM activities WHERE date >= ? AND status = 'completed'",
     [yearStart]
-  ).catch(() => [[{ total: 0 }]]);
+  ).catch(() => [{ total: 0 }]);
 
-  const [upcomingRow] = await db.select<[{ cnt: number }]>(
+  const upcomingRows = await db.select<{ cnt: number }[]>(
     "SELECT COUNT(*) as cnt FROM activities WHERE date >= date('now') AND status IN ('planned', 'in_progress')",
     []
-  ).catch(() => [[{ cnt: 0 }]]);
+  ).catch(() => [{ cnt: 0 }]);
 
-  const [completedRow] = await db.select<[{ cnt: number }]>(
+  const completedRows = await db.select<{ cnt: number }[]>(
     "SELECT COUNT(*) as cnt FROM activities WHERE date >= ? AND status = 'completed'",
     [yearStart]
-  ).catch(() => [[{ cnt: 0 }]]);
+  ).catch(() => [{ cnt: 0 }]);
 
   return {
-    thisMonth: monthRow.cnt,
-    totalParticipants: partRow.total,
-    upcoming: upcomingRow.cnt,
-    completedThisYear: completedRow.cnt,
+    thisMonth: monthRows[0]?.cnt ?? 0,
+    totalParticipants: partRows[0]?.total ?? 0,
+    upcoming: upcomingRows[0]?.cnt ?? 0,
+    completedThisYear: completedRows[0]?.cnt ?? 0,
   };
 }

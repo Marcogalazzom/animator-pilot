@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  Heart, Plus, Search, Trash2, X, ChevronDown, Pencil, Home,
+  Plus, Search, Trash2, X, ChevronDown, Pencil, Home,
 } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
 import { getResidents, createResident, updateResident, deleteResident } from '@/db/residents';
@@ -39,7 +39,7 @@ export default function Residents() {
   const [filterParticipation, setFilterParticipation] = useState<ParticipationLevel | ''>('');
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
-  const addToast = useToastStore((s) => s.addToast);
+  const addToast = useToastStore((s) => s.add);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {

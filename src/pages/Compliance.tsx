@@ -23,17 +23,24 @@ type SortField = 'title' | 'category' | 'frequency' | 'next_due_date' | 'status'
 type SortDir   = 'asc' | 'desc';
 
 const CATEGORY_META: Record<ObligationCategory, { label: string; color: string; bg: string }> = {
-  governance: { label: 'Gouvernance', color: '#1E40AF', bg: '#EFF6FF' },
-  quality:    { label: 'Qualité',     color: '#059669', bg: '#ECFDF5' },
-  security:   { label: 'Sécurité',   color: '#D97706', bg: '#FFFBEB' },
-  hr:         { label: 'RH',          color: '#7C3AED', bg: '#F5F3FF' },
+  governance:    { label: 'Gouvernance',    color: '#1E40AF', bg: '#EFF6FF' },
+  quality:       { label: 'Qualité',        color: '#059669', bg: '#ECFDF5' },
+  security:      { label: 'Sécurité',       color: '#D97706', bg: '#FFFBEB' },
+  hr:            { label: 'RH',             color: '#7C3AED', bg: '#F5F3FF' },
+  securite:      { label: 'Sécurité',       color: '#D97706', bg: '#FFFBEB' },
+  hygiene:       { label: 'Hygiène',        color: '#0F766E', bg: '#F0FDFA' },
+  soins:         { label: 'Soins',          color: '#EC4899', bg: '#FDF2F8' },
+  droits_usagers:{ label: 'Droits usagers', color: '#0EA5E9', bg: '#F0F9FF' },
+  administratif: { label: 'Administratif',  color: '#64748B', bg: '#F8FAFC' },
+  other:         { label: 'Autre',          color: '#64748B', bg: '#F1F5F9' },
 };
 
 const STATUS_META: Record<ObligationStatus, { label: string; color: string; bg: string }> = {
-  compliant:      { label: 'Conforme',      color: '#059669', bg: '#ECFDF5' },
-  in_progress:    { label: 'En cours',      color: '#1E40AF', bg: '#EFF6FF' },
-  non_compliant:  { label: 'Non conforme',  color: '#DC2626', bg: '#FEF2F2' },
-  to_plan:        { label: 'À planifier',   color: '#64748B', bg: '#F1F5F9' },
+  compliant:      { label: 'Conforme',        color: '#059669', bg: '#ECFDF5' },
+  in_progress:    { label: 'En cours',        color: '#1E40AF', bg: '#EFF6FF' },
+  non_compliant:  { label: 'Non conforme',    color: '#DC2626', bg: '#FEF2F2' },
+  to_plan:        { label: 'À planifier',     color: '#64748B', bg: '#F1F5F9' },
+  not_applicable: { label: 'Non applicable',  color: '#94A3B8', bg: '#F8FAFC' },
 };
 
 const FREQUENCY_LABELS: Record<ObligationFrequency, string> = {
@@ -43,6 +50,10 @@ const FREQUENCY_LABELS: Record<ObligationFrequency, string> = {
   quinquennial:  'Quinquennale',
   permanent:     'Permanente',
   periodic:      'Périodique',
+  quarterly:     'Trimestrielle',
+  monthly:       'Mensuelle',
+  one_time:      'Ponctuelle',
+  continuous:    'Continue',
 };
 
 const MONTHS_FR = [
@@ -721,6 +732,7 @@ function CreateModal({ onClose, onCreate }: CreateModalProps) {
         next_due_date:       dueDate || null,
         last_validated_date: null,
         document_path:       null,
+        linked_project_id:   null,
         is_builtin:          0,
       });
       onClose();

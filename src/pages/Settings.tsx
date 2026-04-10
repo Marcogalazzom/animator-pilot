@@ -22,7 +22,7 @@ interface DbStats {
 // ─── Component ────────────────────────────────────────────────
 
 export default function Settings() {
-  const addToast = useToastStore((s) => s.addToast);
+  const addToast = useToastStore((s) => s.add);
 
   const syncAllModules = useSyncStore((s) => s.syncAllModules);
   const globalSyncStatus = useSyncStore((s) => s.globalStatus);

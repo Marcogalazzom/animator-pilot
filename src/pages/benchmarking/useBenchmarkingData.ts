@@ -4,6 +4,7 @@ import type { AnapIndicator, AnapCategory } from '@/db/types';
 
 export const ANAP_CATEGORY_LABELS: Record<AnapCategory, string> = {
   activite: 'Activité', rh: 'Ressources humaines', finance: 'Finance', qualite: 'Qualité',
+  immobilier: 'Immobilier', other: 'Autre',
 };
 
 export interface BenchmarkingData {

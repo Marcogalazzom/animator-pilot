@@ -47,6 +47,6 @@ export async function deleteResident(id: number): Promise<void> {
 
 export async function getResidentCount(): Promise<number> {
   const db = await getDb();
-  const [row] = await db.select<[{ cnt: number }]>('SELECT COUNT(*) as cnt FROM residents', []).catch(() => [[{ cnt: 0 }]]);
-  return row.cnt;
+  const rows = await db.select<{ cnt: number }[]>('SELECT COUNT(*) as cnt FROM residents', []).catch(() => [{ cnt: 0 }]);
+  return rows[0]?.cnt ?? 0;
 }

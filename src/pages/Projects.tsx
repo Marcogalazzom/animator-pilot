@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useToastStore } from '@/stores/toastStore';
 import {
   Plus, LayoutGrid, List, X, ChevronRight, Trash2,
@@ -490,7 +489,6 @@ function DetailPanel({
   onClose, onUpdateProject, onDeleteProject,
   onCreateAction, onUpdateAction, onDeleteAction,
 }: DetailPanelProps) {
-  const navigate = useNavigate();
   // Editable fields
   const [editTitle, setEditTitle]       = useState(project.title);
   const [editDesc, setEditDesc]         = useState(project.description);

@@ -17,7 +17,6 @@ import {
   query,
   where,
   addDoc,
-  type DocumentData,
 } from 'firebase/firestore';
 import { firestore, auth } from './firebase';
 import { getDb } from '@/db/database';

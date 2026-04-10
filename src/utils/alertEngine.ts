@@ -4,7 +4,7 @@ import {
   alertExistsToday,
   getProjects,
 } from '@/db';
-import type { AlertModule, AlertSeverity } from '@/db';
+import type { AlertSeverity } from '@/db';
 import { getDb } from '@/db/database';
 
 async function getBudgetLinesRaw(): Promise<

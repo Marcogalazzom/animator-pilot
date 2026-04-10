@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  Users, Plus, Search, Trash2, X, RefreshCw,
+  Plus, Search, Trash2, X,
   ChevronDown, Phone, Mail, Pencil, UserCheck, UserX,
 } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
@@ -32,13 +32,13 @@ const ROLES: Record<StaffRole, { label: string; color: string; bg: string }> = {
 const ROLE_KEYS = Object.keys(ROLES) as StaffRole[];
 
 const MOCK_STAFF: StaffMember[] = [
-  { id: 1, first_name: 'Marie', last_name: 'Dupont', role: 'animateur', phone: '06 12 34 56 78', email: 'marie.dupont@ehpad.fr', service: 'Animation', is_available: 1, notes: 'Responsable animation', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', created_at: '' },
-  { id: 2, first_name: 'Jean', last_name: 'Martin', role: 'aide_soignant', phone: '06 23 45 67 89', email: 'jean.martin@ehpad.fr', service: 'Étage 2', is_available: 1, notes: '', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', created_at: '' },
-  { id: 3, first_name: 'Sophie', last_name: 'Bernard', role: 'infirmier', phone: '06 34 56 78 90', email: 'sophie.bernard@ehpad.fr', service: 'Soins', is_available: 1, notes: '', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', created_at: '' },
-  { id: 4, first_name: 'Pierre', last_name: 'Leroy', role: 'psychologue', phone: '06 45 67 89 01', email: 'pierre.leroy@ehpad.fr', service: 'Bien-être', is_available: 0, notes: 'En congé jusqu\'au 15/04', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', created_at: '' },
-  { id: 5, first_name: 'Claire', last_name: 'Moreau', role: 'kinesitherapeute', phone: '06 56 78 90 12', email: 'claire.moreau@ehpad.fr', service: 'Rééducation', is_available: 1, notes: '', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', created_at: '' },
-  { id: 6, first_name: 'Jacqueline', last_name: 'Petit', role: 'benevole', phone: '06 67 89 01 23', email: '', service: 'Animation', is_available: 1, notes: 'Disponible mardi et jeudi', synced_from: '', last_sync_at: null, created_at: '' },
-  { id: 7, first_name: 'Anne', last_name: 'Robert', role: 'direction', phone: '06 78 90 12 34', email: 'anne.robert@ehpad.fr', service: 'Direction', is_available: 1, notes: 'Directrice', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', created_at: '' },
+  { id: 1, first_name: 'Marie', last_name: 'Dupont', role: 'animateur', phone: '06 12 34 56 78', email: 'marie.dupont@ehpad.fr', service: 'Animation', is_available: 1, notes: 'Responsable animation', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
+  { id: 2, first_name: 'Jean', last_name: 'Martin', role: 'aide_soignant', phone: '06 23 45 67 89', email: 'jean.martin@ehpad.fr', service: 'Étage 2', is_available: 1, notes: '', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
+  { id: 3, first_name: 'Sophie', last_name: 'Bernard', role: 'infirmier', phone: '06 34 56 78 90', email: 'sophie.bernard@ehpad.fr', service: 'Soins', is_available: 1, notes: '', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
+  { id: 4, first_name: 'Pierre', last_name: 'Leroy', role: 'psychologue', phone: '06 45 67 89 01', email: 'pierre.leroy@ehpad.fr', service: 'Bien-être', is_available: 0, notes: 'En congé jusqu\'au 15/04', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
+  { id: 5, first_name: 'Claire', last_name: 'Moreau', role: 'kinesitherapeute', phone: '06 56 78 90 12', email: 'claire.moreau@ehpad.fr', service: 'Rééducation', is_available: 1, notes: '', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
+  { id: 6, first_name: 'Jacqueline', last_name: 'Petit', role: 'benevole', phone: '06 67 89 01 23', email: '', service: 'Animation', is_available: 1, notes: 'Disponible mardi et jeudi', synced_from: '', last_sync_at: null, external_id: null, created_at: '' },
+  { id: 7, first_name: 'Anne', last_name: 'Robert', role: 'direction', phone: '06 78 90 12 34', email: 'anne.robert@ehpad.fr', service: 'Direction', is_available: 1, notes: 'Directrice', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
 ];
 
 // ─── Component ───────────────────────────────────────────────
@@ -50,7 +50,7 @@ export default function Staff() {
   const [filterRole, setFilterRole] = useState<StaffRole | ''>('');
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
-  const addToast = useToastStore((s) => s.addToast);
+  const addToast = useToastStore((s) => s.add);
   const syncStatus = useSyncStore((s) => s.modules.staff.status);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -87,6 +87,7 @@ export default function Staff() {
       notes: fd.get('notes') as string,
       synced_from: '',
       last_sync_at: null,
+      external_id: null,
     };
 
     try {
@@ -96,7 +97,7 @@ export default function Staff() {
         addToast('Fiche mise à jour', 'success');
       } else {
         const id = await createStaffMember(data).catch(() => Date.now());
-        setMembers((prev) => [{ ...data, id: id as number, created_at: new Date().toISOString() }, ...prev]);
+        setMembers((prev) => [{ ...data, id: id as number, created_at: new Date().toISOString() } as StaffMember, ...prev]);
         addToast('Personnel ajouté', 'success');
       }
     } catch {

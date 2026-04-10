@@ -35,7 +35,7 @@ export default function Veille() {
     if (!ni.title.trim()) return;
     await data.addItem({
       title: ni.title.trim(), category: ni.category as WatchCategory, source: ni.source,
-      url: ni.url, date_published: ni.date_published || null, summary: ni.summary, is_read: 0,
+      url: ni.url, date_published: ni.date_published || '', summary: ni.summary, is_read: 0,
     });
     setShowAddItem(false);
     setNi({ title: '', category: 'legislation', source: '', url: '', date_published: '', summary: '' });

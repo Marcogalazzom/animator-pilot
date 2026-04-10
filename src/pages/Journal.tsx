@@ -38,7 +38,7 @@ export default function Journal() {
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
-  const addToast = useToastStore((s) => s.addToast);
+  const addToast = useToastStore((s) => s.add);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {

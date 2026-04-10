@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  Camera, Plus, Trash2, X, Image, FolderOpen,
-  Calendar, ChevronLeft, Pencil,
+  Camera, Plus, Trash2, X, Image,
+  Calendar, Pencil,
 } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
 import { getAlbums, createAlbum, updateAlbum, deleteAlbum } from '@/db/photos';
@@ -32,7 +32,7 @@ export default function Photos() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
-  const addToast = useToastStore((s) => s.addToast);
+  const addToast = useToastStore((s) => s.add);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {

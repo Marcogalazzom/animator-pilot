@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  Store, Plus, Search, Trash2, X, ChevronDown, Pencil,
+  Plus, Search, Trash2, X, ChevronDown, Pencil,
   Phone, Mail, MapPin, Globe, Star,
 } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
@@ -41,7 +41,7 @@ export default function Suppliers() {
   const [filterCat, setFilterCat] = useState<SupplierCategory | ''>('');
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
-  const addToast = useToastStore((s) => s.addToast);
+  const addToast = useToastStore((s) => s.add);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {

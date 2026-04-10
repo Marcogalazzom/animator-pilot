@@ -57,7 +57,7 @@ export default function Import() {
     // TODO: handle file import
   }
 
-  function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(_e: ChangeEvent<HTMLInputElement>) {
     // TODO: handle file import
   }
 

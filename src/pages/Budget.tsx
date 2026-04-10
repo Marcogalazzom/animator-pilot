@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo } from 'react';
 import {
-  Wallet, Plus, X, Trash2, Pencil, ChevronDown,
-  Euro, Receipt, TrendingDown, Paperclip, FileText as FileIcon,
+  Plus, X, Trash2, Pencil, ChevronDown,
+  Receipt, Paperclip, FileText as FileIcon,
 } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
 import { useBudgetData, CATEGORIES, CATEGORY_KEYS } from './budget/useBudgetData';
@@ -32,7 +32,7 @@ export default function Budget() {
     budget, expenses, summary, year, setYear,
     loading, saveBudgetTotal, addExpense, editExpense, removeExpense,
   } = useBudgetData();
-  const addToast = useToastStore((s) => s.addToast);
+  const addToast = useToastStore((s) => s.add);
 
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -78,7 +78,7 @@ export default function Budget() {
       date: fd.get('date') as string,
       description: fd.get('description') as string,
       supplier: fd.get('supplier') as string,
-      invoice_path: invoicePath,
+      invoice_path: invoicePath as string | null,
       linked_intervenant_id: null,
       synced_from: '',
       last_sync_at: null,

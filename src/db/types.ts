@@ -1,3 +1,52 @@
+// ─── KPIs ───────────────────────────────────────────────────
+export type KpiCategory = 'occupation' | 'finance' | 'rh' | 'qualite';
+export type KpiSource = 'manual' | 'import';
+export type ThresholdDirection = 'above' | 'below';
+
+export interface KpiEntry {
+  id: number;
+  category: KpiCategory;
+  indicator: string;
+  value: number;
+  period: string;
+  source: KpiSource;
+  created_at: string;
+}
+
+export interface KpiThreshold {
+  id: number;
+  indicator: string;
+  warning: number | null;
+  critical: number | null;
+  direction: ThresholdDirection;
+}
+
+// ─── Veille réglementaire & Formation ───────────────────────
+export type WatchCategory = 'legislation' | 'has_recommendation' | 'ars_circular' | 'formation' | 'other';
+
+export interface RegulatoryWatch {
+  id: number;
+  title: string;
+  category: WatchCategory;
+  source: string;
+  url: string;
+  date_published: string;
+  summary: string;
+  is_read: number;
+  created_at: string;
+}
+
+export interface TrainingTracking {
+  id: number;
+  title: string;
+  category: string;
+  hours_planned: number;
+  hours_completed: number;
+  fiscal_year: number;
+  notes: string;
+  created_at: string;
+}
+
 export type ProjectStatus = 'todo' | 'in_progress' | 'done' | 'overdue';
 export type ActionStatus = 'todo' | 'in_progress' | 'done';
 export type ImportStatus = 'success' | 'error';
@@ -247,4 +296,86 @@ export interface Alert {
   link_entity_id: number | null;
   is_read: number;
   triggered_at: string;
+}
+
+// ─── ANAP Benchmarking ──────────────────────────────────────
+export type AnapCategory = 'rh' | 'finance' | 'activite' | 'qualite' | 'immobilier' | 'other';
+
+export interface AnapIndicator {
+  id: number;
+  indicator_key: string;
+  label: string;
+  value_etablissement: number | null;
+  value_national: number | null;
+  value_regional: number | null;
+  unit: string;
+  fiscal_year: number;
+  category: AnapCategory;
+  created_at: string;
+}
+
+// ─── Conformité réglementaire ───────────────────────────────
+export type ObligationCategory = 'governance' | 'quality' | 'security' | 'hr' | 'securite' | 'hygiene' | 'soins' | 'droits_usagers' | 'administratif' | 'other';
+export type ObligationStatus = 'compliant' | 'non_compliant' | 'in_progress' | 'not_applicable' | 'to_plan';
+export type ObligationFrequency = 'annual' | 'biannual' | 'triennial' | 'quinquennial' | 'permanent' | 'periodic' | 'quarterly' | 'monthly' | 'one_time' | 'continuous';
+
+
+export interface ComplianceObligation {
+  id: number;
+  title: string;
+  category: ObligationCategory;
+  frequency: ObligationFrequency;
+  description: string;
+  status: ObligationStatus;
+  next_due_date: string | null;
+  last_validated_date: string | null;
+  document_path: string | null;
+  linked_project_id: number | null;
+  is_builtin: number;
+  created_at: string;
+}
+
+// ─── Tutelles / Autorités ───────────────────────────────────
+export type AuthorityType = 'ars' | 'cd' | 'has' | 'prefecture' | 'other';
+export type EventType = 'cpom' | 'budget_campaign' | 'evaluation' | 'inspection' | 'commission' | 'dialogue' | 'other';
+export type EventStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled';
+
+export interface AuthorityEvent {
+  id: number;
+  title: string;
+  event_type: EventType;
+  authority: AuthorityType;
+  date_start: string;
+  date_end: string | null;
+  status: EventStatus;
+  notes: string;
+  is_recurring: number;
+  recurrence_rule: string | null;
+  linked_project_id: number | null;
+  created_at: string;
+}
+
+export interface AuthorityCorrespondence {
+  id: number;
+  event_id: number | null;
+  date: string;
+  direction: 'sent' | 'received';
+  type: 'letter' | 'email' | 'meeting' | 'phone';
+  authority: AuthorityType;
+  contact_role: string;
+  subject: string;
+  content: string;
+  document_path: string | null;
+  status: 'sent' | 'received' | 'awaiting_reply' | 'archived';
+  created_at: string;
+}
+
+export interface PreparationChecklist {
+  id: number;
+  event_id: number;
+  item_text: string;
+  is_done: number;
+  category: string;
+  sort_order: number;
+  created_at: string;
 }

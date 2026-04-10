@@ -57,9 +57,9 @@ export default function Tutelles() {
       title: newEvt.title.trim(),
       event_type: newEvt.event_type as AuthorityEvent['event_type'],
       authority: newEvt.authority as AuthorityEvent['authority'],
-      date_start: newEvt.date_start || null,
+      date_start: newEvt.date_start || '',
       date_end: null, status: 'planned', notes: newEvt.notes,
-      is_recurring: 0, recurrence_rule: null,
+      is_recurring: 0, recurrence_rule: null, linked_project_id: null,
     });
     setShowCreateEvent(false);
     setNewEvt({ title: '', event_type: 'other', authority: 'ars', date_start: '', notes: '' });

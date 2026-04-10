@@ -1,5 +1,5 @@
 import { getDb } from './database';
-import type { JournalEntry, JournalMood } from './types';
+import type { JournalEntry } from './types';
 
 const UPDATABLE = new Set(['date', 'content', 'mood', 'tags']);
 

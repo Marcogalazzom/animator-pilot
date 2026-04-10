@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  Package, Plus, Search, Trash2, X, RefreshCw,
-  ChevronDown, AlertTriangle, Check, Pencil,
+  Plus, Search, Trash2, X,
+  ChevronDown, AlertTriangle, Pencil,
 } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
 import { useSyncStore } from '@/stores/syncStore';
@@ -36,14 +36,14 @@ const CONDITION_KEYS = Object.keys(CONDITIONS) as InventoryCondition[];
 // ─── Mock data ───────────────────────────────────────────────
 
 const MOCK_ITEMS: InventoryItem[] = [
-  { id: 1, name: 'Jeu de cartes géant', category: 'jeux', quantity: 3, condition: 'bon', location: 'Salle animation', notes: '', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', created_at: '' },
-  { id: 2, name: 'Peinture acrylique (lot)', category: 'fournitures', quantity: 12, condition: 'neuf', location: 'Placard B2', notes: 'Couleurs variées', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', created_at: '' },
-  { id: 3, name: 'Enceinte Bluetooth', category: 'musique', quantity: 2, condition: 'bon', location: 'Salle polyvalente', notes: '', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', created_at: '' },
-  { id: 4, name: 'Ballons mousse', category: 'sport', quantity: 8, condition: 'usage', location: 'Salle de gym', notes: 'Prévoir remplacement 2 ballons', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', created_at: '' },
-  { id: 5, name: 'Guirlandes lumineuses', category: 'decoration', quantity: 5, condition: 'bon', location: 'Réserve déco', notes: '', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', created_at: '' },
-  { id: 6, name: 'Projecteur vidéo', category: 'materiel_animation', quantity: 1, condition: 'a_remplacer', location: 'Bureau animation', notes: 'Lampe à changer', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', created_at: '' },
-  { id: 7, name: 'Puzzles 500 pièces', category: 'jeux', quantity: 6, condition: 'bon', location: 'Étagère jeux', notes: '', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', created_at: '' },
-  { id: 8, name: 'Matériel de loisirs créatifs', category: 'materiel_animation', quantity: 1, condition: 'bon', location: 'Placard A1', notes: 'Perles, fils, ciseaux', synced_from: '', last_sync_at: null, created_at: '' },
+  { id: 1, name: 'Jeu de cartes géant', category: 'jeux', quantity: 3, condition: 'bon', location: 'Salle animation', notes: '', inventory_type: 'durable', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
+  { id: 2, name: 'Peinture acrylique (lot)', category: 'fournitures', quantity: 12, condition: 'neuf', location: 'Placard B2', notes: 'Couleurs variées', inventory_type: 'consumable', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
+  { id: 3, name: 'Enceinte Bluetooth', category: 'musique', quantity: 2, condition: 'bon', location: 'Salle polyvalente', notes: '', inventory_type: 'durable', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
+  { id: 4, name: 'Ballons mousse', category: 'sport', quantity: 8, condition: 'usage', location: 'Salle de gym', notes: 'Prévoir remplacement 2 ballons', inventory_type: 'durable', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
+  { id: 5, name: 'Guirlandes lumineuses', category: 'decoration', quantity: 5, condition: 'bon', location: 'Réserve déco', notes: '', inventory_type: 'durable', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
+  { id: 6, name: 'Projecteur vidéo', category: 'materiel_animation', quantity: 1, condition: 'a_remplacer', location: 'Bureau animation', notes: 'Lampe à changer', inventory_type: 'durable', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
+  { id: 7, name: 'Puzzles 500 pièces', category: 'jeux', quantity: 6, condition: 'bon', location: 'Étagère jeux', notes: '', inventory_type: 'durable', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
+  { id: 8, name: 'Matériel de loisirs créatifs', category: 'materiel_animation', quantity: 1, condition: 'bon', location: 'Placard A1', notes: 'Perles, fils, ciseaux', inventory_type: 'durable', synced_from: '', last_sync_at: null, external_id: null, created_at: '' },
 ];
 
 // ─── Component ───────────────────────────────────────────────
@@ -55,7 +55,7 @@ export default function Inventory() {
   const [filterCat, setFilterCat] = useState<InventoryCategory | ''>('');
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
-  const addToast = useToastStore((s) => s.addToast);
+  const addToast = useToastStore((s) => s.add);
   const syncStatus = useSyncStore((s) => s.modules.inventory.status);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -87,6 +87,8 @@ export default function Inventory() {
       notes: fd.get('notes') as string,
       synced_from: '',
       last_sync_at: null,
+      external_id: null,
+      inventory_type: 'durable' as const,
     };
 
     try {
@@ -96,7 +98,7 @@ export default function Inventory() {
         addToast('Article mis à jour', 'success');
       } else {
         const id = await createInventoryItem(data).catch(() => Date.now());
-        setItems((prev) => [{ ...data, id: id as number, created_at: new Date().toISOString() }, ...prev]);
+        setItems((prev) => [{ ...data, id: id as number, created_at: new Date().toISOString() } as InventoryItem, ...prev]);
         addToast('Article ajouté', 'success');
       }
     } catch {

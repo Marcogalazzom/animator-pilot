@@ -47,8 +47,8 @@ export async function deleteStaffMember(id: number): Promise<void> {
 
 export async function getStaffStats(): Promise<{ total: number; available: number; roles: number }> {
   const db = await getDb();
-  const [totalRow] = await db.select<[{ cnt: number }]>('SELECT COUNT(*) as cnt FROM staff', []).catch(() => [[{ cnt: 0 }]]);
-  const [availRow] = await db.select<[{ cnt: number }]>('SELECT COUNT(*) as cnt FROM staff WHERE is_available = 1', []).catch(() => [[{ cnt: 0 }]]);
-  const [roleRow] = await db.select<[{ cnt: number }]>('SELECT COUNT(DISTINCT role) as cnt FROM staff', []).catch(() => [[{ cnt: 0 }]]);
-  return { total: totalRow.cnt, available: availRow.cnt, roles: roleRow.cnt };
+  const totalRows = await db.select<{ cnt: number }[]>('SELECT COUNT(*) as cnt FROM staff', []).catch(() => [{ cnt: 0 }]);
+  const availRows = await db.select<{ cnt: number }[]>('SELECT COUNT(*) as cnt FROM staff WHERE is_available = 1', []).catch(() => [{ cnt: 0 }]);
+  const roleRows = await db.select<{ cnt: number }[]>('SELECT COUNT(DISTINCT role) as cnt FROM staff', []).catch(() => [{ cnt: 0 }]);
+  return { total: totalRows[0]?.cnt ?? 0, available: availRows[0]?.cnt ?? 0, roles: roleRows[0]?.cnt ?? 0 };
 }

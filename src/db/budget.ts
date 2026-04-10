@@ -1,7 +1,6 @@
 import { getDb } from './database';
 import type { AnimationBudget, Expense, ExpenseCategory } from './types';
 
-const UPDATABLE_BUDGET = new Set(['total_allocated', 'synced_from', 'last_sync_at', 'external_id']);
 const UPDATABLE_EXPENSE = new Set([
   'title', 'category', 'amount', 'date', 'description', 'supplier',
   'invoice_path', 'linked_intervenant_id', 'synced_from', 'last_sync_at', 'external_id',
@@ -85,10 +84,10 @@ export interface ExpenseSummary {
 export async function getExpenseSummary(fiscalYear: number): Promise<ExpenseSummary> {
   const db = await getDb();
 
-  const [totalRow] = await db.select<[{ total: number; cnt: number }]>(
+  const totalRows = await db.select<{ total: number; cnt: number }[]>(
     'SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as cnt FROM expenses WHERE fiscal_year = ?',
     [fiscalYear]
-  ).catch(() => [[{ total: 0, cnt: 0 }]]);
+  ).catch(() => [{ total: 0, cnt: 0 }]);
 
   const catRows = await db.select<{ category: string; total: number }[]>(
     'SELECT category, COALESCE(SUM(amount), 0) as total FROM expenses WHERE fiscal_year = ? GROUP BY category',
@@ -104,5 +103,5 @@ export async function getExpenseSummary(fiscalYear: number): Promise<ExpenseSumm
     }
   }
 
-  return { total: totalRow.total, count: totalRow.cnt, byCategory };
+  return { total: totalRows[0]?.total ?? 0, count: totalRows[0]?.cnt ?? 0, byCategory };
 }

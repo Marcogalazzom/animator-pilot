@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  Palette, Plus, Search, Trash2, X, ChevronDown,
+  Plus, Search, Trash2, X, ChevronDown,
   Clock, MapPin, Users, Pencil, Calendar, CheckCircle2,
 } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
@@ -66,7 +66,7 @@ export default function Activities() {
   const [filterShared, setFilterShared] = useState<'all' | 'shared' | 'perso'>('all');
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
-  const addToast = useToastStore((s) => s.addToast);
+  const addToast = useToastStore((s) => s.add);
   const syncStatus = useSyncStore((s) => s.modules.activities.status);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -109,6 +109,9 @@ export default function Activities() {
       notes: fd.get('notes') as string,
       linked_project_id: null,
       is_shared: fd.get('is_shared') === 'on' ? 1 : 0,
+      synced_from: '',
+      last_sync_at: null,
+      external_id: null,
     };
 
     try {
@@ -118,7 +121,7 @@ export default function Activities() {
         addToast('Activité mise à jour', 'success');
       } else {
         const id = await createActivity(data).catch(() => Date.now());
-        setActivities((prev) => [{ ...data, id: id as number, created_at: new Date().toISOString() }, ...prev]);
+        setActivities((prev) => [{ ...data, id: id as number, created_at: new Date().toISOString() } as Activity, ...prev]);
         addToast('Activité créée', 'success');
       }
     } catch {

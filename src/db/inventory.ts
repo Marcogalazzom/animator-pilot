@@ -47,8 +47,8 @@ export async function deleteInventoryItem(id: number): Promise<void> {
 
 export async function getInventoryStats(): Promise<{ total: number; toReplace: number; categories: number }> {
   const db = await getDb();
-  const [totalRow] = await db.select<[{ cnt: number }]>('SELECT COUNT(*) as cnt FROM inventory', []).catch(() => [[{ cnt: 0 }]]);
-  const [replaceRow] = await db.select<[{ cnt: number }]>("SELECT COUNT(*) as cnt FROM inventory WHERE condition = 'a_remplacer'", []).catch(() => [[{ cnt: 0 }]]);
-  const [catRow] = await db.select<[{ cnt: number }]>('SELECT COUNT(DISTINCT category) as cnt FROM inventory', []).catch(() => [[{ cnt: 0 }]]);
-  return { total: totalRow.cnt, toReplace: replaceRow.cnt, categories: catRow.cnt };
+  const totalRows = await db.select<{ cnt: number }[]>('SELECT COUNT(*) as cnt FROM inventory', []).catch(() => [{ cnt: 0 }]);
+  const replaceRows = await db.select<{ cnt: number }[]>("SELECT COUNT(*) as cnt FROM inventory WHERE condition = 'a_remplacer'", []).catch(() => [{ cnt: 0 }]);
+  const catRows = await db.select<{ cnt: number }[]>('SELECT COUNT(DISTINCT category) as cnt FROM inventory', []).catch(() => [{ cnt: 0 }]);
+  return { total: totalRows[0]?.cnt ?? 0, toReplace: replaceRows[0]?.cnt ?? 0, categories: catRows[0]?.cnt ?? 0 };
 }

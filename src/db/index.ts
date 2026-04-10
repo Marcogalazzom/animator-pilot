@@ -13,3 +13,8 @@ export * from './activities';
 export * from './alerts';
 export * from './search';
 export * from './sync';
+export * from './veille';
+export * from './kpi';
+export * from './tutelles';
+export * from './compliance';
+export * from './anap';

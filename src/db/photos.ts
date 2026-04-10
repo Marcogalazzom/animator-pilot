@@ -75,7 +75,7 @@ export async function deletePhoto(id: number): Promise<void> {
 
 export async function getAlbumStats(): Promise<{ totalAlbums: number; totalPhotos: number }> {
   const db = await getDb();
-  const [albumRow] = await db.select<[{ cnt: number }]>('SELECT COUNT(*) as cnt FROM photo_albums', []).catch(() => [[{ cnt: 0 }]]);
-  const [photoRow] = await db.select<[{ cnt: number }]>('SELECT COUNT(*) as cnt FROM photos', []).catch(() => [[{ cnt: 0 }]]);
-  return { totalAlbums: albumRow.cnt, totalPhotos: photoRow.cnt };
+  const albumRows = await db.select<{ cnt: number }[]>('SELECT COUNT(*) as cnt FROM photo_albums', []).catch(() => [{ cnt: 0 }]);
+  const photoRows = await db.select<{ cnt: number }[]>('SELECT COUNT(*) as cnt FROM photos', []).catch(() => [{ cnt: 0 }]);
+  return { totalAlbums: albumRows[0]?.cnt ?? 0, totalPhotos: photoRows[0]?.cnt ?? 0 };
 }
