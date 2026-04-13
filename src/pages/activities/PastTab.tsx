@@ -125,7 +125,14 @@ export default function PastTab({ items, types, search, typeFilter, locationFilt
           {showCancelled && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
               {cancelled.map((a) => (
-                <ActivityCard key={a.id} activity={a} type={typeFor(a.activity_type)} />
+                <ActivityCard
+                  key={a.id}
+                  activity={a}
+                  type={typeFor(a.activity_type)}
+                  actions={
+                    <button onClick={() => reopen(a)} style={actionBtn}><Undo2 size={11} /> Ré-ouvrir</button>
+                  }
+                />
               ))}
             </div>
           )}
