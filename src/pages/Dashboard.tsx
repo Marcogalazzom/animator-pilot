@@ -3,12 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import {
   Palette, Users, Camera, Package, Heart,
   Clock, CalendarX, ChevronRight, Download,
-  CalendarDays, Bell, MapPin, AlertTriangle,
+  Bell, AlertTriangle,
 } from 'lucide-react';
 
 import KpiCard from '@/components/KpiCard';
 import { useDashboardData } from './dashboard/useDashboardData';
 import { exportDashboardPdf } from '@/utils/pdfExport';
+import { useCalendarEvents } from './calendar/useCalendarEvents';
+import TodayTimeline from './dashboard/TodayTimeline';
+import UpcomingFeed from './dashboard/UpcomingFeed';
 import './Dashboard.css';
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -18,42 +21,16 @@ function formatDate(dateStr: string | null): string {
   return new Date(dateStr).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
-const ACTIVITY_COLORS: Record<string, string> = {
-  atelier_creatif:     '#7C3AED',
-  musique:             '#1E40AF',
-  jeux:                '#059669',
-  sortie:              '#D97706',
-  sport:               '#0F766E',
-  lecture:             '#8B5CF6',
-  cuisine:             '#EA580C',
-  bien_etre:           '#EC4899',
-  intergenerationnel:  '#0EA5E9',
-  fete:                '#DC2626',
-  other:               '#64748B',
-};
-
-const ACTIVITY_LABELS: Record<string, string> = {
-  atelier_creatif:     'Atelier créatif',
-  musique:             'Musique',
-  jeux:                'Jeux',
-  sortie:              'Sortie',
-  sport:               'Sport',
-  lecture:             'Lecture',
-  cuisine:             'Cuisine',
-  bien_etre:           'Bien-être',
-  intergenerationnel:  'Intergénérationnel',
-  fete:                'Fête',
-  other:               'Autre',
-};
-
 // ─── Main component ───────────────────────────────────────────
 
 export default function Dashboard() {
   const {
-    activityStats, upcomingActivities, overdueProjects,
+    activityStats, overdueProjects,
     residentCount, inventoryToReplace, albumCount,
     unreadAlertCount, loading, error,
   } = useDashboardData();
+
+  const { events: calendarEvents } = useCalendarEvents();
 
   const [exporting, setExporting] = useState(false);
   const navigate = useNavigate();
@@ -195,103 +172,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── C. Upcoming Activities ── */}
-      <div style={{
-        backgroundColor: 'var(--color-surface)', borderRadius: '8px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden',
-        borderLeft: '3px solid #7C3AED',
-      }}>
-        <div style={{
-          padding: '16px 20px',
-          borderBottom: upcomingActivities.length > 0 ? '1px solid var(--color-border)' : 'none',
-          display: 'flex', alignItems: 'center', gap: '10px',
-        }}>
-          <CalendarDays size={16} style={{ color: '#7C3AED' }} />
-          <h2 style={{
-            fontFamily: 'var(--font-sans)', fontSize: '14px', fontWeight: 600,
-            color: 'var(--color-text-primary)', margin: 0, flex: 1,
-          }}>
-            Prochaines activités
-          </h2>
-          <button
-            onClick={() => navigate('/activities')}
-            style={{
-              fontSize: '12px', color: 'var(--color-primary)', fontFamily: 'var(--font-sans)',
-              background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500,
-            }}
-          >
-            Voir tout
-          </button>
-        </div>
-
-        {upcomingActivities.length === 0 ? (
-          <div style={{ padding: '24px 20px', fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
-            Aucune activité planifiée
-          </div>
-        ) : (
-          <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-            {upcomingActivities.map((a, i) => {
-              const color = ACTIVITY_COLORS[a.activity_type] ?? '#64748B';
-              return (
-                <li
-                  key={a.id}
-                  onClick={() => navigate('/activities')}
-                  style={{
-                    padding: '12px 20px',
-                    borderBottom: i < upcomingActivities.length - 1 ? '1px solid var(--color-border)' : 'none',
-                    display: 'flex', alignItems: 'center', gap: '12px',
-                    cursor: 'pointer', transition: 'background-color 0.15s ease',
-                  }}
-                  className="overdue-project-item"
-                >
-                  {/* Type dot */}
-                  <div style={{
-                    width: '8px', height: '8px', borderRadius: '50%',
-                    backgroundColor: color, flexShrink: 0,
-                  }} />
-
-                  {/* Title + type */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{
-                      margin: 0, fontSize: '13px', fontWeight: 500,
-                      color: 'var(--color-text-primary)', fontFamily: 'var(--font-sans)',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {a.title}
-                    </p>
-                    <p style={{
-                      margin: '1px 0 0', fontSize: '11px', color: 'var(--color-text-secondary)',
-                      fontFamily: 'var(--font-sans)', display: 'flex', alignItems: 'center', gap: '8px',
-                    }}>
-                      <span style={{ color }}>{ACTIVITY_LABELS[a.activity_type] ?? a.activity_type}</span>
-                      {a.location && (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                          <MapPin size={10} /> {a.location}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-
-                  {/* Date + time */}
-                  <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)', flexShrink: 0 }}>
-                    {formatDate(a.date)}
-                  </span>
-                  {a.time_start && (
-                    <span style={{
-                      fontSize: '11px', fontWeight: 600, fontFamily: 'var(--font-sans)',
-                      color: '#7C3AED', backgroundColor: 'rgba(124,58,237,0.08)',
-                      borderRadius: '4px', padding: '2px 7px', flexShrink: 0,
-                    }}>
-                      {a.time_start}
-                    </span>
-                  )}
-
-                  <ChevronRight size={14} style={{ color: 'var(--color-border)', flexShrink: 0 }} />
-                </li>
-              );
-            })}
-          </ul>
-        )}
+      {/* ── C. Today + Upcoming ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+        <TodayTimeline events={calendarEvents} />
+        <UpcomingFeed events={calendarEvents} />
       </div>
 
       {/* ── D. Quick access cards ── */}
