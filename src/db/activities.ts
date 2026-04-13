@@ -114,6 +114,7 @@ export async function duplicateActivity(id: number, newDate: string): Promise<nu
     date: newDate,
     status: 'planned',
     actual_participants: 0,
+    is_template: 0, // duplicate = always a scheduled instance, not another template
     synced_from: '',
     last_sync_at: null,
     external_id: null,

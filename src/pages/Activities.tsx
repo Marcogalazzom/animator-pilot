@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useToastStore } from '@/stores/toastStore';
 import { useSyncStore } from '@/stores/syncStore';
@@ -29,9 +29,13 @@ export default function Activities() {
   const syncStatus = useSyncStore((s) => s.modules.activities.status);
 
   const data = useActivitiesData();
-  // refresh after a sync completes
+  // refresh only on sync transition (active → idle), pas au mount
+  const prevSyncStatus = useRef(syncStatus);
   useEffect(() => {
-    if (syncStatus === 'idle') data.refresh().catch(() => {});
+    if (prevSyncStatus.current !== 'idle' && syncStatus === 'idle') {
+      data.refresh().catch(() => {});
+    }
+    prevSyncStatus.current = syncStatus;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncStatus]);
 

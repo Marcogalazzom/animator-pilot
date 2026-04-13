@@ -39,7 +39,7 @@ export function splitPast(items: Activity[], today: string): PastSections {
   for (const a of items) {
     if (a.status === 'cancelled') cancelled.push(a);
     else if (a.status === 'completed') completed.push(a);
-    else if (a.date < today) toConfirm.push(a);
+    else if (a.date < today) toConfirm.push(a); // planned ou in_progress passé
   }
   toConfirm.sort((a, b) => b.date.localeCompare(a.date));
   return { toConfirm, completed, cancelled };
