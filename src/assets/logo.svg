@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFB088"/>
+      <stop offset="45%" stop-color="#F472B6"/>
+      <stop offset="100%" stop-color="#9B7BE8"/>
+    </linearGradient>
+
+    <linearGradient id="sparkleFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#FFF1F5"/>
+    </linearGradient>
+
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="70%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="sheen" cx="0.3" cy="0.25" r="0.7">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.35"/>
+      <stop offset="60%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="14" result="b"/>
+      <feOffset dy="8" in="b" result="ob"/>
+      <feComponentTransfer in="ob" result="sob">
+        <feFuncA type="linear" slope="0.35"/>
+      </feComponentTransfer>
+      <feMerge><feMergeNode in="sob"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Squircle background (iOS-style rounded square) -->
+  <rect x="0" y="0" width="1024" height="1024" rx="230" ry="230" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="230" ry="230" fill="url(#sheen)"/>
+
+  <!-- Ambient glow behind main sparkle -->
+  <circle cx="512" cy="520" r="340" fill="url(#glow)"/>
+
+  <!-- Main sparkle: 4-point star with elongated top branch (motion/pilot) -->
+  <g filter="url(#softShadow)">
+    <path d="
+      M 512 120
+      C 525 300, 560 440, 720 500
+      C 560 540, 525 660, 512 900
+      C 499 660, 464 540, 304 500
+      C 464 440, 499 300, 512 120 Z"
+      fill="url(#sparkleFill)"/>
+  </g>
+
+  <!-- Inner highlight on sparkle -->
+  <path d="
+    M 512 230
+    C 520 370, 545 455, 640 498
+    C 545 528, 520 612, 512 780
+    C 504 612, 479 528, 384 498
+    C 479 455, 504 370, 512 230 Z"
+    fill="#FFFFFF" opacity="0.35"/>
+
+  <!-- Satellite mini-sparkle top-right -->
+  <g opacity="0.95">
+    <path d="
+      M 790 260
+      C 798 305, 820 335, 870 348
+      C 820 361, 798 391, 790 436
+      C 782 391, 760 361, 710 348
+      C 760 335, 782 305, 790 260 Z"
+      fill="#FFFFFF"/>
+  </g>
+
+  <!-- Tiny sparkle bottom-left -->
+  <g opacity="0.85">
+    <path d="
+      M 255 760
+      C 260 785, 272 800, 298 807
+      C 272 814, 260 829, 255 854
+      C 250 829, 238 814, 212 807
+      C 238 800, 250 785, 255 760 Z"
+      fill="#FFFFFF"/>
+  </g>
+</svg>

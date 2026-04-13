@@ -159,36 +159,8 @@ export default function Sidebar() {
         background: "linear-gradient(180deg, var(--color-sidebar) 0%, #1a2535 100%)",
       }}
     >
-      {/* Logo / App name */}
-      <div
-        className="flex items-center gap-2 px-6 py-5"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
-      >
-        <div
-          className="flex items-center justify-center rounded-md shrink-0"
-          style={{
-            width: "28px",
-            height: "28px",
-            backgroundColor: "#7C3AED",
-          }}
-        >
-          <span
-            className="text-white font-bold"
-            style={{ fontFamily: "var(--font-display)", fontSize: "14px", lineHeight: 1 }}
-          >
-            A
-          </span>
-        </div>
-        <h1
-          className="text-white font-semibold leading-tight"
-          style={{ fontFamily: "var(--font-display)", fontSize: "16px" }}
-        >
-          Pilot Animateur
-        </h1>
-      </div>
-
       {/* Main navigation with groups */}
-      <nav className="flex-1 p-3 flex flex-col overflow-y-auto" aria-label="Navigation principale">
+      <nav className="flex-1 p-3 pt-4 flex flex-col overflow-y-auto" aria-label="Navigation principale">
         {navGroups.map((group) => (
           <NavGroupSection
             key={group.id}
