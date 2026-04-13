@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useToastStore } from '@/stores/toastStore';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Undo2 } from 'lucide-react';
 import ActivityCard from './ActivityCard';
 import { splitPast, type Activity } from './useActivitiesData';
 import { todayIso } from '@/utils/dateUtils';
 import { autoColor, type CategoryColor } from '@/db/categoryColors';
-import { markCompleted, markCancelled, saveAsTemplate } from '@/db/activities';
+import { markCompleted, markCancelled, saveAsTemplate, updateActivity } from '@/db/activities';
 
 interface Props {
   items: Activity[];
@@ -48,6 +48,11 @@ export default function PastTab({ items, types, search, typeFilter, locationFilt
   async function template(a: Activity) {
     await saveAsTemplate(a.id).catch(() => {});
     addToast('Modèle enregistré', 'success');
+    await onRefresh();
+  }
+  async function reopen(a: Activity) {
+    await updateActivity(a.id, { status: 'planned', actual_participants: 0 }).catch(() => {});
+    addToast('Activité ré-ouverte', 'success');
     await onRefresh();
   }
 
@@ -99,7 +104,12 @@ export default function PastTab({ items, types, search, typeFilter, locationFilt
                 inlineRow={a.notes ? (
                   <p style={{ margin: '8px 0 0', fontSize: '12px', fontStyle: 'italic', color: 'var(--color-text-secondary)' }}>"{a.notes}"</p>
                 ) : null}
-                actions={<button onClick={() => template(a)} style={actionBtn}>+ Modèle</button>}
+                actions={
+                  <>
+                    <button onClick={() => reopen(a)} style={actionBtn}><Undo2 size={11} /> Ré-ouvrir</button>
+                    <button onClick={() => template(a)} style={actionBtn}>+ Modèle</button>
+                  </>
+                }
               />
             ))}
           </div>
