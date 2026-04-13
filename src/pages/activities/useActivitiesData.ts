@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getUpcomingPlanned, getPast, getTemplates } from '@/db/activities';
+import { getUpcomingPlanned, getPast, getActivityTemplates } from '@/db/activities';
 import { ensureCategoryColors, type CategoryColor } from '@/db/categoryColors';
 import { mondayOf, addDays } from '@/utils/dateUtils';
 import type { Activity } from '@/db/types';
@@ -66,7 +66,7 @@ export function useActivitiesData(): ActivitiesData {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [u, p, t] = await Promise.all([getUpcomingPlanned(), getPast(), getTemplates()]);
+      const [u, p, t] = await Promise.all([getUpcomingPlanned(), getPast(), getActivityTemplates()]);
       setUpcoming(u); setPast(p); setTemplates(t);
       const allTypes = [...u, ...p, ...t].map((a) => a.activity_type);
       const cats = await ensureCategoryColors('activities', allTypes);

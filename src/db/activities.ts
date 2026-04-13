@@ -46,7 +46,7 @@ export async function getPast(): Promise<Activity[]> {
   );
 }
 
-export async function getTemplates(): Promise<Activity[]> {
+export async function getActivityTemplates(): Promise<Activity[]> {
   const db = await getDb();
   return db.select<Activity[]>(
     "SELECT * FROM activities WHERE is_template = 1 ORDER BY title ASC",
