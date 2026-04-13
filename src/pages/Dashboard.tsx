@@ -72,16 +72,18 @@ export default function Dashboard() {
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
         <div>
           <h1 style={{
-            fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: 700,
-            color: 'var(--color-text-primary)', margin: 0, lineHeight: 1.2,
+            fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: 700,
+            color: 'var(--color-text-primary)', margin: 0, lineHeight: 1.15,
+            letterSpacing: '-0.01em',
           }}>
             Tableau de bord
           </h1>
           <p style={{
-            fontSize: '14px', color: 'var(--color-text-secondary)',
-            margin: '4px 0 0', fontFamily: 'var(--font-sans)',
+            fontSize: '13px', color: 'var(--color-text-secondary)',
+            margin: '6px 0 0', fontFamily: 'var(--font-sans)',
+            textTransform: 'capitalize',
           }}>
-            Vue d'ensemble de l'animation
+            {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
 

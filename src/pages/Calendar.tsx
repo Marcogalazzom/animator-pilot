@@ -74,9 +74,21 @@ export default function Calendar() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '1300px' }}>
-      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: 700, margin: 0 }}>
-        Calendrier
-      </h1>
+      <div>
+        <h1 style={{
+          fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: 700,
+          margin: 0, lineHeight: 1.15, letterSpacing: '-0.01em',
+          color: 'var(--color-text-primary)',
+        }}>
+          Calendrier
+        </h1>
+        <p style={{
+          fontSize: '13px', color: 'var(--color-text-secondary)',
+          margin: '6px 0 0', fontFamily: 'var(--font-sans)',
+        }}>
+          Planning des activités, projets et créneaux par lieu
+        </p>
+      </div>
 
       <CalendarToolbar
         view={view}
