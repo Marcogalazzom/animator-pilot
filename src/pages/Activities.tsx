@@ -8,22 +8,12 @@ import { useSyncStore } from '@/stores/syncStore';
 import { getActivities, createActivity, updateActivity, deleteActivity } from '@/db/activities';
 import { SyncButton, SyncStatus } from '@/components/SyncIndicator';
 import type { Activity, ActivityType, ActivityStatus } from '@/db/types';
+import {
+  ensureCategoryColors, autoColor, categoryLabel,
+  type CategoryColor,
+} from '@/db/categoryColors';
 
 // ─── Constants ───────────────────────────────────────────────
-
-const TYPES: Record<ActivityType, { label: string; color: string; bg: string }> = {
-  atelier_creatif:     { label: 'Atelier créatif',      color: '#7C3AED', bg: '#F5F3FF' },
-  musique:             { label: 'Musique',               color: '#1E40AF', bg: '#EFF6FF' },
-  jeux:                { label: 'Jeux',                  color: '#059669', bg: '#ECFDF5' },
-  sortie:              { label: 'Sortie',                color: '#D97706', bg: '#FFFBEB' },
-  sport:               { label: 'Sport / Motricité',     color: '#0F766E', bg: '#F0FDFA' },
-  lecture:             { label: 'Lecture',                color: '#8B5CF6', bg: '#F5F3FF' },
-  cuisine:             { label: 'Cuisine',               color: '#EA580C', bg: '#FFF7ED' },
-  bien_etre:           { label: 'Bien-être',             color: '#EC4899', bg: '#FDF2F8' },
-  intergenerationnel:  { label: 'Intergénérationnel',    color: '#0EA5E9', bg: '#F0F9FF' },
-  fete:                { label: 'Fête / Événement',      color: '#DC2626', bg: '#FEF2F2' },
-  other:               { label: 'Autre',                 color: '#64748B', bg: '#F1F5F9' },
-};
 
 const STATUSES: Record<ActivityStatus, { label: string; color: string }> = {
   planned:     { label: 'Planifié',    color: '#1E40AF' },
@@ -32,7 +22,6 @@ const STATUSES: Record<ActivityStatus, { label: string; color: string }> = {
   cancelled:   { label: 'Annulé',      color: '#DC2626' },
 };
 
-const TYPE_KEYS = Object.keys(TYPES) as ActivityType[];
 const STATUS_KEYS = Object.keys(STATUSES) as ActivityStatus[];
 
 function formatDate(d: string): string {
@@ -43,6 +32,7 @@ function formatDate(d: string): string {
 
 export default function Activities() {
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [types, setTypes] = useState<CategoryColor[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<ActivityType | ''>('');
@@ -56,10 +46,15 @@ export default function Activities() {
 
   // Load activities on mount and after sync completes
   useEffect(() => {
-    getActivities()
-      .then((rows) => setActivities(rows))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    (async () => {
+      try {
+        const rows = await getActivities();
+        setActivities(rows);
+        const cats = await ensureCategoryColors('activities', rows.map((r) => r.activity_type));
+        setTypes(cats);
+      } catch { /* ignore */ }
+      setLoading(false);
+    })();
   }, [syncStatus]);
 
   const filtered = activities.filter((a) => {
@@ -108,6 +103,8 @@ export default function Activities() {
         setActivities((prev) => [{ ...data, id: id as number, created_at: new Date().toISOString() } as Activity, ...prev]);
         addToast('Activité créée', 'success');
       }
+      const cats = await ensureCategoryColors('activities', [data.activity_type]);
+      setTypes(cats);
     } catch {
       addToast('Erreur lors de la sauvegarde', 'error');
     }
@@ -125,6 +122,14 @@ export default function Activities() {
   const editActivity = editId ? activities.find((a) => a.id === editId) : null;
 
   const upcoming = activities.filter((a) => a.status === 'planned' || a.status === 'in_progress').length;
+
+  const typeMap = new Map(types.map((c) => [c.name, c]));
+  function catFor(name: string): CategoryColor {
+    const existing = typeMap.get(name);
+    if (existing) return existing;
+    const { color, bg } = autoColor(name);
+    return { module: 'activities', name, color, bg, label: null };
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1200px' }}>
@@ -173,7 +178,7 @@ export default function Activities() {
           <select value={filterType} onChange={(e) => setFilterType(e.target.value as ActivityType | '')}
             style={{ padding: '8px 28px 8px 10px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px', fontFamily: 'var(--font-sans)', backgroundColor: 'var(--color-surface)', appearance: 'none', cursor: 'pointer' }}>
             <option value="">Tous types</option>
-            {TYPE_KEYS.map((k) => <option key={k} value={k}>{TYPES[k].label}</option>)}
+            {types.map((c) => <option key={c.name} value={c.name}>{categoryLabel(c)}</option>)}
           </select>
           <ChevronDown size={12} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--color-text-secondary)' }} />
         </div>
@@ -207,13 +212,13 @@ export default function Activities() {
         ) : filtered.length === 0 ? (
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px', padding: '20px' }}>Aucune activité trouvée</p>
         ) : filtered.map((a) => {
-          const type = TYPES[a.activity_type];
+          const cat = catFor(a.activity_type);
           const status = STATUSES[a.status];
           return (
             <div key={a.id} style={{
               backgroundColor: 'var(--color-surface)', borderRadius: '8px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.06)', padding: '16px',
-              borderLeft: `3px solid ${type.color}`,
+              borderLeft: `3px solid ${cat.color}`,
               display: 'flex', alignItems: 'center', gap: '16px',
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -221,8 +226,8 @@ export default function Activities() {
                   <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)', fontFamily: 'var(--font-sans)' }}>
                     {a.title}
                   </h3>
-                  <span style={{ fontSize: '11px', fontWeight: 500, color: type.color, backgroundColor: type.bg, padding: '1px 6px', borderRadius: '4px' }}>
-                    {type.label}
+                  <span style={{ fontSize: '11px', fontWeight: 500, color: cat.color, backgroundColor: cat.bg, padding: '1px 6px', borderRadius: '4px' }}>
+                    {categoryLabel(cat)}
                   </span>
                   <span style={{ fontSize: '11px', fontWeight: 600, color: status.color }}>
                     {a.status === 'completed' && <CheckCircle2 size={11} style={{ marginRight: '2px', verticalAlign: 'middle' }} />}
@@ -299,9 +304,16 @@ export default function Activities() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
                   Type
-                  <select name="activity_type" defaultValue={editActivity?.activity_type ?? 'atelier_creatif'} style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}>
-                    {TYPE_KEYS.map((k) => <option key={k} value={k}>{TYPES[k].label}</option>)}
-                  </select>
+                  <input
+                    name="activity_type"
+                    list="activity-types"
+                    defaultValue={editActivity?.activity_type ?? 'jeux'}
+                    placeholder="Tapez ou choisissez..."
+                    style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
+                  />
+                  <datalist id="activity-types">
+                    {types.map((c) => <option key={c.name} value={c.name}>{categoryLabel(c)}</option>)}
+                  </datalist>
                 </label>
                 <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
                   Statut
