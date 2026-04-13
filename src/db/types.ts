@@ -230,7 +230,7 @@ export interface Resident {
 }
 
 // ─── Ateliers / Activités ────────────────────────────────────
-export type ActivityType = 'atelier_creatif' | 'musique' | 'jeux' | 'sortie' | 'sport' | 'lecture' | 'cuisine' | 'bien_etre' | 'intergenerationnel' | 'fete' | 'other';
+export type ActivityType = string;
 export type ActivityStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled';
 
 export interface Activity {
