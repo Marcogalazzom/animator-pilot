@@ -253,6 +253,7 @@ export interface Activity {
   last_sync_at: string | null;
   external_id: string | null;
   is_shared: number;
+  is_template: number; // 0 ou 1 — templates non synchronisés
   created_at: string;
 }
 
