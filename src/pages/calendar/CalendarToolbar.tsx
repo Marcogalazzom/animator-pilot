@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, Clock, CalendarDays, MapPin, List, Filter } from 'lucide-react';
 import { categoryLabel, type CategoryColor } from '@/db/categoryColors';
+import { addDays, todayIso } from './dateUtils';
 
 export type CalendarView = 'day' | 'week' | 'location' | 'list';
 
@@ -25,14 +26,8 @@ interface Props {
   onToday: () => void;
 }
 
-function todayIso(): string { return new Date().toISOString().slice(0, 10); }
-
 export default function CalendarToolbar(p: Props) {
-  const shift = (days: number) => {
-    const d = new Date(p.date + 'T00:00:00');
-    d.setDate(d.getDate() + days);
-    p.onDateChange(d.toISOString().slice(0, 10));
-  };
+  const shift = (days: number) => p.onDateChange(addDays(p.date, days));
   const step = p.view === 'week' ? 7 : 1;
   const isToday = p.date === todayIso();
 

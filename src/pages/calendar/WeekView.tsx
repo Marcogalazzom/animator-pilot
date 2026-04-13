@@ -10,12 +10,12 @@ interface Props {
   locationFilter: string;
 }
 
+import { todayIso } from './dateUtils';
+
 const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
-function todayIso(): string { return new Date().toISOString().slice(0, 10); }
 function shortDate(iso: string): string {
-  const d = new Date(iso + 'T00:00:00');
-  return `${d.getDate()}`;
+  return String(parseInt(iso.slice(8, 10), 10));
 }
 
 export default function WeekView({ events, mondayDate, types, typeFilter, locationFilter }: Props) {

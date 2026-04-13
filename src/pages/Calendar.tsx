@@ -7,19 +7,10 @@ import WeekView from './calendar/WeekView';
 import LocationView from './calendar/LocationView';
 import ListView from './calendar/ListView';
 import { ensureCategoryColors, type CategoryColor } from '@/db/categoryColors';
+import { todayIso, mondayOf } from './calendar/dateUtils';
 
 const MONTH_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 const DAY_FR = ['Dim.', 'Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.'];
-
-function todayIso(): string { return new Date().toISOString().slice(0, 10); }
-
-function mondayOf(iso: string): string {
-  const d = new Date(iso + 'T00:00:00');
-  const dow = d.getDay();
-  const offset = dow === 0 ? -6 : 1 - dow;
-  d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
-}
 
 function dayLabel(iso: string): string {
   const d = new Date(iso + 'T00:00:00');

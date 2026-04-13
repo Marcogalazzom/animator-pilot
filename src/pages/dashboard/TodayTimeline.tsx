@@ -10,7 +10,8 @@ interface Props {
 const DAY_FR_SHORT = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
 const MONTH_FR_SHORT = ['jan.', 'fév.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 
-function todayIso(): string { return new Date().toISOString().slice(0, 10); }
+import { todayIso } from '@/pages/calendar/dateUtils';
+
 function nowTimeString(): string {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;

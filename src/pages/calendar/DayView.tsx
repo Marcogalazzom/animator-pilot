@@ -12,13 +12,11 @@ interface Props {
   locationFilter: string;
 }
 
+import { todayIso } from './dateUtils';
+
 function nowTimeString(): string {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
 }
 
 export default function DayView({ events, date, types, typeFilter, locationFilter }: Props) {
