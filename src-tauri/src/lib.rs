@@ -63,6 +63,12 @@ pub fn run() {
             sql: include_str!("../migrations/010_activity_categories.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 11,
+            description: "add is_template flag to activities",
+            sql: include_str!("../migrations/011_activity_templates.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
