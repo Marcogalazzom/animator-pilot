@@ -39,26 +39,10 @@ function formatDate(d: string): string {
   return new Date(d).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
-// ─── Mock data ───────────────────────────────────────────────
-
-const today = new Date();
-const addDays = (n: number) => new Date(today.getFullYear(), today.getMonth(), today.getDate() + n).toISOString().slice(0, 10);
-
-const MOCK_ACTIVITIES: Activity[] = [
-  { id: 1, title: 'Atelier peinture aquarelle', activity_type: 'atelier_creatif', description: 'Peinture de paysages printaniers', date: addDays(1), time_start: '10:00', time_end: '11:30', location: 'Salle animation', max_participants: 12, actual_participants: 0, animator_name: 'Marie Dupont', status: 'planned', materials_needed: 'Papier aquarelle, pinceaux, peintures', notes: '', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, is_shared: 1, created_at: '' },
-  { id: 2, title: 'Loto musical', activity_type: 'jeux', description: 'Loto avec extraits musicaux des années 60-70', date: addDays(2), time_start: '14:30', time_end: '16:00', location: 'Salle polyvalente', max_participants: 30, actual_participants: 0, animator_name: 'Marie Dupont', status: 'planned', materials_needed: 'Cartons de loto, enceinte', notes: '', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, is_shared: 1, created_at: '' },
-  { id: 3, title: 'Gym douce', activity_type: 'sport', description: 'Exercices adaptés en position assise', date: addDays(3), time_start: '09:30', time_end: '10:30', location: 'Salle de gym', max_participants: 15, actual_participants: 0, animator_name: 'Claire Moreau', status: 'planned', materials_needed: 'Ballons mousse, élastiques', notes: '', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, is_shared: 1, created_at: '' },
-  { id: 4, title: 'Lecture en groupe', activity_type: 'lecture', description: 'Lecture à voix haute — "Le Petit Prince"', date: addDays(0), time_start: '15:00', time_end: '16:00', location: 'Bibliothèque', max_participants: 10, actual_participants: 8, animator_name: 'Marie Dupont', status: 'in_progress', materials_needed: '', notes: '', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, is_shared: 1, created_at: '' },
-  { id: 5, title: 'Concert chorale école primaire', activity_type: 'intergenerationnel', description: 'Concert avec les enfants de l\'école Jean Moulin', date: addDays(7), time_start: '14:00', time_end: '15:30', location: 'Hall d\'accueil', max_participants: 50, actual_participants: 0, animator_name: 'Marie Dupont', status: 'planned', materials_needed: 'Chaises, sonorisation', notes: 'Contacter directrice école', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, is_shared: 1, created_at: '' },
-  { id: 6, title: 'Atelier cuisine — Tarte aux pommes', activity_type: 'cuisine', description: 'Réalisation d\'une tarte aux pommes', date: addDays(-1), time_start: '10:00', time_end: '12:00', location: 'Cuisine pédagogique', max_participants: 8, actual_participants: 7, animator_name: 'Marie Dupont', status: 'completed', materials_needed: 'Ingrédients, tabliers, moules', notes: 'Très bonne participation !', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, is_shared: 1, created_at: '' },
-  { id: 7, title: 'Séance de relaxation', activity_type: 'bien_etre', description: 'Méditation guidée et relaxation musicale', date: addDays(4), time_start: '11:00', time_end: '11:45', location: 'Salon calme', max_participants: 8, actual_participants: 0, animator_name: 'Marie Dupont', status: 'planned', materials_needed: 'Musique douce, coussins', notes: '', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, is_shared: 1, created_at: '' },
-  { id: 8, title: 'Fête des anniversaires — Avril', activity_type: 'fete', description: 'Goûter d\'anniversaire pour les résidents nés en avril', date: addDays(10), time_start: '15:00', time_end: '17:00', location: 'Salle polyvalente', max_participants: 40, actual_participants: 0, animator_name: 'Marie Dupont', status: 'planned', materials_needed: 'Gâteau, boissons, décorations', notes: '3 anniversaires ce mois', linked_project_id: null, synced_from: 'planning-ehpad', last_sync_at: '2026-04-10', external_id: null, is_shared: 1, created_at: '' },
-];
-
 // ─── Component ───────────────────────────────────────────────
 
 export default function Activities() {
-  const [activities, setActivities] = useState<Activity[]>(MOCK_ACTIVITIES);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<ActivityType | ''>('');
@@ -73,7 +57,7 @@ export default function Activities() {
   // Load activities on mount and after sync completes
   useEffect(() => {
     getActivities()
-      .then((rows) => { if (rows.length > 0) setActivities(rows); })
+      .then((rows) => setActivities(rows))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [syncStatus]);

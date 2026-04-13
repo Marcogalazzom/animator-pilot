@@ -15,25 +15,17 @@ function formatDateTime(iso: string): string {
   });
 }
 
-// ─── Mock data ───────────────────────────────────────────────
-
-const MOCK_HISTORY: ImportRecord[] = [
-  { id: 1, filename: 'residents_avril.csv', imported_at: '2026-04-01T09:30:00', row_count: 42, status: 'success' },
-  { id: 2, filename: 'inventaire_mars.csv', imported_at: '2026-03-15T14:00:00', row_count: 28, status: 'success' },
-  { id: 3, filename: 'planning_activites.xlsx', imported_at: '2026-03-01T10:15:00', row_count: 15, status: 'success' },
-];
-
 // ─── Component ───────────────────────────────────────────────
 
 export default function Import() {
-  const [history, setHistory] = useState<ImportRecord[]>(MOCK_HISTORY);
+  const [history, setHistory] = useState<ImportRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragActive, setDragActive] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getImportHistory()
-      .then((rows) => { if (rows.length > 0) setHistory(rows); })
+      .then((rows) => setHistory(rows))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);

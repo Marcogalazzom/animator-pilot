@@ -7,35 +7,17 @@ import { useToastStore } from '@/stores/toastStore';
 import {
   getSuppliers, createSupplier, updateSupplier, deleteSupplier, toggleFavorite,
 } from '@/db/suppliers';
+import {
+  ensureCategoryColors, autoColor, categoryLabel,
+  type CategoryColor,
+} from '@/db/categoryColors';
 import type { Supplier, SupplierCategory } from '@/db/types';
-
-// ─── Constants ───────────────────────────────────────────────
-
-const CATEGORIES: Record<SupplierCategory, { label: string; color: string; bg: string }> = {
-  alimentation:  { label: 'Alimentation',       color: '#EA580C', bg: '#FFF7ED' },
-  materiel:      { label: 'Matériel / Loisirs',  color: '#1E40AF', bg: '#EFF6FF' },
-  transport:     { label: 'Transport',           color: '#059669', bg: '#ECFDF5' },
-  spectacle:     { label: 'Spectacle / Artiste', color: '#7C3AED', bg: '#F5F3FF' },
-  formation:     { label: 'Formation',           color: '#D97706', bg: '#FFFBEB' },
-  location:      { label: 'Location matériel',   color: '#0F766E', bg: '#F0FDFA' },
-  other:         { label: 'Autre',               color: '#64748B', bg: '#F1F5F9' },
-};
-
-const CATEGORY_KEYS = Object.keys(CATEGORIES) as SupplierCategory[];
-
-const MOCK_SUPPLIERS: Supplier[] = [
-  { id: 1, name: 'Cultura', category: 'materiel', contact_name: '', phone: '05 62 00 00 00', email: '', address: 'Centre commercial', website: 'cultura.com', notes: 'Peinture, papier, jeux', is_favorite: 1, created_at: '' },
-  { id: 2, name: 'Transport Express', category: 'transport', contact_name: 'M. Dupuis', phone: '06 12 34 56 78', email: 'contact@transport-express.fr', address: '12 rue de la Gare', website: '', notes: 'Bus adapté PMR, devis à demander 3 semaines avant', is_favorite: 1, created_at: '' },
-  { id: 3, name: 'Boulangerie Petit', category: 'alimentation', contact_name: 'Mme Petit', phone: '05 61 00 00 00', email: '', address: '3 place du Marché', website: '', notes: 'Gâteaux anniversaires, commande 48h avant', is_favorite: 0, created_at: '' },
-  { id: 4, name: 'Marie Martin - Musicothérapeute', category: 'spectacle', contact_name: 'Marie Martin', phone: '06 23 45 67 89', email: 'marie.martin@gmail.com', address: '', website: '', notes: 'Séances de 1h30, tarif 160 EUR/séance', is_favorite: 1, created_at: '' },
-  { id: 5, name: 'Sophie Duval - Art-thérapeute', category: 'spectacle', contact_name: 'Sophie Duval', phone: '06 34 56 78 90', email: 'sophie.duval@art-therapie.fr', address: '', website: 'art-therapie-toulouse.fr', notes: 'Spécialiste personnes âgées, 250 EUR/séance', is_favorite: 0, created_at: '' },
-  { id: 6, name: 'Jardin Botanique', category: 'other', contact_name: 'Accueil groupes', phone: '05 62 11 22 33', email: 'groupes@jardin-botanique.fr', address: '25 allée des Platanes', website: '', notes: 'Tarif groupe : 5 EUR/personne, gratuit accompagnateurs', is_favorite: 0, created_at: '' },
-];
 
 // ─── Component ───────────────────────────────────────────────
 
 export default function Suppliers() {
-  const [suppliers, setSuppliers] = useState<Supplier[]>(MOCK_SUPPLIERS);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [categories, setCategories] = useState<CategoryColor[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState<SupplierCategory | ''>('');
@@ -45,11 +27,24 @@ export default function Suppliers() {
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
-    getSuppliers()
-      .then((rows) => { if (rows.length > 0) setSuppliers(rows); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    (async () => {
+      try {
+        const rows = await getSuppliers();
+        setSuppliers(rows);
+        const cats = await ensureCategoryColors('suppliers', rows.map((r) => r.category));
+        setCategories(cats);
+      } catch { /* ignore */ }
+      setLoading(false);
+    })();
   }, []);
+
+  const categoryMap = new Map(categories.map((c) => [c.name, c]));
+  function catFor(name: string): CategoryColor {
+    const existing = categoryMap.get(name);
+    if (existing) return existing;
+    const { color, bg } = autoColor(name);
+    return { module: 'suppliers', name, color, bg, label: null };
+  }
 
   const filtered = suppliers.filter((s) => {
     if (filterCat && s.category !== filterCat) return false;
@@ -65,6 +60,12 @@ export default function Suppliers() {
     const form = formRef.current;
     if (!form) return;
     const fd = new FormData(form);
+    const num = (k: string): number | null => {
+      const v = fd.get(k);
+      if (!v) return null;
+      const n = parseFloat(v as string);
+      return Number.isFinite(n) ? n : null;
+    };
 
     const data = {
       name: fd.get('name') as string,
@@ -75,6 +76,8 @@ export default function Suppliers() {
       address: fd.get('address') as string,
       website: fd.get('website') as string,
       notes: fd.get('notes') as string,
+      hourly_rate: num('hourly_rate'),
+      session_rate: num('session_rate'),
       is_favorite: fd.get('is_favorite') === 'on' ? 1 : 0,
     };
 
@@ -88,6 +91,8 @@ export default function Suppliers() {
         setSuppliers((prev) => [{ ...data, id: id as number, created_at: new Date().toISOString() }, ...prev]);
         addToast('Fournisseur ajouté', 'success');
       }
+      const cats = await ensureCategoryColors('suppliers', [data.category]);
+      setCategories(cats);
     } catch {
       addToast('Erreur', 'error');
     }
@@ -144,7 +149,7 @@ export default function Suppliers() {
           <select value={filterCat} onChange={(e) => setFilterCat(e.target.value as SupplierCategory | '')}
             style={{ padding: '8px 28px 8px 10px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px', fontFamily: 'var(--font-sans)', backgroundColor: 'var(--color-surface)', appearance: 'none', cursor: 'pointer' }}>
             <option value="">Toutes catégories</option>
-            {CATEGORY_KEYS.map((k) => <option key={k} value={k}>{CATEGORIES[k].label}</option>)}
+            {categories.map((c) => <option key={c.name} value={c.name}>{categoryLabel(c)}</option>)}
           </select>
           <ChevronDown size={12} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--color-text-secondary)' }} />
         </div>
@@ -157,7 +162,7 @@ export default function Suppliers() {
         ) : filtered.length === 0 ? (
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px', padding: '20px' }}>Aucun fournisseur</p>
         ) : filtered.map((s) => {
-          const cat = CATEGORIES[s.category] ?? CATEGORIES.other;
+          const cat = catFor(s.category);
           return (
             <div key={s.id} style={{
               backgroundColor: 'var(--color-surface)', borderRadius: '8px',
@@ -172,7 +177,7 @@ export default function Suppliers() {
                   </p>
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
                     <span style={{ fontSize: '11px', fontWeight: 500, color: cat.color, backgroundColor: cat.bg, padding: '1px 6px', borderRadius: '4px' }}>
-                      {cat.label}
+                      {categoryLabel(cat)}
                     </span>
                     {s.contact_name && (
                       <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>{s.contact_name}</span>
@@ -191,6 +196,21 @@ export default function Suppliers() {
                   </button>
                 </div>
               </div>
+
+              {(s.hourly_rate != null || s.session_rate != null) && (
+                <div style={{ display: 'flex', gap: '10px', fontSize: '12px' }}>
+                  {s.hourly_rate != null && (
+                    <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
+                      {s.hourly_rate.toFixed(2)} &euro;/h
+                    </span>
+                  )}
+                  {s.session_rate != null && (
+                    <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
+                      {s.session_rate.toFixed(2)} &euro;/séance
+                    </span>
+                  )}
+                </div>
+              )}
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
                 {s.phone && <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} /> {s.phone}</span>}
@@ -229,9 +249,16 @@ export default function Suppliers() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
                   Catégorie
-                  <select name="category" defaultValue={editItem?.category ?? 'other'} style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}>
-                    {CATEGORY_KEYS.map((k) => <option key={k} value={k}>{CATEGORIES[k].label}</option>)}
-                  </select>
+                  <input
+                    name="category"
+                    list="supplier-categories"
+                    defaultValue={editItem?.category ?? 'other'}
+                    placeholder="Tapez ou choisissez..."
+                    style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
+                  />
+                  <datalist id="supplier-categories">
+                    {categories.map((c) => <option key={c.name} value={c.name}>{categoryLabel(c)}</option>)}
+                  </datalist>
                 </label>
                 <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
                   Personne de contact
@@ -256,8 +283,18 @@ export default function Suppliers() {
                 Site web
                 <input name="website" defaultValue={editItem?.website ?? ''} placeholder="www.exemple.fr" style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }} />
               </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
+                  Tarif / heure
+                  <input name="hourly_rate" type="number" step="0.01" min="0" defaultValue={editItem?.hourly_rate ?? ''} placeholder="ex: 45.00" style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }} />
+                </label>
+                <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
+                  Tarif / séance
+                  <input name="session_rate" type="number" step="0.01" min="0" defaultValue={editItem?.session_rate ?? ''} placeholder="ex: 160.00" style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }} />
+                </label>
+              </div>
               <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
-                Notes (tarifs, délais, remarques...)
+                Notes (délais, remarques...)
                 <textarea name="notes" rows={3} defaultValue={editItem?.notes ?? ''} style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px', resize: 'vertical' }} />
               </label>
               <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)', display: 'flex', alignItems: 'center', gap: '8px' }}>

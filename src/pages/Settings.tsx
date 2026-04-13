@@ -28,8 +28,8 @@ export default function Settings() {
   const globalSyncStatus = useSyncStore((s) => s.globalStatus);
 
   // Settings state
-  const [etablissement, setEtablissement] = useState('Mon EHPAD');
-  const [animatrice, setAnimatrice]       = useState('Marie Dupont');
+  const [etablissement, setEtablissement] = useState('');
+  const [animatrice, setAnimatrice]       = useState('');
   const [syncEmail, setSyncEmail]         = useState('');
   const [syncPassword, setSyncPassword]   = useState('');
   const [syncAutoEnabled, setSyncAutoEnabled] = useState(true);

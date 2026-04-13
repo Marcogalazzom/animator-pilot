@@ -18,8 +18,7 @@ import {
   computeStatus,
   INDICATOR_META,
   CATEGORY_LABELS,
-  MOCK_ENTRIES,
-  MOCK_THRESHOLDS,
+  DEFAULT_THRESHOLDS,
   type KpiStatus,
   type ChartPoint,
 } from './kpis/useKpisData';
@@ -625,11 +624,6 @@ export default function KPIs() {
 
   const chartData = useMemo<ChartPoint[]>(() => {
     const indicatorEntries = entries.filter(e => e.indicator === selectedIndicator);
-    if (indicatorEntries.length === 0) {
-      // Fall back to mock
-      const mock = (MOCK_ENTRIES[selectedIndicator] ?? []);
-      return buildChartData(mock);
-    }
     return buildChartData(indicatorEntries);
   }, [entries, selectedIndicator]);
 
@@ -1012,7 +1006,7 @@ export default function KPIs() {
       <ThresholdPanel
         open={thresholdOpen}
         indicators={indicatorsForCategory}
-        thresholds={thresholds.length > 0 ? thresholds : MOCK_THRESHOLDS}
+        thresholds={thresholds.length > 0 ? thresholds : DEFAULT_THRESHOLDS}
         onSaved={refresh}
       />
 

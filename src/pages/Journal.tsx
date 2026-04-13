@@ -24,16 +24,10 @@ function formatDate(d: string): string {
   return new Date(d).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-const MOCK_ENTRIES: JournalEntry[] = [
-  { id: 1, date: new Date().toISOString().slice(0, 10), content: 'Atelier peinture ce matin, 10 participants. Madeleine a adoré le thème des paysages. Penser à racheter du bleu outremer.', mood: 'great', tags: 'peinture,réussite', created_at: '' },
-  { id: 2, date: new Date(Date.now() - 86400000).toISOString().slice(0, 10), content: 'Loto cet après-midi. Bonne ambiance mais seulement 6 personnes. Le créneau de 14h30 est peut-être trop tôt après la sieste.', mood: 'good', tags: 'loto,horaire', created_at: '' },
-  { id: 3, date: new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10), content: 'Réunion avec la direction sur le budget. Le projecteur est en panne, demande de remplacement en cours. Préparer le programme été.', mood: 'neutral', tags: 'réunion,matériel', created_at: '' },
-];
-
 // ─── Component ───────────────────────────────────────────────
 
 export default function Journal() {
-  const [entries, setEntries] = useState<JournalEntry[]>(MOCK_ENTRIES);
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -43,7 +37,7 @@ export default function Journal() {
 
   useEffect(() => {
     getJournalEntries()
-      .then((rows) => { if (rows.length > 0) setEntries(rows); })
+      .then((rows) => setEntries(rows))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);

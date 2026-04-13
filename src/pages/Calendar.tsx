@@ -95,13 +95,20 @@ export default function Calendar() {
       list.push(ev);
       map.set(key, list);
     }
-    // Sort months ASC
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+    // Sort: current & future months first, then past months
+    const currentMonth = getTodayKey();
+    return Array.from(map.entries()).sort(([a], [b]) => {
+      const aFuture = a >= currentMonth;
+      const bFuture = b >= currentMonth;
+      if (aFuture && !bFuture) return -1;
+      if (!aFuture && bFuture) return 1;
+      return a.localeCompare(b);
+    });
   }, [filtered]);
 
   const totalCount = filtered.length;
   const upcomingCount = filtered.filter(e => e.date >= todayISO).length;
-  const overdueCount  = filtered.filter(e => e.date < todayISO).length;
+  const overdueCount  = filtered.filter(e => e.date < todayISO && e.module === 'projects').length;
 
   if (loading) {
     return (
@@ -482,7 +489,7 @@ export default function Calendar() {
                               }}>
                                 Aujourd'hui
                               </span>
-                            ) : isPast ? (
+                            ) : isPast && ev.module === 'projects' ? (
                               <span style={{
                                 display: 'inline-block',
                                 padding: '3px 8px',

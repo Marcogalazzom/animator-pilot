@@ -44,123 +44,6 @@ export interface ComplianceData {
   markCompliant: (id: number) => Promise<void>;
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const MOCK_OBLIGATIONS: ComplianceObligation[] = [
-  {
-    id: 1,
-    title: 'Rapport d\'activité annuel',
-    category: 'governance',
-    frequency: 'annual',
-    description: 'Rapport annuel transmis à l\'ARS et au Conseil Départemental.',
-    status: 'compliant',
-    next_due_date: '2026-12-31',
-    last_validated_date: '2026-01-15',
-    document_path: '/docs/rapport-2025.pdf',
-    linked_project_id: null,
-    is_builtin: 1,
-    created_at: '2025-01-01',
-  },
-  {
-    id: 2,
-    title: 'Contrat Pluriannuel d\'Objectifs (CPOM)',
-    category: 'governance',
-    frequency: 'quinquennial',
-    description: 'Renouvellement et suivi du CPOM avec les autorités de tutelle.',
-    status: 'in_progress',
-    next_due_date: '2026-06-30',
-    last_validated_date: null,
-    document_path: null,
-    linked_project_id: null,
-    is_builtin: 1,
-    created_at: '2025-01-01',
-  },
-  {
-    id: 3,
-    title: 'Évaluation externe HAS',
-    category: 'quality',
-    frequency: 'quinquennial',
-    description: 'Évaluation externe de la qualité des prestations par organisme agréé.',
-    status: 'to_plan',
-    next_due_date: '2027-03-31',
-    last_validated_date: null,
-    document_path: null,
-    linked_project_id: null,
-    is_builtin: 1,
-    created_at: '2025-01-01',
-  },
-  {
-    id: 4,
-    title: 'Formation obligatoire gestes barrières',
-    category: 'hr',
-    frequency: 'annual',
-    description: 'Formation de l\'ensemble du personnel aux gestes barrières.',
-    status: 'non_compliant',
-    next_due_date: '2026-02-28',
-    last_validated_date: null,
-    document_path: null,
-    linked_project_id: null,
-    is_builtin: 1,
-    created_at: '2025-01-01',
-  },
-  {
-    id: 5,
-    title: 'Contrôle sécurité incendie',
-    category: 'security',
-    frequency: 'annual',
-    description: 'Vérification annuelle des équipements de lutte contre l\'incendie.',
-    status: 'compliant',
-    next_due_date: '2026-11-30',
-    last_validated_date: '2025-11-28',
-    document_path: '/docs/controle-incendie-2025.pdf',
-    linked_project_id: null,
-    is_builtin: 1,
-    created_at: '2025-01-01',
-  },
-  {
-    id: 6,
-    title: 'Registre des accidents du travail',
-    category: 'hr',
-    frequency: 'permanent',
-    description: 'Tenue à jour du registre des accidents du travail et maladies professionnelles.',
-    status: 'in_progress',
-    next_due_date: null,
-    last_validated_date: null,
-    document_path: null,
-    linked_project_id: null,
-    is_builtin: 1,
-    created_at: '2025-01-01',
-  },
-  {
-    id: 7,
-    title: 'Plan de maîtrise sanitaire',
-    category: 'quality',
-    frequency: 'annual',
-    description: 'Révision annuelle du plan de maîtrise sanitaire et protocoles HACCP.',
-    status: 'compliant',
-    next_due_date: '2026-09-30',
-    last_validated_date: '2025-09-15',
-    document_path: null,
-    linked_project_id: null,
-    is_builtin: 1,
-    created_at: '2025-01-01',
-  },
-  {
-    id: 8,
-    title: 'Formation droits des résidents',
-    category: 'hr',
-    frequency: 'annual',
-    description: 'Formation annuelle sur les droits et libertés des personnes accueillies.',
-    status: 'to_plan',
-    next_due_date: '2026-05-31',
-    last_validated_date: null,
-    document_path: null,
-    linked_project_id: null,
-    is_builtin: 1,
-    created_at: '2025-01-01',
-  },
-];
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function applyFilters(
@@ -229,17 +112,12 @@ export function useComplianceData(): ComplianceData {
         getObligations(),
         getObligationStats(),
       ]);
-      if (data.length === 0) {
-        setObligations(MOCK_OBLIGATIONS);
-        setStats(computeStats(MOCK_OBLIGATIONS));
-      } else {
-        setObligations(data);
-        setStats(dbStats);
-      }
+      setObligations(data);
+      setStats(dbStats);
     } catch (err) {
       setError(String(err));
-      setObligations(MOCK_OBLIGATIONS);
-      setStats(computeStats(MOCK_OBLIGATIONS));
+      setObligations([]);
+      setStats({ total: 0, compliant: 0, overdue: 0, upcoming30: 0 });
     } finally {
       setLoading(false);
     }

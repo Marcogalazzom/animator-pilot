@@ -19,21 +19,10 @@ const PARTICIPATION: Record<ParticipationLevel, { label: string; color: string; 
 
 const PARTICIPATION_KEYS = Object.keys(PARTICIPATION) as ParticipationLevel[];
 
-const MOCK_RESIDENTS: Resident[] = [
-  { id: 1, display_name: 'Madeleine', room_number: '101', interests: 'Peinture, musique, lecture', animation_notes: 'Aime les activités créatives', participation_level: 'active', created_at: '' },
-  { id: 2, display_name: 'Georges', room_number: '105', interests: 'Jardinage, jeux de cartes, pétanque', animation_notes: '', participation_level: 'active', created_at: '' },
-  { id: 3, display_name: 'Yvette', room_number: '203', interests: 'Chant, couture, cuisine', animation_notes: 'Participante très active, peut aider', participation_level: 'active', created_at: '' },
-  { id: 4, display_name: 'Henri', room_number: '112', interests: 'Musique douce, lecture à voix haute', animation_notes: 'Adapter les activités — mobilité réduite', participation_level: 'occasional', created_at: '' },
-  { id: 5, display_name: 'Simone', room_number: '210', interests: 'Loto, mots croisés, promenade', animation_notes: '', participation_level: 'moderate', created_at: '' },
-  { id: 6, display_name: 'Marcel', room_number: '108', interests: 'Histoires, films, jeux de société', animation_notes: 'Ancien menuisier — intéressé par le bricolage', participation_level: 'moderate', created_at: '' },
-  { id: 7, display_name: 'Jeannine', room_number: '215', interests: 'Yoga doux, jardinage, photographie', animation_notes: 'Très autonome, peut aider lors des ateliers', participation_level: 'active', created_at: '' },
-  { id: 8, display_name: 'Raymond', room_number: '104', interests: 'Musique, chorale, dominos', animation_notes: '', participation_level: 'moderate', created_at: '' },
-];
-
 // ─── Component ───────────────────────────────────────────────
 
 export default function Residents() {
-  const [residents, setResidents] = useState<Resident[]>(MOCK_RESIDENTS);
+  const [residents, setResidents] = useState<Resident[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterParticipation, setFilterParticipation] = useState<ParticipationLevel | ''>('');
@@ -44,7 +33,7 @@ export default function Residents() {
 
   useEffect(() => {
     getResidents()
-      .then((rows) => { if (rows.length > 0) setResidents(rows); })
+      .then((rows) => setResidents(rows))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);

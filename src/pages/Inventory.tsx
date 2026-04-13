@@ -8,20 +8,14 @@ import { useSyncStore } from '@/stores/syncStore';
 import {
   getInventoryItems, createInventoryItem, updateInventoryItem, deleteInventoryItem,
 } from '@/db/inventory';
+import {
+  ensureCategoryColors, autoColor, categoryLabel,
+  type CategoryColor,
+} from '@/db/categoryColors';
 import { SyncButton, SyncStatus } from '@/components/SyncIndicator';
 import type { InventoryItem, InventoryCategory, InventoryCondition } from '@/db/types';
 
 // ─── Constants ───────────────────────────────────────────────
-
-const CATEGORIES: Record<InventoryCategory, { label: string; color: string; bg: string }> = {
-  materiel_animation: { label: 'Matériel animation', color: '#1E40AF', bg: '#EFF6FF' },
-  jeux:               { label: 'Jeux',               color: '#7C3AED', bg: '#F5F3FF' },
-  fournitures:        { label: 'Fournitures',        color: '#059669', bg: '#ECFDF5' },
-  decoration:         { label: 'Décoration',         color: '#D97706', bg: '#FFFBEB' },
-  musique:            { label: 'Musique',             color: '#DC2626', bg: '#FEF2F2' },
-  sport:              { label: 'Sport / Motricité',   color: '#0F766E', bg: '#F0FDFA' },
-  other:              { label: 'Autre',               color: '#64748B', bg: '#F1F5F9' },
-};
 
 const CONDITIONS: Record<InventoryCondition, { label: string; color: string }> = {
   neuf:        { label: 'Neuf',         color: '#059669' },
@@ -30,26 +24,13 @@ const CONDITIONS: Record<InventoryCondition, { label: string; color: string }> =
   a_remplacer: { label: 'À remplacer',  color: '#DC2626' },
 };
 
-const CATEGORY_KEYS = Object.keys(CATEGORIES) as InventoryCategory[];
 const CONDITION_KEYS = Object.keys(CONDITIONS) as InventoryCondition[];
-
-// ─── Mock data ───────────────────────────────────────────────
-
-const MOCK_ITEMS: InventoryItem[] = [
-  { id: 1, name: 'Jeu de cartes géant', category: 'jeux', quantity: 3, condition: 'bon', location: 'Salle animation', notes: '', inventory_type: 'durable', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
-  { id: 2, name: 'Peinture acrylique (lot)', category: 'fournitures', quantity: 12, condition: 'neuf', location: 'Placard B2', notes: 'Couleurs variées', inventory_type: 'consumable', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
-  { id: 3, name: 'Enceinte Bluetooth', category: 'musique', quantity: 2, condition: 'bon', location: 'Salle polyvalente', notes: '', inventory_type: 'durable', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
-  { id: 4, name: 'Ballons mousse', category: 'sport', quantity: 8, condition: 'usage', location: 'Salle de gym', notes: 'Prévoir remplacement 2 ballons', inventory_type: 'durable', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
-  { id: 5, name: 'Guirlandes lumineuses', category: 'decoration', quantity: 5, condition: 'bon', location: 'Réserve déco', notes: '', inventory_type: 'durable', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
-  { id: 6, name: 'Projecteur vidéo', category: 'materiel_animation', quantity: 1, condition: 'a_remplacer', location: 'Bureau animation', notes: 'Lampe à changer', inventory_type: 'durable', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
-  { id: 7, name: 'Puzzles 500 pièces', category: 'jeux', quantity: 6, condition: 'bon', location: 'Étagère jeux', notes: '', inventory_type: 'durable', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
-  { id: 8, name: 'Matériel de loisirs créatifs', category: 'materiel_animation', quantity: 1, condition: 'bon', location: 'Placard A1', notes: 'Perles, fils, ciseaux', inventory_type: 'durable', synced_from: '', last_sync_at: null, external_id: null, created_at: '' },
-];
 
 // ─── Component ───────────────────────────────────────────────
 
 export default function Inventory() {
-  const [items, setItems] = useState<InventoryItem[]>(MOCK_ITEMS);
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [categories, setCategories] = useState<CategoryColor[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState<InventoryCategory | ''>('');
@@ -60,11 +41,24 @@ export default function Inventory() {
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
-    getInventoryItems()
-      .then((rows) => { if (rows.length > 0) setItems(rows); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    (async () => {
+      try {
+        const rows = await getInventoryItems();
+        setItems(rows);
+        const cats = await ensureCategoryColors('inventory', rows.map((r) => r.category));
+        setCategories(cats);
+      } catch { /* ignore */ }
+      setLoading(false);
+    })();
   }, [syncStatus]);
+
+  const categoryMap = new Map(categories.map((c) => [c.name, c]));
+  function catFor(name: string): CategoryColor {
+    const existing = categoryMap.get(name);
+    if (existing) return existing;
+    const { color, bg } = autoColor(name);
+    return { module: 'inventory', name, color, bg, label: null };
+  }
 
   const filtered = items.filter((item) => {
     if (filterCat && item.category !== filterCat) return false;
@@ -101,6 +95,8 @@ export default function Inventory() {
         setItems((prev) => [{ ...data, id: id as number, created_at: new Date().toISOString() } as InventoryItem, ...prev]);
         addToast('Article ajouté', 'success');
       }
+      const cats = await ensureCategoryColors('inventory', [data.category]);
+      setCategories(cats);
     } catch {
       addToast('Erreur lors de la sauvegarde', 'error');
     }
@@ -180,7 +176,7 @@ export default function Inventory() {
             }}
           >
             <option value="">Toutes catégories</option>
-            {CATEGORY_KEYS.map((k) => <option key={k} value={k}>{CATEGORIES[k].label}</option>)}
+            {categories.map((c) => <option key={c.name} value={c.name}>{categoryLabel(c)}</option>)}
           </select>
           <ChevronDown size={12} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--color-text-secondary)' }} />
         </div>
@@ -223,8 +219,8 @@ export default function Inventory() {
             ) : filtered.length === 0 ? (
               <tr><td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--color-text-secondary)' }}>Aucun article trouvé</td></tr>
             ) : filtered.map((item) => {
-              const cat = CATEGORIES[item.category];
-              const cond = CONDITIONS[item.condition];
+              const cat = catFor(item.category);
+              const cond = CONDITIONS[item.condition] ?? CONDITIONS.bon;
               return (
                 <tr key={item.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                   <td style={{ padding: '12px 16px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
@@ -235,7 +231,7 @@ export default function Inventory() {
                   </td>
                   <td style={{ padding: '12px 16px' }}>
                     <span style={{ fontSize: '12px', fontWeight: 500, color: cat.color, backgroundColor: cat.bg, padding: '2px 8px', borderRadius: '4px' }}>
-                      {cat.label}
+                      {categoryLabel(cat)}
                     </span>
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600 }}>{item.quantity}</td>
@@ -290,9 +286,16 @@ export default function Inventory() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
                   Catégorie
-                  <select name="category" defaultValue={editItem?.category ?? 'materiel_animation'} style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}>
-                    {CATEGORY_KEYS.map((k) => <option key={k} value={k}>{CATEGORIES[k].label}</option>)}
-                  </select>
+                  <input
+                    name="category"
+                    list="inventory-categories"
+                    defaultValue={editItem?.category ?? (categories[0]?.name ?? 'other')}
+                    placeholder="Tapez ou choisissez..."
+                    style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
+                  />
+                  <datalist id="inventory-categories">
+                    {categories.map((c) => <option key={c.name} value={c.name}>{categoryLabel(c)}</option>)}
+                  </datalist>
                 </label>
                 <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
                   État

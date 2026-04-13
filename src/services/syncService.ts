@@ -96,14 +96,10 @@ const CONDITION_MAP: Record<string, string> = {
   out_of_service: 'a_remplacer',
 };
 
-// ─── Staff role mapping ──────────────────────────────────────
 
-function mapStaffRole(firestoreType: string): string {
-  if (firestoreType === 'benevole') return 'benevole';
-  if (firestoreType === 'salarie') return 'other';
-  if (firestoreType === 'liberal') return 'other';
-  return 'other';
-}
+// ─── Staff role: on conserve la valeur brute de Firestore ───
+// (liberal/salarie/benevole ou toute valeur custom), le module
+// Staff utilise category_colors pour afficher chaque rôle.
 
 // ─── Sync Activities ─────────────────────────────────────────
 
@@ -117,19 +113,23 @@ export async function syncActivities(): Promise<{ synced: number; failed: number
     const db = await getDb();
     const now = new Date().toISOString();
 
-    // ── PULL from Firestore ──
+    // ── PULL from Firestore (animation only, not PASA) ──
     const activitiesRef = collection(firestore, 'activities');
-    let q;
-    if (lastSyncRecord?.finished_at) {
-      const sinceMs = new Date(lastSyncRecord.finished_at).getTime();
-      q = query(activitiesRef, where('createdAt', '>', sinceMs));
-    } else {
-      q = query(activitiesRef);
-    }
+    const baseQuery = query(activitiesRef, where('unit', '==', 'main'));
+    const snapshot = await getDocs(baseQuery);
 
-    const snapshot = await getDocs(q);
+    // Filter createdAt client-side to avoid composite index requirement
+    const sinceMs = lastSyncRecord?.finished_at
+      ? new Date(lastSyncRecord.finished_at).getTime()
+      : 0;
+    const filteredDocs = sinceMs > 0
+      ? snapshot.docs.filter(doc => {
+          const createdAt = doc.data().createdAt;
+          return typeof createdAt === 'number' && createdAt > sinceMs;
+        })
+      : snapshot.docs;
 
-    for (const docSnap of snapshot.docs) {
+    for (const docSnap of filteredDocs) {
       try {
         const data = docSnap.data();
         const date = computeDate(data.weekId ?? '', data.day ?? '');
@@ -230,7 +230,7 @@ export async function syncActivities(): Promise<{ synced: number; failed: number
 
 export async function syncInventory(): Promise<{ synced: number; failed: number }> {
   if (!auth.currentUser) {
-    throw new Error('Connexion Firebase requise pour synchroniser l\'inventaire');
+    throw new Error('Connectez-vous dans Paramètres pour synchroniser l\'inventaire');
   }
 
   const logId = await createSyncLog('inventory', 'pull');
@@ -247,7 +247,7 @@ export async function syncInventory(): Promise<{ synced: number; failed: number 
       try {
         const data = docSnap.data();
         const name = data.name ?? '';
-        const category = data.category ?? 'other';
+        const category = typeof data.category === 'string' && data.category ? data.category : 'other';
         const inventoryType = data.type ?? 'consumable'; // consumable or durable
         const quantity = data.quantity ?? (inventoryType === 'durable' ? 1 : 0);
         const condition = inventoryType === 'durable'
@@ -305,28 +305,35 @@ export async function syncStaff(): Promise<{ synced: number; failed: number }> {
     const now = new Date().toISOString();
 
     const intervenantsRef = collection(firestore, 'intervenants');
-    let q;
-    if (lastSyncRecord?.finished_at) {
-      // intervenants has updatedAt → use for incremental sync
-      const sinceDate = new Date(lastSyncRecord.finished_at);
-      q = query(intervenantsRef, where('actif', '==', true), where('updatedAt', '>', sinceDate));
-    } else {
-      q = query(intervenantsRef, where('actif', '==', true));
-    }
-
+    const q = query(intervenantsRef, where('actif', '==', true));
     const snapshot = await getDocs(q);
 
-    for (const docSnap of snapshot.docs) {
+    // Filter updatedAt client-side to avoid composite index requirement
+    const sinceMs = lastSyncRecord?.finished_at
+      ? new Date(lastSyncRecord.finished_at).getTime()
+      : 0;
+    const filteredDocs = sinceMs > 0
+      ? snapshot.docs.filter(doc => {
+          const updatedAt = doc.data().updatedAt;
+          if (!updatedAt) return true;
+          const ts = updatedAt.toDate ? updatedAt.toDate().getTime() : new Date(updatedAt).getTime();
+          return ts > sinceMs;
+        })
+      : snapshot.docs;
+
+    for (const docSnap of filteredDocs) {
       try {
         const data = docSnap.data();
         const firstName = data.prenom ?? '';
         const lastName = data.nom ?? '';
-        const role = mapStaffRole(data.type ?? '');
+        const role = typeof data.type === 'string' && data.type ? data.type : 'other';
         const phone = data.tel ?? '';
         const email = data.email ?? '';
         const service = Array.isArray(data.specialites) ? data.specialites.join(', ') : '';
         const isAvailable = data.actif ? 1 : 0;
         const notes = data.notes ?? '';
+        const hourlyRate = typeof data.tarif === 'number' ? data.tarif : null;
+        const sessionRate = typeof data.tarifSeance === 'number' ? data.tarifSeance : null;
 
         const existing = await db.select<{ id: number }[]>(
           'SELECT id FROM staff WHERE external_id = ?',
@@ -336,17 +343,17 @@ export async function syncStaff(): Promise<{ synced: number; failed: number }> {
         if (existing.length > 0) {
           await db.execute(
             `UPDATE staff SET first_name=?, last_name=?, role=?, phone=?, email=?,
-             service=?, is_available=?, notes=?,
+             service=?, is_available=?, notes=?, hourly_rate=?, session_rate=?,
              synced_from='planning-ehpad', last_sync_at=?
              WHERE external_id=?`,
-            [firstName, lastName, role, phone, email, service, isAvailable, notes, now, docSnap.id]
+            [firstName, lastName, role, phone, email, service, isAvailable, notes, hourlyRate, sessionRate, now, docSnap.id]
           );
         } else {
           await db.execute(
             `INSERT INTO staff (first_name, last_name, role, phone, email, service,
-             is_available, notes, synced_from, last_sync_at, external_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'planning-ehpad', ?, ?)`,
-            [firstName, lastName, role, phone, email, service, isAvailable, notes, now, docSnap.id]
+             is_available, notes, hourly_rate, session_rate, synced_from, last_sync_at, external_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'planning-ehpad', ?, ?)`,
+            [firstName, lastName, role, phone, email, service, isAvailable, notes, hourlyRate, sessionRate, now, docSnap.id]
           );
         }
         synced++;
@@ -369,6 +376,10 @@ export async function syncStaff(): Promise<{ synced: number; failed: number }> {
 // ─── Sync Budget ─────────────────────────────────────────────
 
 export async function syncBudget(): Promise<{ synced: number; failed: number }> {
+  if (!auth.currentUser) {
+    throw new Error('Connectez-vous dans Paramètres pour synchroniser le budget');
+  }
+
   const logId = await createSyncLog('budget', 'pull');
   let synced = 0;
   let failed = 0;

@@ -1,7 +1,7 @@
 import { getDb } from './database';
 import type { StaffMember, StaffRole } from './types';
 
-const UPDATABLE_FIELDS = new Set(['first_name', 'last_name', 'role', 'phone', 'email', 'service', 'is_available', 'notes', 'synced_from', 'last_sync_at']);
+const UPDATABLE_FIELDS = new Set(['first_name', 'last_name', 'role', 'phone', 'email', 'service', 'is_available', 'notes', 'hourly_rate', 'session_rate', 'synced_from', 'last_sync_at']);
 
 export async function getStaffMembers(role?: StaffRole): Promise<StaffMember[]> {
   const db = await getDb();
@@ -23,9 +23,9 @@ export async function getStaffMember(id: number): Promise<StaffMember | null> {
 export async function createStaffMember(member: Omit<StaffMember, 'id' | 'created_at'>): Promise<number> {
   const db = await getDb();
   const result = await db.execute(
-    `INSERT INTO staff (first_name, last_name, role, phone, email, service, is_available, notes, synced_from, last_sync_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [member.first_name, member.last_name, member.role, member.phone, member.email, member.service, member.is_available, member.notes, member.synced_from, member.last_sync_at]
+    `INSERT INTO staff (first_name, last_name, role, phone, email, service, is_available, notes, hourly_rate, session_rate, synced_from, last_sync_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [member.first_name, member.last_name, member.role, member.phone, member.email, member.service, member.is_available, member.notes, member.hourly_rate, member.session_rate, member.synced_from, member.last_sync_at]
   );
   return result.lastInsertId ?? 0;
 }

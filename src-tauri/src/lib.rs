@@ -39,6 +39,24 @@ pub fn run() {
             sql: include_str!("../migrations/006_animateur_tables.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 7,
+            description: "add hourly_rate and session_rate to suppliers",
+            sql: include_str!("../migrations/007_staff_rates.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 8,
+            description: "category colors per module (inventory, suppliers, ...)",
+            sql: include_str!("../migrations/008_category_colors.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 9,
+            description: "staff hourly/session rates + seed staff category colors",
+            sql: include_str!("../migrations/009_staff_rates_and_role.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

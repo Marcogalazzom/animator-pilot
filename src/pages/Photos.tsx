@@ -7,17 +7,6 @@ import { useToastStore } from '@/stores/toastStore';
 import { getAlbums, createAlbum, updateAlbum, deleteAlbum } from '@/db/photos';
 import type { PhotoAlbum } from '@/db/types';
 
-// ─── Mock data ───────────────────────────────────────────────
-
-const MOCK_ALBUMS: PhotoAlbum[] = [
-  { id: 1, title: 'Atelier peinture - Mars 2026', description: 'Séance peinture aquarelle avec les résidents du 2ème étage', activity_date: '2026-03-15', cover_path: null, created_at: '' },
-  { id: 2, title: 'Fête du Printemps', description: 'Décoration du hall et spectacle musical', activity_date: '2026-03-20', cover_path: null, created_at: '' },
-  { id: 3, title: 'Sortie Jardin Botanique', description: 'Visite du jardin botanique avec 12 résidents', activity_date: '2026-04-02', cover_path: null, created_at: '' },
-  { id: 4, title: 'Atelier cuisine - Crêpes', description: 'Préparation de crêpes pour la Chandeleur', activity_date: '2026-02-02', cover_path: null, created_at: '' },
-  { id: 5, title: 'Concert intergénérationnel', description: 'Concert avec les élèves de l\'école primaire', activity_date: '2026-02-14', cover_path: null, created_at: '' },
-  { id: 6, title: 'Atelier mémoire - Jeux de société', description: 'Après-midi jeux : loto, mémory, puzzles', activity_date: '2026-01-20', cover_path: null, created_at: '' },
-];
-
 // Colors for album cards (cycle)
 const ALBUM_COLORS = ['#1E40AF', '#059669', '#7C3AED', '#D97706', '#DC2626', '#0F766E', '#EC4899', '#EA580C'];
 
@@ -28,7 +17,7 @@ function formatDate(dateStr: string): string {
 // ─── Component ───────────────────────────────────────────────
 
 export default function Photos() {
-  const [albums, setAlbums] = useState<PhotoAlbum[]>(MOCK_ALBUMS);
+  const [albums, setAlbums] = useState<PhotoAlbum[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -37,7 +26,7 @@ export default function Photos() {
 
   useEffect(() => {
     getAlbums()
-      .then((rows) => { if (rows.length > 0) setAlbums(rows); })
+      .then((rows) => setAlbums(rows))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);

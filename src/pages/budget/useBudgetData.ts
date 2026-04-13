@@ -20,28 +20,9 @@ export const CATEGORIES: Record<ExpenseCategory, { label: string; color: string;
 
 export const CATEGORY_KEYS = Object.keys(CATEGORIES) as ExpenseCategory[];
 
-// ─── Mock data ───────────────────────────────────────────────
-
-const MOCK_BUDGET: AnimationBudget = {
-  id: 1, fiscal_year: new Date().getFullYear(), total_allocated: 15000,
-  synced_from: '', last_sync_at: null, external_id: null, created_at: '',
-};
-
-const today = new Date();
-const addDays = (n: number) => new Date(today.getFullYear(), today.getMonth(), today.getDate() + n).toISOString().slice(0, 10);
-
-const MOCK_EXPENSES: Expense[] = [
-  { id: 1, fiscal_year: today.getFullYear(), title: 'Musicothérapeute - Mars', category: 'intervenants', amount: 320, date: addDays(-20), description: '2 séances musicothérapie', supplier: 'Marie Martin', invoice_path: null, linked_intervenant_id: null, synced_from: '', last_sync_at: null, external_id: null, created_at: '' },
-  { id: 2, fiscal_year: today.getFullYear(), title: 'Peinture et pinceaux', category: 'materiel', amount: 85.50, date: addDays(-15), description: 'Lot peinture acrylique + pinceaux', supplier: 'Cultura', invoice_path: null, linked_intervenant_id: null, synced_from: '', last_sync_at: null, external_id: null, created_at: '' },
-  { id: 3, fiscal_year: today.getFullYear(), title: 'Sortie Jardin Botanique', category: 'sorties', amount: 180, date: addDays(-10), description: 'Bus + entrées pour 12 résidents', supplier: 'Transport Express', invoice_path: null, linked_intervenant_id: null, synced_from: '', last_sync_at: null, external_id: null, created_at: '' },
-  { id: 4, fiscal_year: today.getFullYear(), title: 'Goûter anniversaires Mars', category: 'fetes', amount: 45, date: addDays(-8), description: 'Gâteau + boissons', supplier: 'Boulangerie Petit', invoice_path: null, linked_intervenant_id: null, synced_from: '', last_sync_at: null, external_id: null, created_at: '' },
-  { id: 5, fiscal_year: today.getFullYear(), title: 'Art-thérapeute - Avril', category: 'intervenants', amount: 250, date: addDays(-3), description: '1 séance atelier créatif', supplier: 'Sophie Duval', invoice_path: null, linked_intervenant_id: null, synced_from: '', last_sync_at: null, external_id: null, created_at: '' },
-  { id: 6, fiscal_year: today.getFullYear(), title: 'Jeux de société', category: 'materiel', amount: 62, date: addDays(-1), description: '3 jeux adaptés personnes âgées', supplier: 'Amazon', invoice_path: null, linked_intervenant_id: null, synced_from: '', last_sync_at: null, external_id: null, created_at: '' },
-];
-
-const MOCK_SUMMARY: ExpenseSummary = {
-  total: 942.50, count: 6,
-  byCategory: { intervenants: 570, materiel: 147.50, sorties: 180, fetes: 45, other: 0 },
+const EMPTY_SUMMARY: ExpenseSummary = {
+  total: 0, count: 0,
+  byCategory: { intervenants: 0, materiel: 0, sorties: 0, fetes: 0, other: 0 },
 };
 
 // ─── Hook ────────────────────────────────────────────────────
@@ -63,9 +44,9 @@ export interface BudgetData {
 
 export function useBudgetData(): BudgetData {
   const [year, setYear] = useState(new Date().getFullYear());
-  const [budget, setBudget] = useState<AnimationBudget | null>(MOCK_BUDGET);
-  const [expenses, setExpenses] = useState<Expense[]>(MOCK_EXPENSES);
-  const [summary, setSummary] = useState<ExpenseSummary>(MOCK_SUMMARY);
+  const [budget, setBudget] = useState<AnimationBudget | null>(null);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [summary, setSummary] = useState<ExpenseSummary>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const syncStatus = useSyncStore((s) => s.modules.budget.status);
@@ -75,12 +56,12 @@ export function useBudgetData(): BudgetData {
       const [dbBudget, dbExpenses, dbSummary] = await Promise.all([
         getBudget(year).catch(() => null),
         getExpenses(year).catch(() => [] as Expense[]),
-        getExpenseSummary(year).catch(() => MOCK_SUMMARY),
+        getExpenseSummary(year).catch(() => EMPTY_SUMMARY),
       ]);
 
-      if (dbBudget) setBudget(dbBudget);
-      if (dbExpenses.length > 0) setExpenses(dbExpenses);
-      setSummary(dbSummary.count > 0 ? dbSummary : MOCK_SUMMARY);
+      setBudget(dbBudget);
+      setExpenses(dbExpenses);
+      setSummary(dbSummary);
     } catch (err) {
       setError(String(err));
     } finally {

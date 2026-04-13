@@ -125,7 +125,7 @@ export interface JournalEntry {
 
 // ─── Contacts fournisseurs ───────────────────────────────────
 
-export type SupplierCategory = 'alimentation' | 'materiel' | 'transport' | 'spectacle' | 'formation' | 'location' | 'other';
+export type SupplierCategory = string;
 
 export interface Supplier {
   id: number;
@@ -137,6 +137,8 @@ export interface Supplier {
   address: string;
   website: string;
   notes: string;
+  hourly_rate: number | null;
+  session_rate: number | null;
   is_favorite: number;
   created_at: string;
 }
@@ -157,7 +159,7 @@ export interface Document {
 }
 
 // ─── Inventaire (synced from planning-ehpad) ─────────────────
-export type InventoryCategory = 'materiel_animation' | 'jeux' | 'fournitures' | 'decoration' | 'musique' | 'sport' | 'other';
+export type InventoryCategory = string;
 export type InventoryCondition = 'neuf' | 'bon' | 'usage' | 'a_remplacer';
 
 export interface InventoryItem {
@@ -176,7 +178,7 @@ export interface InventoryItem {
 }
 
 // ─── Annuaire Personnel (synced with planning-ehpad) ─────────
-export type StaffRole = 'animateur' | 'aide_soignant' | 'infirmier' | 'medecin' | 'psychologue' | 'kinesitherapeute' | 'ergotherapeute' | 'ash' | 'cuisine' | 'direction' | 'administratif' | 'benevole' | 'other';
+export type StaffRole = string;
 
 export interface StaffMember {
   id: number;
@@ -188,6 +190,8 @@ export interface StaffMember {
   service: string;
   is_available: number;
   notes: string;
+  hourly_rate: number | null;
+  session_rate: number | null;
   synced_from: string;
   last_sync_at: string | null;
   external_id: string | null;

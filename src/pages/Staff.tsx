@@ -8,43 +8,23 @@ import { useSyncStore } from '@/stores/syncStore';
 import {
   getStaffMembers, createStaffMember, updateStaffMember, deleteStaffMember,
 } from '@/db/staff';
+import {
+  ensureCategoryColors, autoColor, categoryLabel,
+  type CategoryColor,
+} from '@/db/categoryColors';
 import { SyncButton, SyncStatus } from '@/components/SyncIndicator';
 import type { StaffMember, StaffRole } from '@/db/types';
 
-// ─── Constants ───────────────────────────────────────────────
-
-const ROLES: Record<StaffRole, { label: string; color: string; bg: string }> = {
-  animateur:        { label: 'Animateur/trice',  color: '#1E40AF', bg: '#EFF6FF' },
-  aide_soignant:    { label: 'Aide-soignant(e)', color: '#059669', bg: '#ECFDF5' },
-  infirmier:        { label: 'Infirmier/ère',    color: '#7C3AED', bg: '#F5F3FF' },
-  medecin:          { label: 'Médecin',          color: '#DC2626', bg: '#FEF2F2' },
-  psychologue:      { label: 'Psychologue',      color: '#D97706', bg: '#FFFBEB' },
-  kinesitherapeute: { label: 'Kinésithérapeute', color: '#0F766E', bg: '#F0FDFA' },
-  ergotherapeute:   { label: 'Ergothérapeute',   color: '#0EA5E9', bg: '#F0F9FF' },
-  ash:              { label: 'ASH',              color: '#8B5CF6', bg: '#F5F3FF' },
-  cuisine:          { label: 'Cuisine',          color: '#EA580C', bg: '#FFF7ED' },
-  direction:        { label: 'Direction',        color: '#1E293B', bg: '#F1F5F9' },
-  administratif:    { label: 'Administratif',    color: '#64748B', bg: '#F8FAFC' },
-  benevole:         { label: 'Bénévole',         color: '#EC4899', bg: '#FDF2F8' },
-  other:            { label: 'Autre',            color: '#64748B', bg: '#F1F5F9' },
-};
-
-const ROLE_KEYS = Object.keys(ROLES) as StaffRole[];
-
-const MOCK_STAFF: StaffMember[] = [
-  { id: 1, first_name: 'Marie', last_name: 'Dupont', role: 'animateur', phone: '06 12 34 56 78', email: 'marie.dupont@ehpad.fr', service: 'Animation', is_available: 1, notes: 'Responsable animation', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
-  { id: 2, first_name: 'Jean', last_name: 'Martin', role: 'aide_soignant', phone: '06 23 45 67 89', email: 'jean.martin@ehpad.fr', service: 'Étage 2', is_available: 1, notes: '', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
-  { id: 3, first_name: 'Sophie', last_name: 'Bernard', role: 'infirmier', phone: '06 34 56 78 90', email: 'sophie.bernard@ehpad.fr', service: 'Soins', is_available: 1, notes: '', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
-  { id: 4, first_name: 'Pierre', last_name: 'Leroy', role: 'psychologue', phone: '06 45 67 89 01', email: 'pierre.leroy@ehpad.fr', service: 'Bien-être', is_available: 0, notes: 'En congé jusqu\'au 15/04', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
-  { id: 5, first_name: 'Claire', last_name: 'Moreau', role: 'kinesitherapeute', phone: '06 56 78 90 12', email: 'claire.moreau@ehpad.fr', service: 'Rééducation', is_available: 1, notes: '', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
-  { id: 6, first_name: 'Jacqueline', last_name: 'Petit', role: 'benevole', phone: '06 67 89 01 23', email: '', service: 'Animation', is_available: 1, notes: 'Disponible mardi et jeudi', synced_from: '', last_sync_at: null, external_id: null, created_at: '' },
-  { id: 7, first_name: 'Anne', last_name: 'Robert', role: 'direction', phone: '06 78 90 12 34', email: 'anne.robert@ehpad.fr', service: 'Direction', is_available: 1, notes: 'Directrice', synced_from: 'planning-ehpad', last_sync_at: '2026-04-01', external_id: null, created_at: '' },
-];
+function formatMoney(v: number | null | undefined): string | null {
+  if (v == null) return null;
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
+}
 
 // ─── Component ───────────────────────────────────────────────
 
 export default function Staff() {
-  const [members, setMembers] = useState<StaffMember[]>(MOCK_STAFF);
+  const [members, setMembers] = useState<StaffMember[]>([]);
+  const [roles, setRoles] = useState<CategoryColor[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState<StaffRole | ''>('');
@@ -55,11 +35,24 @@ export default function Staff() {
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
-    getStaffMembers()
-      .then((rows) => { if (rows.length > 0) setMembers(rows); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    (async () => {
+      try {
+        const rows = await getStaffMembers();
+        setMembers(rows);
+        const cats = await ensureCategoryColors('staff', rows.map((r) => r.role));
+        setRoles(cats);
+      } catch { /* ignore */ }
+      setLoading(false);
+    })();
   }, [syncStatus]);
+
+  const roleMap = new Map(roles.map((c) => [c.name, c]));
+  function roleFor(name: string): CategoryColor {
+    const existing = roleMap.get(name);
+    if (existing) return existing;
+    const { color, bg } = autoColor(name);
+    return { module: 'staff', name, color, bg, label: null };
+  }
 
   const filtered = members.filter((m) => {
     if (filterRole && m.role !== filterRole) return false;
@@ -76,15 +69,24 @@ export default function Staff() {
     if (!form) return;
     const fd = new FormData(form);
 
+    const num = (k: string): number | null => {
+      const v = fd.get(k);
+      if (!v) return null;
+      const n = parseFloat(v as string);
+      return Number.isFinite(n) ? n : null;
+    };
+
     const data = {
       first_name: fd.get('first_name') as string,
       last_name: fd.get('last_name') as string,
-      role: fd.get('role') as StaffRole,
+      role: (fd.get('role') as string) || 'other',
       phone: fd.get('phone') as string,
       email: fd.get('email') as string,
       service: fd.get('service') as string,
       is_available: fd.get('is_available') === 'on' ? 1 : 0,
       notes: fd.get('notes') as string,
+      hourly_rate: num('hourly_rate'),
+      session_rate: num('session_rate'),
       synced_from: '',
       last_sync_at: null,
       external_id: null,
@@ -100,6 +102,8 @@ export default function Staff() {
         setMembers((prev) => [{ ...data, id: id as number, created_at: new Date().toISOString() } as StaffMember, ...prev]);
         addToast('Personnel ajouté', 'success');
       }
+      const cats = await ensureCategoryColors('staff', [data.role]);
+      setRoles(cats);
     } catch {
       addToast('Erreur lors de la sauvegarde', 'error');
     }
@@ -176,7 +180,7 @@ export default function Staff() {
             }}
           >
             <option value="">Tous les rôles</option>
-            {ROLE_KEYS.map((k) => <option key={k} value={k}>{ROLES[k].label}</option>)}
+            {roles.map((c) => <option key={c.name} value={c.name}>{categoryLabel(c)}</option>)}
           </select>
           <ChevronDown size={12} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--color-text-secondary)' }} />
         </div>
@@ -189,7 +193,9 @@ export default function Staff() {
         ) : filtered.length === 0 ? (
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px', padding: '20px' }}>Aucun résultat</p>
         ) : filtered.map((m) => {
-          const role = ROLES[m.role];
+          const role = roleFor(m.role);
+          const hourly = formatMoney(m.hourly_rate);
+          const session = formatMoney(m.session_rate);
           return (
             <div key={m.id} style={{
               backgroundColor: 'var(--color-surface)', borderRadius: '8px',
@@ -203,7 +209,7 @@ export default function Staff() {
                     {m.first_name} {m.last_name}
                   </p>
                   <span style={{ fontSize: '12px', fontWeight: 500, color: role.color, backgroundColor: role.bg, padding: '2px 8px', borderRadius: '4px' }}>
-                    {role.label}
+                    {categoryLabel(role)}
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
@@ -234,6 +240,13 @@ export default function Staff() {
                   </span>
                 )}
               </div>
+
+              {(hourly || session) && (
+                <div style={{ display: 'flex', gap: '12px', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+                  {hourly && <span><strong style={{ color: 'var(--color-text-primary)' }}>{hourly}</strong> /h</span>}
+                  {session && <span><strong style={{ color: 'var(--color-text-primary)' }}>{session}</strong> /séance</span>}
+                </div>
+              )}
 
               {m.notes && (
                 <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-text-secondary)', fontStyle: 'italic' }}>{m.notes}</p>
@@ -285,9 +298,16 @@ export default function Staff() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
                   Rôle
-                  <select name="role" defaultValue={editMember?.role ?? 'animateur'} style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}>
-                    {ROLE_KEYS.map((k) => <option key={k} value={k}>{ROLES[k].label}</option>)}
-                  </select>
+                  <input
+                    name="role"
+                    list="staff-roles"
+                    defaultValue={editMember?.role ?? 'animateur'}
+                    placeholder="Tapez ou choisissez..."
+                    style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
+                  />
+                  <datalist id="staff-roles">
+                    {roles.map((c) => <option key={c.name} value={c.name}>{categoryLabel(c)}</option>)}
+                  </datalist>
                 </label>
                 <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
                   Service
@@ -302,6 +322,16 @@ export default function Staff() {
                 <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
                   Email
                   <input name="email" type="email" defaultValue={editMember?.email ?? ''} style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }} />
+                </label>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
+                  Tarif horaire (€)
+                  <input name="hourly_rate" type="number" step="0.01" min="0" defaultValue={editMember?.hourly_rate ?? ''} style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }} />
+                </label>
+                <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
+                  Tarif séance (€)
+                  <input name="session_rate" type="number" step="0.01" min="0" defaultValue={editMember?.session_rate ?? ''} style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }} />
                 </label>
               </div>
               <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)', display: 'flex', alignItems: 'center', gap: '8px' }}>

@@ -1,7 +1,7 @@
 import { getDb } from './database';
 import type { Supplier, SupplierCategory } from './types';
 
-const UPDATABLE = new Set(['name', 'category', 'contact_name', 'phone', 'email', 'address', 'website', 'notes', 'is_favorite']);
+const UPDATABLE = new Set(['name', 'category', 'contact_name', 'phone', 'email', 'address', 'website', 'notes', 'hourly_rate', 'session_rate', 'is_favorite']);
 
 export async function getSuppliers(category?: SupplierCategory): Promise<Supplier[]> {
   const db = await getDb();
@@ -23,9 +23,9 @@ export async function getSupplier(id: number): Promise<Supplier | null> {
 export async function createSupplier(supplier: Omit<Supplier, 'id' | 'created_at'>): Promise<number> {
   const db = await getDb();
   const result = await db.execute(
-    `INSERT INTO suppliers (name, category, contact_name, phone, email, address, website, notes, is_favorite)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [supplier.name, supplier.category, supplier.contact_name, supplier.phone, supplier.email, supplier.address, supplier.website, supplier.notes, supplier.is_favorite]
+    `INSERT INTO suppliers (name, category, contact_name, phone, email, address, website, notes, hourly_rate, session_rate, is_favorite)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [supplier.name, supplier.category, supplier.contact_name, supplier.phone, supplier.email, supplier.address, supplier.website, supplier.notes, supplier.hourly_rate, supplier.session_rate, supplier.is_favorite]
   );
   return result.lastInsertId ?? 0;
 }

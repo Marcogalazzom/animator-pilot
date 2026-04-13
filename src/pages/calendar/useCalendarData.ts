@@ -17,24 +17,6 @@ export interface CalendarEvent {
   rawDate: Date;
 }
 
-// ─── Mock data ─────────────────────────────────────────────────
-
-const today = new Date();
-const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
-const toISO = (d: Date) => d.toISOString().slice(0, 10);
-
-export const MOCK_CALENDAR_EVENTS: CalendarEvent[] = [
-  { id: 'a-1', title: 'Atelier peinture aquarelle', date: toISO(addDays(today, 1)), module: 'activities', link_path: '/activities', status: 'planned', rawDate: addDays(today, 1) },
-  { id: 'a-2', title: 'Loto musical', date: toISO(addDays(today, 2)), module: 'activities', link_path: '/activities', status: 'planned', rawDate: addDays(today, 2) },
-  { id: 'a-3', title: 'Gym douce', date: toISO(addDays(today, 3)), module: 'activities', link_path: '/activities', status: 'planned', rawDate: addDays(today, 3) },
-  { id: 'p-1', title: 'Programme animations été 2026', date: toISO(addDays(today, -5)), module: 'projects', link_path: '/projects', status: 'overdue', rawDate: addDays(today, -5) },
-  { id: 'a-4', title: 'Concert chorale école primaire', date: toISO(addDays(today, 7)), module: 'activities', link_path: '/activities', status: 'planned', rawDate: addDays(today, 7) },
-  { id: 'a-5', title: 'Fête des anniversaires — Avril', date: toISO(addDays(today, 10)), module: 'activities', link_path: '/activities', status: 'planned', rawDate: addDays(today, 10) },
-  { id: 'p-2', title: 'Projet jardin thérapeutique', date: toISO(addDays(today, 30)), module: 'projects', link_path: '/projects', status: 'in_progress', rawDate: addDays(today, 30) },
-  { id: 'a-6', title: 'Atelier mémoire — Jeux de société', date: toISO(addDays(today, 14)), module: 'activities', link_path: '/activities', status: 'planned', rawDate: addDays(today, 14) },
-  { id: 'a-7', title: 'Sortie Jardin Botanique', date: toISO(addDays(today, 21)), module: 'activities', link_path: '/activities', status: 'planned', rawDate: addDays(today, 21) },
-];
-
 // ─── Hook ─────────────────────────────────────────────────────
 
 export interface CalendarData {
@@ -54,7 +36,7 @@ function isoFromDate(d: Date): string {
 }
 
 export function useCalendarData(): CalendarData {
-  const [events, setEvents]   = useState<CalendarEvent[]>(MOCK_CALENDAR_EVENTS);
+  const [events, setEvents]   = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
 
@@ -106,9 +88,7 @@ export function useCalendarData(): CalendarData {
 
         result.sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
 
-        if (result.length > 0) {
-          setEvents(result);
-        }
+        setEvents(result);
       } catch (err) {
         if (!cancelled) setError(String(err));
       } finally {
