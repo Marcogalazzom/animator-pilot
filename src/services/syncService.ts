@@ -132,7 +132,7 @@ export async function syncActivities(): Promise<{ synced: number; failed: number
 
     // ── PUSH local shared activities to Firestore ──
     const localOnly = await db.select<Activity[]>(
-      `SELECT * FROM activities WHERE (synced_from = '' OR synced_from IS NULL) AND is_shared = 1`,
+      `SELECT * FROM activities WHERE (synced_from = '' OR synced_from IS NULL) AND is_shared = 1 AND is_template = 0`,
       []
     );
 
