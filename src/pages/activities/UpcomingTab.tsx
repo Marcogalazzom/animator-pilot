@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useToastStore } from '@/stores/toastStore';
 import { Check, Copy, Pencil, Trash2 } from 'lucide-react';
 import ActivityCard from './ActivityCard';
@@ -18,6 +19,7 @@ interface Props {
 
 export default function UpcomingTab({ items, types, search, typeFilter, locationFilter, onEdit, onRefresh }: Props) {
   const addToast = useToastStore((s) => s.add);
+  const [presents, setPresents] = useState<Record<number, string>>({});
   const today = todayIso();
   const typeMap = new Map(types.map((c) => [c.name, c]));
   const typeFor = (name: string): CategoryColor =>
@@ -33,8 +35,10 @@ export default function UpcomingTab({ items, types, search, typeFilter, location
   const grouped = bucketize(filtered, today);
 
   async function complete(a: Activity) {
-    await markCompleted(a.id, a.actual_participants).catch(() => {});
-    addToast('Activité clôturée', 'success');
+    const raw = presents[a.id];
+    const n = raw !== undefined ? (parseInt(raw) || 0) : a.actual_participants;
+    await markCompleted(a.id, n).catch(() => {});
+    addToast(`Activité clôturée — ${n} présent${n > 1 ? 's' : ''}`, 'success');
     await onRefresh();
   }
   async function duplicate(a: Activity) {
@@ -66,9 +70,26 @@ export default function UpcomingTab({ items, types, search, typeFilter, location
                   key={a.id}
                   activity={a}
                   type={typeFor(a.activity_type)}
+                  inlineRow={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px', padding: '8px 10px', background: 'var(--color-bg-soft)', borderRadius: '6px' }}>
+                      <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>Présents :</span>
+                      <input
+                        type="number" min="0" max={a.max_participants || undefined}
+                        value={presents[a.id] ?? ''}
+                        placeholder={String(a.actual_participants || 0)}
+                        onChange={(e) => setPresents((p) => ({ ...p, [a.id]: e.target.value }))}
+                        style={{ width: '56px', padding: '4px 6px', border: '1px solid var(--color-border)', borderRadius: '4px', textAlign: 'center', fontSize: '12px' }}
+                      />
+                      {a.max_participants > 0 && (
+                        <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>/ {a.max_participants}</span>
+                      )}
+                      <button onClick={() => complete(a)} style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '5px 12px', background: 'var(--color-success)', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
+                        <Check size={12} /> Terminer
+                      </button>
+                    </div>
+                  }
                   actions={
                     <>
-                      <button onClick={() => complete(a)} style={{ ...actionBtn, background: '#ECFDF5', color: '#059669' }}><Check size={12} /> Terminer</button>
                       <button onClick={() => duplicate(a)} style={actionBtn}><Copy size={12} /> Dupliquer</button>
                       <button onClick={() => onEdit(a)} style={actionBtn}><Pencil size={12} /> Modifier</button>
                       <button onClick={() => remove(a)} style={{ ...actionBtn, color: 'var(--color-danger)' }}><Trash2 size={12} /></button>
