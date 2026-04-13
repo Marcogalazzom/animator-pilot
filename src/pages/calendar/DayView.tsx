@@ -12,7 +12,7 @@ interface Props {
   locationFilter: string;
 }
 
-import { todayIso } from './dateUtils';
+import { todayIso } from '@/utils/dateUtils';
 
 function nowTimeString(): string {
   const d = new Date();

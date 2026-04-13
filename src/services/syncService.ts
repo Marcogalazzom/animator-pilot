@@ -23,6 +23,7 @@ import { getDb } from '@/db/database';
 import { createSyncLog, completeSyncLog, getLastSync } from '@/db/sync';
 import { getSetting } from '@/db/settings';
 import type { Activity, SyncModule } from '@/db/types';
+import { addDays, mondayOf } from '@/utils/dateUtils';
 
 
 // ─── Day / week helpers ──────────────────────────────────────
@@ -35,20 +36,15 @@ const DAY_OFFSET: Record<string, number> = {
 const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
 function computeDate(weekId: string, day: string): string {
-  const monday = new Date(weekId + 'T00:00:00');
-  monday.setDate(monday.getDate() + (DAY_OFFSET[day] ?? 0));
-  return monday.toISOString().slice(0, 10);
+  return addDays(weekId, DAY_OFFSET[day] ?? 0);
 }
 
 function computeWeekIdAndDay(dateStr: string): { weekId: string; day: string } {
-  const d = new Date(dateStr + 'T00:00:00');
-  const dow = d.getDay(); // 0=Sun
-  const mondayOffset = dow === 0 ? -6 : 1 - dow;
-  const monday = new Date(d);
-  monday.setDate(d.getDate() + mondayOffset);
-  const weekId = monday.toISOString().slice(0, 10);
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const dow = dt.getUTCDay(); // 0=Sun
   const dayIndex = dow === 0 ? 6 : dow - 1;
-  return { weekId, day: DAY_NAMES[dayIndex] };
+  return { weekId: mondayOf(dateStr), day: DAY_NAMES[dayIndex] };
 }
 
 // ─── Inventory condition mapping ─────────────────────────────

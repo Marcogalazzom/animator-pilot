@@ -9,7 +9,7 @@ interface Props {
 const DAY_FR = ['Dim.', 'Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.'];
 const MONTH_FR_SHORT = ['jan.', 'fév.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 
-import { tomorrowIso } from '@/pages/calendar/dateUtils';
+import { tomorrowIso } from '@/utils/dateUtils';
 
 function isoToLabel(iso: string): string {
   const d = new Date(iso + 'T00:00:00');

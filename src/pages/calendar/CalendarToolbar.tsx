@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight, Clock, CalendarDays, MapPin, List, Filter } from 'lucide-react';
 import { categoryLabel, type CategoryColor } from '@/db/categoryColors';
-import { addDays, todayIso } from './dateUtils';
+import { addDays, todayIso } from '@/utils/dateUtils';
 
 export type CalendarView = 'day' | 'week' | 'location' | 'list';
 

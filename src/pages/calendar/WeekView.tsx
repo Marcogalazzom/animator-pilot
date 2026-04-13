@@ -10,7 +10,7 @@ interface Props {
   locationFilter: string;
 }
 
-import { todayIso } from './dateUtils';
+import { todayIso } from '@/utils/dateUtils';
 
 const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 

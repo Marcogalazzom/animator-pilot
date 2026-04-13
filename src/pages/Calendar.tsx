@@ -7,7 +7,7 @@ import WeekView from './calendar/WeekView';
 import LocationView from './calendar/LocationView';
 import ListView from './calendar/ListView';
 import { ensureCategoryColors, type CategoryColor } from '@/db/categoryColors';
-import { todayIso, mondayOf } from './calendar/dateUtils';
+import { todayIso, mondayOf } from '@/utils/dateUtils';
 
 const MONTH_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 const DAY_FR = ['Dim.', 'Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.'];
