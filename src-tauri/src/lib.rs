@@ -57,6 +57,12 @@ pub fn run() {
             sql: include_str!("../migrations/009_staff_rates_and_role.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 10,
+            description: "seed activity category colors",
+            sql: include_str!("../migrations/010_activity_categories.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
