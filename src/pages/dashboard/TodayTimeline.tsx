@@ -17,9 +17,15 @@ export default function TodayTimeline({ events }: Props) {
   const dayEvents = byDay(events, today);
   const now = nowTimeString();
 
+  // "En cours" = commencée dans les 30 dernières minutes.
+  const [nh, nm] = now.split(':').map(Number);
+  const nowMin = nh * 60 + nm;
   let currentId: string | null = null;
   for (const e of dayEvents) {
-    if (e.time && e.time <= now) currentId = e.id;
+    if (!e.time) continue;
+    const [h, m] = e.time.split(':').map(Number);
+    const eMin = h * 60 + m;
+    if (eMin <= nowMin && nowMin - eMin <= 30) currentId = e.id;
   }
 
   return (

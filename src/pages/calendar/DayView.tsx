@@ -35,12 +35,17 @@ export default function DayView({ events, date, types, typeFilter, locationFilte
   const isToday = date === todayIso();
   const now = nowTimeString();
 
-  // L'activité "en cours" : la dernière dont time <= now (si aujourd'hui).
+  // L'activité "en cours" : commencée dans les 30 dernières minutes (si aujourd'hui).
   const currentId = (() => {
     if (!isToday) return null;
+    const [nh, nm] = now.split(':').map(Number);
+    const nowMin = nh * 60 + nm;
     let pick: string | null = null;
     for (const e of dayEvents) {
-      if (e.time && e.time <= now) pick = e.id;
+      if (!e.time) continue;
+      const [h, m] = e.time.split(':').map(Number);
+      const eMin = h * 60 + m;
+      if (eMin <= nowMin && nowMin - eMin <= 30) pick = e.id;
     }
     return pick;
   })();
