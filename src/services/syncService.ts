@@ -24,42 +24,6 @@ import { createSyncLog, completeSyncLog, getLastSync } from '@/db/sync';
 import { getSetting } from '@/db/settings';
 import type { Activity, SyncModule } from '@/db/types';
 
-// ─── Activity type mapping (Firestore → local) ──────────────
-
-const ACTIVITY_TYPE_MAP: Record<string, string> = {
-  sport: 'sport',
-  cognitive: 'jeux',
-  creative: 'atelier_creatif',
-  vr: 'other',
-  boardgames: 'jeux',
-  music: 'musique',
-  food: 'cuisine',
-  social: 'intergenerationnel',
-  outing: 'sortie',
-  festive: 'fete',
-  sensory: 'bien_etre',
-  animal: 'other',
-  religious: 'other',
-  cinema: 'other',
-  reading: 'lecture',
-  press: 'lecture',
-  volleyball: 'sport',
-};
-
-// Reverse mapping (local → Firestore) for push
-const ACTIVITY_TYPE_REVERSE: Record<string, string> = {
-  sport: 'sport',
-  jeux: 'boardgames',
-  atelier_creatif: 'creative',
-  musique: 'music',
-  cuisine: 'food',
-  intergenerationnel: 'social',
-  sortie: 'outing',
-  fete: 'festive',
-  bien_etre: 'sensory',
-  lecture: 'reading',
-  other: 'cognitive',
-};
 
 // ─── Day / week helpers ──────────────────────────────────────
 
@@ -133,7 +97,7 @@ export async function syncActivities(): Promise<{ synced: number; failed: number
       try {
         const data = docSnap.data();
         const date = computeDate(data.weekId ?? '', data.day ?? '');
-        const activityType = ACTIVITY_TYPE_MAP[data.type] ?? 'other';
+        const activityType = typeof data.type === 'string' && data.type ? data.type : 'other';
         const status = data.cancelled ? 'cancelled' : 'planned';
         const title = data.title ?? '';
         const timeStart = data.time ?? null;
@@ -179,7 +143,7 @@ export async function syncActivities(): Promise<{ synced: number; failed: number
     for (const a of localOnly) {
       try {
         const { weekId, day } = computeWeekIdAndDay(a.date);
-        const firestoreType = ACTIVITY_TYPE_REVERSE[a.activity_type] ?? 'cognitive';
+        const firestoreType = a.activity_type || 'other';
 
         const docData: Record<string, unknown> = {
           title: a.title,
