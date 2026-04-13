@@ -83,7 +83,7 @@ export default function WeekView({ events, mondayDate, types, typeFilter, locati
     }}>
       {/* Header */}
       <div style={{
-        display: 'grid', gridTemplateColumns: '90px repeat(7, 1fr)',
+        display: 'grid', gridTemplateColumns: '90px repeat(7, minmax(0, 1fr))',
         borderBottom: '1px solid var(--color-border)',
       }}>
         <div />
@@ -132,7 +132,7 @@ export default function WeekView({ events, mondayDate, types, typeFilter, locati
         <div
           key={slot}
           style={{
-            display: 'grid', gridTemplateColumns: '90px repeat(7, 1fr)',
+            display: 'grid', gridTemplateColumns: '90px repeat(7, minmax(0, 1fr))',
             borderBottom: slotIdx === 0 ? '1px solid var(--color-border)' : 'none',
             minHeight: '130px',
           }}
