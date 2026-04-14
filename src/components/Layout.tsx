@@ -3,6 +3,7 @@ import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import CommandPalette from "@/components/CommandPalette";
 import ToastContainer from "@/components/Toast";
+import UpdateBanner from "@/components/UpdateBanner";
 import { evaluateAlerts } from "@/utils/alertEngine";
 
 interface LayoutProps {
@@ -34,19 +35,22 @@ export default function Layout({ children }: LayoutProps) {
   }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: "var(--color-bg)" }}>
-      <Sidebar />
+    <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: "var(--color-bg)" }}>
+      <UpdateBanner />
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <Sidebar />
 
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Header />
+        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+          <Header />
 
-        <main
-          className="flex-1 overflow-y-auto"
-          style={{ padding: "24px" }}
-          aria-label="Contenu principal"
-        >
-          {children}
-        </main>
+          <main
+            className="flex-1 overflow-y-auto"
+            style={{ padding: "24px" }}
+            aria-label="Contenu principal"
+          >
+            {children}
+          </main>
+        </div>
       </div>
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />

@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Building2, Database, Info, RefreshCw,
-  Save, CheckCircle2, HardDrive, Globe, LogIn, LogOut,
+  Save, CheckCircle2, HardDrive, Globe, LogIn, LogOut, Download,
 } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
 import { useSyncStore } from '@/stores/syncStore';
 import { getSetting, setSetting } from '@/db';
 import { getDb } from '@/db/database';
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged, type User } from '@/services/firebase';
+import { checkForAppUpdate, downloadAndInstall, currentVersion, type UpdateInfo } from '@/utils/updater';
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -39,6 +40,9 @@ export default function Settings() {
   const [dbStats, setDbStats]             = useState<DbStats>({ projects: 0, activities: 0, residents: 0, albums: 0, inventory: 0 });
   const [loading, setLoading]             = useState(true);
   const [saving, setSaving]               = useState(false);
+  const [appVersion, setAppVersion]       = useState<string>('…');
+  const [updateCheck, setUpdateCheck]     = useState<UpdateInfo | null | 'checking'>(null);
+  const [installing, setInstalling]       = useState(false);
 
   // Listen to Firebase auth state
   useEffect(() => {
@@ -47,6 +51,34 @@ export default function Settings() {
     });
     return unsubscribe;
   }, []);
+
+  // Load app version once
+  useEffect(() => {
+    currentVersion().then(setAppVersion).catch(() => {});
+  }, []);
+
+  const handleCheckUpdate = useCallback(async () => {
+    setUpdateCheck('checking');
+    const result = await checkForAppUpdate();
+    setUpdateCheck(result);
+    if (result === null) {
+      addToast('Vérification impossible (pas de réseau ou config)', 'error');
+    } else if (!result.available) {
+      addToast("L'application est à jour", 'success');
+    }
+  }, [addToast]);
+
+  const handleInstallFromSettings = useCallback(async () => {
+    if (updateCheck && updateCheck !== 'checking' && updateCheck.available) {
+      setInstalling(true);
+      try {
+        await downloadAndInstall(updateCheck.update);
+      } catch (err) {
+        addToast(`Erreur installation : ${String(err).slice(0, 80)}`, 'error');
+        setInstalling(false);
+      }
+    }
+  }, [updateCheck, addToast]);
 
   // Load settings
   useEffect(() => {
@@ -416,12 +448,57 @@ export default function Settings() {
             À propos
           </h2>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
           <p style={{ margin: 0 }}><strong>Pilot Animateur</strong> — Outil de pilotage pour animateurs/trices en EHPAD</p>
-          <p style={{ margin: 0 }}>Version 0.1.0</p>
+          <p style={{ margin: 0 }}>Version <strong style={{ color: 'var(--color-text-primary)' }}>v{appVersion}</strong></p>
           <p style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
             <HardDrive size={12} /> Base de données locale SQLite (Tauri)
           </p>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px', flexWrap: 'wrap' }}>
+            <button
+              onClick={handleCheckUpdate}
+              disabled={updateCheck === 'checking' || installing}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                padding: '6px 12px', background: 'var(--color-surface)',
+                border: '1px solid var(--color-border)', borderRadius: '6px',
+                fontSize: '12px', fontWeight: 500, fontFamily: 'var(--font-sans)',
+                color: 'var(--color-text-primary)',
+                cursor: (updateCheck === 'checking' || installing) ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <RefreshCw size={12} style={updateCheck === 'checking' ? { animation: 'spin 1s linear infinite' } : {}} />
+              {updateCheck === 'checking' ? 'Vérification…' : 'Vérifier les mises à jour'}
+            </button>
+
+            {updateCheck && updateCheck !== 'checking' && updateCheck.available && (
+              <>
+                <span style={{ fontSize: '12px', color: '#7C3AED', fontWeight: 500 }}>
+                  Nouvelle version <strong>v{updateCheck.version}</strong> disponible
+                </span>
+                <button
+                  onClick={handleInstallFromSettings}
+                  disabled={installing}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '6px',
+                    padding: '6px 12px', background: '#7C3AED', color: '#fff',
+                    border: 'none', borderRadius: '6px',
+                    fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-sans)',
+                    cursor: installing ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  <Download size={12} />
+                  {installing ? 'Installation…' : 'Installer & redémarrer'}
+                </button>
+              </>
+            )}
+            {updateCheck && updateCheck !== 'checking' && !updateCheck.available && (
+              <span style={{ fontSize: '12px', color: 'var(--color-success)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <CheckCircle2 size={12} /> À jour
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>

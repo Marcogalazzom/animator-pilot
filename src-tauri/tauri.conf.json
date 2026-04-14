@@ -27,13 +27,34 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
+    "publisher": "Marcogalazzom",
+    "category": "Productivity",
+    "shortDescription": "Outil de pilotage pour animateurs/trices en EHPAD",
+    "longDescription": "Pilot Animateur — Gestion des activités, résidents, photos, rendez-vous et génération Famileo mensuel pour les animateurs en résidence.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "perUser",
+        "displayLanguageSelector": false,
+        "languages": ["French", "English"]
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/Marcogalazzom/animator-pilot/releases/latest/download/latest.json"
+      ],
+      "pubkey": "REPLACE_WITH_YOUR_TAURI_UPDATER_PUBKEY",
+      "dialog": false
+    }
   }
 }

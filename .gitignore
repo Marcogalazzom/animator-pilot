@@ -26,3 +26,8 @@ dist-ssr
 # Claude / Superpowers
 .claude/
 .superpowers/
+
+# Tauri signing keys — NEVER commit these
+*.key
+*.pem
+.tauri/
