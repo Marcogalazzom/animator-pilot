@@ -95,7 +95,7 @@ describe('buildEventsFromDb', () => {
       due_date: '2026-04-20', priority: 'high', category: '',
       progress: 0, assigned_to: '', created_at: '2026-04-01',
     }] as unknown as Project[];
-    const events = buildEventsFromDb(activities, projects);
+    const events = buildEventsFromDb(activities, projects, []);
     expect(events).toHaveLength(2);
     expect(events[0].title).toBe('Yoga');
     expect(events[0].source).toBe('activity');

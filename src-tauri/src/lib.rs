@@ -69,6 +69,24 @@ pub fn run() {
             sql: include_str!("../migrations/011_activity_templates.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 12,
+            description: "appointments (RDV pro animateur)",
+            sql: include_str!("../migrations/012_appointments.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 13,
+            description: "photos: album-activity link + thumbnails",
+            sql: include_str!("../migrations/013_photos_famileo.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 14,
+            description: "photo_albums: activity_type (album par type+mois)",
+            sql: include_str!("../migrations/014_album_by_type.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

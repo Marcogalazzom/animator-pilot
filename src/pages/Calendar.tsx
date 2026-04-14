@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useCalendarEvents } from './calendar/useCalendarEvents';
+import { useCalendarEvents, type CalendarEvent } from './calendar/useCalendarEvents';
 import CalendarToolbar, { type CalendarView } from './calendar/CalendarToolbar';
 import DayView from './calendar/DayView';
 import WeekView from './calendar/WeekView';
@@ -32,6 +32,7 @@ export default function Calendar() {
   const date = params.get('date') || todayIso();
   const typeFilter = params.get('type') || '';
   const locationFilter = params.get('location') || '';
+  const showAppointments = params.get('showAppointments') !== '0';
 
   function update(p: Record<string, string | null>) {
     const next = new URLSearchParams(params);
@@ -44,13 +45,21 @@ export default function Calendar() {
 
   useEffect(() => {
     if (loading) return;
-    const uniqueTypes = Array.from(new Set(events.map((e) => e.type)));
+    // Types activités uniquement (les RDV ont une couleur violette fixe)
+    const uniqueTypes = Array.from(new Set(
+      events.filter((e) => e.source !== 'appointment').map((e) => e.type)
+    ));
     ensureCategoryColors('activities', uniqueTypes).then(setTypes).catch(() => {});
   }, [loading, events]);
 
+  const visibleEvents = useMemo<CalendarEvent[]>(() => {
+    if (showAppointments) return events;
+    return events.filter((e) => e.source !== 'appointment');
+  }, [events, showAppointments]);
+
   const locations = useMemo(() => {
-    return Array.from(new Set(events.map((e) => e.location).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'fr'));
-  }, [events]);
+    return Array.from(new Set(visibleEvents.map((e) => e.location).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'fr'));
+  }, [visibleEvents]);
 
   const label = view === 'week' ? weekLabel(date) : dayLabel(date);
 
@@ -93,20 +102,22 @@ export default function Calendar() {
         locations={locations}
         locationFilter={locationFilter}
         onLocationFilterChange={(v) => update({ location: v || null })}
+        showAppointments={showAppointments}
+        onShowAppointmentsChange={(v) => update({ showAppointments: v ? null : '0' })}
         onToday={() => update({ date: todayIso() })}
       />
 
       {view === 'day' && (
-        <DayView events={events} date={date} types={types} typeFilter={typeFilter} locationFilter={locationFilter} />
+        <DayView events={visibleEvents} date={date} types={types} typeFilter={typeFilter} locationFilter={locationFilter} />
       )}
       {view === 'week' && (
-        <WeekView events={events} mondayDate={mondayOf(date)} types={types} typeFilter={typeFilter} locationFilter={locationFilter} />
+        <WeekView events={visibleEvents} mondayDate={mondayOf(date)} types={types} typeFilter={typeFilter} locationFilter={locationFilter} />
       )}
       {view === 'location' && (
-        <LocationView events={events} date={date} types={types} typeFilter={typeFilter} locationFilter={locationFilter} />
+        <LocationView events={visibleEvents} date={date} types={types} typeFilter={typeFilter} locationFilter={locationFilter} />
       )}
       {view === 'list' && (
-        <ListView events={events} types={types} typeFilter={typeFilter} locationFilter={locationFilter} />
+        <ListView events={visibleEvents} types={types} typeFilter={typeFilter} locationFilter={locationFilter} />
       )}
     </div>
   );

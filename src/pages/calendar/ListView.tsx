@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, ChevronRight } from 'lucide-react';
-import type { CalendarEvent } from './useCalendarEvents';
-import { categoryLabel, autoColor, type CategoryColor } from '@/db/categoryColors';
+import { Search, ChevronRight, CalendarClock } from 'lucide-react';
+import { resolveEventColor, type CalendarEvent } from './useCalendarEvents';
+import { categoryLabel, type CategoryColor } from '@/db/categoryColors';
 
 interface Props {
   events: CalendarEvent[];
@@ -25,8 +25,7 @@ export default function ListView({ events, types, typeFilter, locationFilter }: 
   const [focused, setFocused] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const typeMap = new Map(types.map((c) => [c.name, c]));
-  const colorFor = (name: string): CategoryColor =>
-    typeMap.get(name) ?? { module: 'activities', name, ...autoColor(name), label: null };
+  const colorFor = (e: CalendarEvent): CategoryColor => resolveEventColor(e, typeMap);
 
   const filtered = useMemo(() => {
     return events.filter((e) => {
@@ -101,8 +100,9 @@ export default function ListView({ events, types, typeFilter, locationFilter }: 
               {formatDay(date)}
             </div>
             {list.map((e) => {
-              const c = colorFor(e.type);
+              const c = colorFor(e);
               const isHover = hoveredId === e.id;
+              const isAppt = e.source === 'appointment';
               return (
                 <div
                   key={e.id}
@@ -128,6 +128,7 @@ export default function ListView({ events, types, typeFilter, locationFilter }: 
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      {isAppt && <CalendarClock size={12} style={{ color: c.color }} />}
                       <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
                         {e.title}
                       </span>

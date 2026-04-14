@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { MapPin } from 'lucide-react';
-import { byLocation, type CalendarEvent } from './useCalendarEvents';
-import { autoColor, type CategoryColor } from '@/db/categoryColors';
+import { byLocation, resolveEventColor, type CalendarEvent } from './useCalendarEvents';
+import { type CategoryColor } from '@/db/categoryColors';
 
 interface Props {
   events: CalendarEvent[];
@@ -14,8 +14,7 @@ interface Props {
 export default function LocationView({ events, date, types, typeFilter, locationFilter }: Props) {
   const navigate = useNavigate();
   const typeMap = new Map(types.map((c) => [c.name, c]));
-  const colorFor = (name: string): CategoryColor =>
-    typeMap.get(name) ?? { module: 'activities', name, ...autoColor(name), label: null };
+  const colorFor = (e: CalendarEvent): CategoryColor => resolveEventColor(e, typeMap);
 
   const filtered = events.filter((e) => {
     if (typeFilter && e.type !== typeFilter) return false;
@@ -67,7 +66,7 @@ export default function LocationView({ events, date, types, typeFilter, location
           </div>
           <div style={{ flex: 1, padding: '10px 12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {grouped[loc].map((e) => {
-              const c = colorFor(e.type);
+              const c = colorFor(e);
               return (
                 <div
                   key={e.id}

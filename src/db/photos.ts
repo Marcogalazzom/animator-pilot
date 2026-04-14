@@ -1,7 +1,7 @@
 import { getDb } from './database';
 import type { PhotoAlbum, Photo } from './types';
 
-const UPDATABLE_ALBUM_FIELDS = new Set(['title', 'description', 'activity_date', 'cover_path']);
+const UPDATABLE_ALBUM_FIELDS = new Set(['title', 'description', 'activity_date', 'cover_path', 'activity_id', 'activity_type']);
 const UPDATABLE_PHOTO_FIELDS = new Set(['caption', 'taken_at']);
 
 // ─── Albums ──────────────────────────────────────────────────
@@ -17,11 +17,30 @@ export async function getAlbum(id: number): Promise<PhotoAlbum | null> {
   return rows[0] ?? null;
 }
 
+export async function getAlbumByActivity(activityId: number): Promise<PhotoAlbum | null> {
+  const db = await getDb();
+  const rows = await db.select<PhotoAlbum[]>('SELECT * FROM photo_albums WHERE activity_id = ?', [activityId]);
+  return rows[0] ?? null;
+}
+
+/** Recherche l'album associé à un type d'activité pour un mois donné (prefix 'YYYY-MM'). */
+export async function getAlbumByTypeAndMonth(activityType: string, monthPrefix: string): Promise<PhotoAlbum | null> {
+  const db = await getDb();
+  const rows = await db.select<PhotoAlbum[]>(
+    "SELECT * FROM photo_albums WHERE activity_type = ? AND substr(activity_date, 1, 7) = ? LIMIT 1",
+    [activityType, monthPrefix],
+  );
+  return rows[0] ?? null;
+}
+
 export async function createAlbum(album: Omit<PhotoAlbum, 'id' | 'created_at'>): Promise<number> {
   const db = await getDb();
   const result = await db.execute(
-    'INSERT INTO photo_albums (title, description, activity_date, cover_path) VALUES (?, ?, ?, ?)',
-    [album.title, album.description, album.activity_date, album.cover_path]
+    'INSERT INTO photo_albums (title, description, activity_date, cover_path, activity_id, activity_type) VALUES (?, ?, ?, ?, ?, ?)',
+    [
+      album.title, album.description, album.activity_date, album.cover_path,
+      album.activity_id ?? null, album.activity_type ?? '',
+    ],
   );
   return result.lastInsertId ?? 0;
 }
@@ -46,14 +65,20 @@ export async function deleteAlbum(id: number): Promise<void> {
 
 export async function getPhotos(albumId: number): Promise<Photo[]> {
   const db = await getDb();
-  return db.select<Photo[]>('SELECT * FROM photos WHERE album_id = ? ORDER BY taken_at DESC', [albumId]);
+  return db.select<Photo[]>('SELECT * FROM photos WHERE album_id = ? ORDER BY taken_at ASC, id ASC', [albumId]);
+}
+
+export async function getPhoto(id: number): Promise<Photo | null> {
+  const db = await getDb();
+  const rows = await db.select<Photo[]>('SELECT * FROM photos WHERE id = ?', [id]);
+  return rows[0] ?? null;
 }
 
 export async function createPhoto(photo: Omit<Photo, 'id' | 'created_at'>): Promise<number> {
   const db = await getDb();
   const result = await db.execute(
-    'INSERT INTO photos (album_id, file_path, caption, taken_at) VALUES (?, ?, ?, ?)',
-    [photo.album_id, photo.file_path, photo.caption, photo.taken_at]
+    'INSERT INTO photos (album_id, file_path, thumbnail_path, caption, taken_at) VALUES (?, ?, ?, ?, ?)',
+    [photo.album_id, photo.file_path, photo.thumbnail_path ?? null, photo.caption, photo.taken_at]
   );
   return result.lastInsertId ?? 0;
 }
@@ -71,6 +96,12 @@ export async function updatePhoto(id: number, updates: Partial<Photo>): Promise<
 export async function deletePhoto(id: number): Promise<void> {
   const db = await getDb();
   await db.execute('DELETE FROM photos WHERE id = ?', [id]);
+}
+
+export async function countPhotos(albumId: number): Promise<number> {
+  const db = await getDb();
+  const rows = await db.select<{ cnt: number }[]>('SELECT COUNT(*) as cnt FROM photos WHERE album_id = ?', [albumId]);
+  return rows[0]?.cnt ?? 0;
 }
 
 export async function getAlbumStats(): Promise<{ totalAlbums: number; totalPhotos: number }> {

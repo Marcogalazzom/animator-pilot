@@ -1,21 +1,45 @@
 import { useState, useEffect } from 'react';
 import { getProjects } from '@/db';
 import { getActivities } from '@/db/activities';
-import type { Activity, Project } from '@/db/types';
+import { getAppointments } from '@/db/appointments';
+import type { Activity, Appointment, Project } from '@/db/types';
+import type { CategoryColor } from '@/db/categoryColors';
+import { autoColor } from '@/db/categoryColors';
 
-export type CalendarSource = 'activity' | 'project';
+export type CalendarSource = 'activity' | 'project' | 'appointment';
 
 export interface CalendarEvent {
   id: string;
   title: string;
   date: string;            // YYYY-MM-DD
   time: string | null;     // HH:MM (null pour les projects)
-  type: string;            // activity_type ou 'project'
+  type: string;            // activity_type, appointment_type ou 'project'
   location: string;
   animator: string;
   status: string;
   source: CalendarSource;
   link: string;
+}
+
+// Couleur violette dédiée aux rendez-vous — stable à travers les vues
+export const APPOINTMENT_COLOR: CategoryColor = {
+  module: 'appointments',
+  name: '__appointment__',
+  color: '#7C3AED',
+  bg: '#F3EEFF',
+  label: 'Rendez-vous',
+};
+
+// Résout la couleur pour un événement calendrier — violet fixe pour les RDV,
+// sinon lookup dans les catégories activités.
+export function resolveEventColor(
+  e: CalendarEvent,
+  typeMap: Map<string, CategoryColor>,
+): CategoryColor {
+  if (e.source === 'appointment') return APPOINTMENT_COLOR;
+  return typeMap.get(e.type) ?? {
+    module: 'activities', name: e.type, ...autoColor(e.type), label: null,
+  };
 }
 
 function toIso(d: Date): string {
@@ -39,6 +63,7 @@ function compareEvents(a: CalendarEvent, b: CalendarEvent): number {
 export function buildEventsFromDb(
   activities: Activity[],
   projects: Project[],
+  appointments: Appointment[],
 ): CalendarEvent[] {
   const events: CalendarEvent[] = [];
 
@@ -78,6 +103,24 @@ export function buildEventsFromDb(
     });
   }
 
+  for (const r of appointments) {
+    if (r.status === 'cancelled') continue;
+    const d = parseDate(r.date);
+    if (!d) continue;
+    events.push({
+      id: `r-${r.id}`,
+      title: r.title,
+      date: toIso(d),
+      time: r.time_start || null,
+      type: r.appointment_type,
+      location: r.location ?? '',
+      animator: r.participants ?? '',
+      status: r.status,
+      source: 'appointment',
+      link: '/appointments',
+    });
+  }
+
   return events.sort(compareEvents);
 }
 
@@ -89,7 +132,6 @@ export function byWeek(
   events: CalendarEvent[],
   mondayDate: string,
 ): Record<string, CalendarEvent[]> {
-  // Parse as UTC to avoid timezone-induced off-by-one in toIso()
   const [y, m, day] = mondayDate.split('-').map(Number);
   const result: Record<string, CalendarEvent[]> = {};
   for (let i = 0; i < 7; i++) {
@@ -141,12 +183,13 @@ export function useCalendarEvents(): CalendarData {
     let cancelled = false;
     (async () => {
       try {
-        const [activities, projects] = await Promise.all([
+        const [activities, projects, appointments] = await Promise.all([
           getActivities().catch(() => [] as Activity[]),
           getProjects().catch(() => [] as Project[]),
+          getAppointments().catch(() => [] as Appointment[]),
         ]);
         if (cancelled) return;
-        setEvents(buildEventsFromDb(activities, projects));
+        setEvents(buildEventsFromDb(activities, projects, appointments));
       } catch (err) {
         if (!cancelled) setError(String(err));
       } finally {

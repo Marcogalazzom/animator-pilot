@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useToastStore } from '@/stores/toastStore';
-import { Check, Copy, Pencil, Trash2 } from 'lucide-react';
+import { Check, Copy, Pencil, Trash2, Camera } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import ActivityCard from './ActivityCard';
 import { bucketize, BUCKETS, type Activity } from './useActivitiesData';
 import { todayIso } from '@/utils/dateUtils';
 import { autoColor, type CategoryColor } from '@/db/categoryColors';
 import { markCompleted, deleteActivity, duplicateActivity } from '@/db/activities';
+import { openOrCreateActivityAlbum } from '@/pages/photos/activityAlbum';
 
 interface Props {
   items: Activity[];
@@ -19,6 +21,7 @@ interface Props {
 
 export default function UpcomingTab({ items, types, search, typeFilter, locationFilter, onEdit, onRefresh }: Props) {
   const addToast = useToastStore((s) => s.add);
+  const navigate = useNavigate();
   const [presents, setPresents] = useState<Record<number, string>>({});
   const today = todayIso();
   const typeMap = new Map(types.map((c) => [c.name, c]));
@@ -90,6 +93,7 @@ export default function UpcomingTab({ items, types, search, typeFilter, location
                   }
                   actions={
                     <>
+                      <button onClick={() => openOrCreateActivityAlbum(a, navigate)} style={actionBtn}><Camera size={12} /> Photos</button>
                       <button onClick={() => duplicate(a)} style={actionBtn}><Copy size={12} /> Dupliquer</button>
                       <button onClick={() => onEdit(a)} style={actionBtn}><Pencil size={12} /> Modifier</button>
                       <button onClick={() => remove(a)} style={{ ...actionBtn, color: 'var(--color-danger)' }}><Trash2 size={12} /></button>

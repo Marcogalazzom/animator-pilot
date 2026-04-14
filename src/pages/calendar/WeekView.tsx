@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
-import { byWeek, type CalendarEvent } from './useCalendarEvents';
-import { autoColor, type CategoryColor } from '@/db/categoryColors';
+import { byWeek, resolveEventColor, type CalendarEvent } from './useCalendarEvents';
+import { type CategoryColor } from '@/db/categoryColors';
 
 interface Props {
   events: CalendarEvent[];
@@ -21,8 +21,7 @@ function shortDate(iso: string): string {
 export default function WeekView({ events, mondayDate, types, typeFilter, locationFilter }: Props) {
   const navigate = useNavigate();
   const typeMap = new Map(types.map((c) => [c.name, c]));
-  const colorFor = (name: string): CategoryColor =>
-    typeMap.get(name) ?? { module: 'activities', name, ...autoColor(name), label: null };
+  const colorFor = (e: CalendarEvent): CategoryColor => resolveEventColor(e, typeMap);
 
   const filtered = events.filter((e) => {
     if (typeFilter && e.type !== typeFilter) return false;
@@ -46,7 +45,8 @@ export default function WeekView({ events, mondayDate, types, typeFilter, locati
   }
 
   function renderCell(e: CalendarEvent) {
-    const c = colorFor(e.type);
+    const c = colorFor(e);
+    const prefix = e.source === 'appointment' ? '◇ ' : '';
     return (
       <div
         key={e.id}
@@ -71,7 +71,7 @@ export default function WeekView({ events, mondayDate, types, typeFilter, locati
         }}
         title={`${e.time ?? ''} ${e.title}${e.location ? ' · ' + e.location : ''}`}
       >
-        <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{e.time ?? ''}</strong> {e.title}
+        <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{e.time ?? ''}</strong> {prefix}{e.title}
       </div>
     );
   }

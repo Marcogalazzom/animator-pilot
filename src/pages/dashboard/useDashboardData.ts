@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getProjects } from '@/db';
 import { getUpcomingActivities, getActivityStats } from '@/db/activities';
+import { getAppointmentStats } from '@/db/appointments';
 import { getResidentCount } from '@/db/residents';
 import { getInventoryStats } from '@/db/inventory';
 import { getAlbumStats } from '@/db/photos';
@@ -16,8 +17,15 @@ export interface ActivityStats {
   completedThisYear: number;
 }
 
+export interface AppointmentStats {
+  thisWeek: number;
+  upcoming: number;
+  completedThisMonth: number;
+}
+
 export interface DashboardData {
   activityStats:      ActivityStats;
+  appointmentStats:   AppointmentStats;
   upcomingActivities: Activity[];
   overdueProjects:    Project[];
   residentCount:      number;
@@ -34,6 +42,7 @@ export function useDashboardData(): DashboardData {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
   const [activityStats, setActivityStats]       = useState<ActivityStats>({ thisMonth: 0, totalParticipants: 0, upcoming: 0, completedThisYear: 0 });
+  const [appointmentStats, setAppointmentStats] = useState<AppointmentStats>({ thisWeek: 0, upcoming: 0, completedThisMonth: 0 });
   const [upcomingActivities, setUpcomingActivities] = useState<Activity[]>([]);
   const [overdueProjects, setOverdueProjects]   = useState<Project[]>([]);
   const [residentCount, setResidentCount]       = useState(0);
@@ -46,8 +55,9 @@ export function useDashboardData(): DashboardData {
 
     async function load() {
       try {
-        const [dbStats, dbUpcoming, dbProjects, dbResidents, dbInventory, dbAlbums, dbAlerts] = await Promise.all([
+        const [dbStats, dbAppt, dbUpcoming, dbProjects, dbResidents, dbInventory, dbAlbums, dbAlerts] = await Promise.all([
           getActivityStats().catch(() => ({ thisMonth: 0, totalParticipants: 0, upcoming: 0, completedThisYear: 0 })),
+          getAppointmentStats().catch(() => ({ thisWeek: 0, upcoming: 0, completedThisMonth: 0 })),
           getUpcomingActivities(5).catch(() => [] as Activity[]),
           getProjects('overdue').catch(() => [] as Project[]),
           getResidentCount().catch(() => 0),
@@ -59,6 +69,7 @@ export function useDashboardData(): DashboardData {
         if (cancelled) return;
 
         setActivityStats(dbStats);
+        setAppointmentStats(dbAppt);
         setUpcomingActivities(dbUpcoming);
         setOverdueProjects(dbProjects);
         setResidentCount(dbResidents);
@@ -78,6 +89,7 @@ export function useDashboardData(): DashboardData {
 
   return {
     activityStats,
+    appointmentStats,
     upcomingActivities,
     overdueProjects,
     residentCount,

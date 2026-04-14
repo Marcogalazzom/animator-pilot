@@ -1,61 +1,62 @@
 import { useState } from 'react';
 import { useToastStore } from '@/stores/toastStore';
-import { ChevronDown, ChevronRight, Undo2, Camera } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import ActivityCard from './ActivityCard';
-import { splitPast, type Activity } from './useActivitiesData';
+import { ChevronDown, ChevronRight, Undo2, Pencil, Trash2 } from 'lucide-react';
+import AppointmentCard from './AppointmentCard';
+import { splitPast, type Appointment } from './useAppointmentsData';
 import { todayIso } from '@/utils/dateUtils';
 import { autoColor, type CategoryColor } from '@/db/categoryColors';
-import { markCompleted, markCancelled, saveAsTemplate, updateActivity } from '@/db/activities';
-import { openOrCreateActivityAlbum } from '@/pages/photos/activityAlbum';
+import { markCompleted, markCancelled, reopen, deleteAppointment } from '@/db/appointments';
 
 interface Props {
-  items: Activity[];
+  items: Appointment[];
   types: CategoryColor[];
   search: string;
   typeFilter: string;
   locationFilter: string;
+  onEdit: (a: Appointment) => void;
   onRefresh: () => Promise<void>;
 }
 
-export default function PastTab({ items, types, search, typeFilter, locationFilter, onRefresh }: Props) {
+export default function PastTab({ items, types, search, typeFilter, locationFilter, onEdit, onRefresh }: Props) {
   const addToast = useToastStore((s) => s.add);
-  const navigate = useNavigate();
   const [showCancelled, setShowCancelled] = useState(false);
-  const [presents, setPresents] = useState<Record<number, string>>({});
   const today = todayIso();
   const typeMap = new Map(types.map((c) => [c.name, c]));
   const typeFor = (name: string): CategoryColor =>
-    typeMap.get(name) ?? { module: 'activities', name, ...autoColor(name), label: null };
+    typeMap.get(name) ?? { module: 'appointments', name, ...autoColor(name), label: null };
 
   const filtered = items.filter((a) => {
-    if (typeFilter && a.activity_type !== typeFilter) return false;
+    if (typeFilter && a.appointment_type !== typeFilter) return false;
     if (locationFilter && a.location !== locationFilter) return false;
-    if (search && !a.title.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!a.title.toLowerCase().includes(q) &&
+          !a.participants.toLowerCase().includes(q) &&
+          !a.description.toLowerCase().includes(q)) return false;
+    }
     return true;
   });
 
   const { toConfirm, completed, cancelled } = splitPast(filtered, today);
 
-  async function close(a: Activity) {
-    const n = parseInt(presents[a.id] ?? String(a.actual_participants)) || 0;
-    await markCompleted(a.id, n).catch(() => {});
-    addToast('Clôturée', 'success');
+  async function close(a: Appointment) {
+    await markCompleted(a.id).catch(() => {});
+    addToast('Terminé', 'success');
     await onRefresh();
   }
-  async function cancel(a: Activity) {
+  async function cancel(a: Appointment) {
     await markCancelled(a.id).catch(() => {});
-    addToast('Annulée', 'success');
+    addToast('Annulé', 'success');
     await onRefresh();
   }
-  async function template(a: Activity) {
-    await saveAsTemplate(a.id).catch(() => {});
-    addToast('Modèle enregistré', 'success');
+  async function reopenOne(a: Appointment) {
+    await reopen(a.id).catch(() => {});
+    addToast('Rendez-vous ré-ouvert', 'success');
     await onRefresh();
   }
-  async function reopen(a: Activity) {
-    await updateActivity(a.id, { status: 'planned', actual_participants: 0 }).catch(() => {});
-    addToast('Activité ré-ouverte', 'success');
+  async function remove(a: Appointment) {
+    await deleteAppointment(a.id).catch(() => {});
+    addToast('Supprimé', 'success');
     await onRefresh();
   }
 
@@ -68,22 +69,14 @@ export default function PastTab({ items, types, search, typeFilter, locationFilt
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {toConfirm.map((a) => (
-              <ActivityCard
+              <AppointmentCard
                 key={a.id}
-                activity={a}
-                type={typeFor(a.activity_type)}
+                appointment={a}
+                type={typeFor(a.appointment_type)}
                 inlineRow={
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px', padding: '10px', background: 'var(--color-now-bg)', borderRadius: '6px' }}>
-                    <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>Présents :</span>
-                    <input
-                      type="number" min="0" max={a.max_participants}
-                      value={presents[a.id] ?? ''}
-                      placeholder={String(a.actual_participants || 0)}
-                      onChange={(e) => setPresents((p) => ({ ...p, [a.id]: e.target.value }))}
-                      style={{ width: '60px', padding: '4px 6px', border: '1px solid var(--color-border)', borderRadius: '4px', textAlign: 'center', fontSize: '12px' }}
-                    />
-                    <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>/ {a.max_participants}</span>
-                    <button onClick={() => close(a)} style={{ marginLeft: 'auto', padding: '5px 12px', background: 'var(--color-success)', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>✓ Clôturer</button>
+                    <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>Ce rendez-vous est passé — mettre à jour le statut :</span>
+                    <button onClick={() => close(a)} style={{ marginLeft: 'auto', padding: '5px 12px', background: 'var(--color-success)', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>✓ Terminer</button>
                     <button onClick={() => cancel(a)} style={{ padding: '5px 12px', background: '#FEF2F2', color: 'var(--color-danger)', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 500, cursor: 'pointer' }}>Annuler</button>
                   </div>
                 }
@@ -96,22 +89,19 @@ export default function PastTab({ items, types, search, typeFilter, locationFilt
       {completed.length > 0 && (
         <div>
           <div style={{ ...sectionHeader, color: 'var(--color-success)' }}>
-            ✓ Terminées <span style={{ opacity: 0.7 }}>· {completed.length}</span>
+            ✓ Terminés <span style={{ opacity: 0.7 }}>· {completed.length}</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {completed.map((a) => (
-              <ActivityCard
+              <AppointmentCard
                 key={a.id}
-                activity={a}
-                type={typeFor(a.activity_type)}
-                inlineRow={a.notes ? (
-                  <p style={{ margin: '8px 0 0', fontSize: '12px', fontStyle: 'italic', color: 'var(--color-text-secondary)' }}>"{a.notes}"</p>
-                ) : null}
+                appointment={a}
+                type={typeFor(a.appointment_type)}
                 actions={
                   <>
-                    <button onClick={() => openOrCreateActivityAlbum(a, navigate)} style={actionBtn}><Camera size={11} /> Photos</button>
-                    <button onClick={() => reopen(a)} style={actionBtn}><Undo2 size={11} /> Ré-ouvrir</button>
-                    <button onClick={() => template(a)} style={actionBtn}>+ Modèle</button>
+                    <button onClick={() => reopenOne(a)} style={actionBtn}><Undo2 size={11} /> Ré-ouvrir</button>
+                    <button onClick={() => onEdit(a)} style={actionBtn}><Pencil size={11} /> Modifier</button>
+                    <button onClick={() => remove(a)} style={{ ...actionBtn, color: 'var(--color-danger)' }}><Trash2 size={11} /></button>
                   </>
                 }
               />
@@ -124,17 +114,20 @@ export default function PastTab({ items, types, search, typeFilter, locationFilt
         <div>
           <button onClick={() => setShowCancelled((v) => !v)} style={{ ...sectionHeader, color: 'var(--color-text-secondary)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
             {showCancelled ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-            Annulées <span style={{ opacity: 0.7 }}>· {cancelled.length}</span>
+            Annulés <span style={{ opacity: 0.7 }}>· {cancelled.length}</span>
           </button>
           {showCancelled && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
               {cancelled.map((a) => (
-                <ActivityCard
+                <AppointmentCard
                   key={a.id}
-                  activity={a}
-                  type={typeFor(a.activity_type)}
+                  appointment={a}
+                  type={typeFor(a.appointment_type)}
                   actions={
-                    <button onClick={() => reopen(a)} style={actionBtn}><Undo2 size={11} /> Ré-ouvrir</button>
+                    <>
+                      <button onClick={() => reopenOne(a)} style={actionBtn}><Undo2 size={11} /> Ré-ouvrir</button>
+                      <button onClick={() => remove(a)} style={{ ...actionBtn, color: 'var(--color-danger)' }}><Trash2 size={11} /></button>
+                    </>
                   }
                 />
               ))}
@@ -145,7 +138,7 @@ export default function PastTab({ items, types, search, typeFilter, locationFilt
 
       {toConfirm.length === 0 && completed.length === 0 && cancelled.length === 0 && (
         <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-card)', padding: '40px', textAlign: 'center' }}>
-          <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>Aucune activité passée.</p>
+          <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>Aucun rendez-vous passé.</p>
         </div>
       )}
     </div>

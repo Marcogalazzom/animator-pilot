@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Clock, CalendarDays, MapPin, List, Filter } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, CalendarDays, MapPin, List, Filter, CalendarClock } from 'lucide-react';
 import { categoryLabel, type CategoryColor } from '@/db/categoryColors';
 import { addDays, todayIso } from '@/utils/dateUtils';
 
@@ -23,6 +23,8 @@ interface Props {
   locations: string[];
   locationFilter: string;
   onLocationFilterChange: (v: string) => void;
+  showAppointments: boolean;
+  onShowAppointmentsChange: (v: boolean) => void;
   onToday: () => void;
 }
 
@@ -103,7 +105,26 @@ export default function CalendarToolbar(p: Props) {
       )}
 
       {/* Filters */}
-      <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <button
+          type="button"
+          onClick={() => p.onShowAppointmentsChange(!p.showAppointments)}
+          title={p.showAppointments ? 'Masquer les rendez-vous' : 'Afficher les rendez-vous'}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: '6px',
+            padding: '7px 10px', borderRadius: '8px',
+            border: '1px solid ' + (p.showAppointments ? '#7C3AED' : 'var(--color-border)'),
+            background: p.showAppointments ? '#F3EEFF' : 'var(--color-surface)',
+            color: p.showAppointments ? '#7C3AED' : 'var(--color-text-secondary)',
+            cursor: 'pointer',
+            fontSize: '12px', fontWeight: 500,
+            fontFamily: 'var(--font-sans)',
+            transition: 'var(--transition-fast)',
+          }}
+        >
+          <CalendarClock size={13} />
+          Rendez-vous
+        </button>
         <div style={filterWrap}>
           <Filter size={12} style={filterIcon} />
           <select

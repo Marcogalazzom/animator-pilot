@@ -204,8 +204,10 @@ export interface PhotoAlbum {
   id: number;
   title: string;
   description: string;
-  activity_date: string;
+  activity_date: string;          // 1er jour du mois couvert (YYYY-MM-01) — filtre Famileo
   cover_path: string | null;
+  activity_id: number | null;     // legacy, conservé pour rétro-compatibilité
+  activity_type: string;          // catégorie d'activité (ex: 'loto', 'gym') — clef de regroupement
   created_at: string;
 }
 
@@ -213,6 +215,7 @@ export interface Photo {
   id: number;
   album_id: number;
   file_path: string;
+  thumbnail_path: string | null;
   caption: string;
   taken_at: string | null;
   created_at: string;
@@ -254,6 +257,24 @@ export interface Activity {
   external_id: string | null;
   is_shared: number;
   is_template: number; // 0 ou 1 — templates non synchronisés
+  created_at: string;
+}
+
+// ─── Rendez-vous pro (animateur) ─────────────────────────────
+export type AppointmentType = 'meeting' | 'supplier' | 'training' | 'interview' | 'other' | string;
+export type AppointmentStatus = 'planned' | 'completed' | 'cancelled';
+
+export interface Appointment {
+  id: number;
+  title: string;
+  appointment_type: AppointmentType;
+  date: string;
+  time_start: string | null;
+  time_end: string | null;
+  location: string;
+  participants: string;
+  description: string;
+  status: AppointmentStatus;
   created_at: string;
 }
 

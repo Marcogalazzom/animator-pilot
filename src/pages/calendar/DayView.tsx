@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, User } from 'lucide-react';
-import { byDay, type CalendarEvent } from './useCalendarEvents';
-import { categoryLabel, autoColor, type CategoryColor } from '@/db/categoryColors';
+import { MapPin, User, CalendarClock } from 'lucide-react';
+import { byDay, resolveEventColor, type CalendarEvent } from './useCalendarEvents';
+import { categoryLabel, type CategoryColor } from '@/db/categoryColors';
 
 interface Props {
   events: CalendarEvent[];
@@ -23,8 +23,8 @@ export default function DayView({ events, date, types, typeFilter, locationFilte
   const navigate = useNavigate();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const typeMap = new Map(types.map((c) => [c.name, c]));
-  function typeFor(name: string): CategoryColor {
-    return typeMap.get(name) ?? { module: 'activities', name, ...autoColor(name), label: null };
+  function typeFor(e: CalendarEvent): CategoryColor {
+    return resolveEventColor(e, typeMap);
   }
 
   const dayEvents = byDay(events, date).filter((e) => {
@@ -69,7 +69,8 @@ export default function DayView({ events, date, types, typeFilter, locationFilte
       boxShadow: 'var(--shadow-card)', overflow: 'hidden',
     }}>
       {dayEvents.map((e, i) => {
-        const t = typeFor(e.type);
+        const t = typeFor(e);
+        const isAppt = e.source === 'appointment';
         const isCurrent = e.id === currentId;
         const isHover = hoveredId === e.id;
         const accent = isCurrent ? 'var(--color-now)' : t.color;
@@ -112,6 +113,7 @@ export default function DayView({ events, date, types, typeFilter, locationFilte
             {/* Contenu */}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                {isAppt && <CalendarClock size={13} style={{ color: t.color }} />}
                 <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--color-text-primary)' }}>
                   {e.title}
                 </span>

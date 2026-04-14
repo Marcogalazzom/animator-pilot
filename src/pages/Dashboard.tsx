@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Palette, Users, Camera, Package, Heart,
   Clock, CalendarX, ChevronRight, Download,
-  Bell, AlertTriangle,
+  Bell, AlertTriangle, CalendarClock,
 } from 'lucide-react';
 
 import KpiCard from '@/components/KpiCard';
@@ -12,6 +12,7 @@ import { exportDashboardPdf } from '@/utils/pdfExport';
 import { useCalendarEvents } from './calendar/useCalendarEvents';
 import TodayTimeline from './dashboard/TodayTimeline';
 import UpcomingFeed from './dashboard/UpcomingFeed';
+import UpcomingAppointments from './dashboard/UpcomingAppointments';
 import './Dashboard.css';
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -25,12 +26,15 @@ function formatDate(dateStr: string | null): string {
 
 export default function Dashboard() {
   const {
-    activityStats, overdueProjects,
+    activityStats, appointmentStats, overdueProjects,
     residentCount, inventoryToReplace, albumCount,
     unreadAlertCount, loading, error,
   } = useDashboardData();
 
-  const { events: calendarEvents } = useCalendarEvents();
+  const { events: allCalendarEvents } = useCalendarEvents();
+  // Timeline / UpcomingFeed ne montrent que les activités+projets ;
+  // les RDV ont leur propre carte dédiée.
+  const calendarEvents = allCalendarEvents.filter((e) => e.source !== 'appointment');
 
   const [exporting, setExporting] = useState(false);
   const navigate = useNavigate();
@@ -172,12 +176,21 @@ export default function Dashboard() {
             icon={<Camera size={16} />}
           />
         </div>
+        <div onClick={() => navigate('/appointments')} style={{ cursor: 'pointer' }}>
+          <KpiCard
+            label="RDV cette semaine"
+            value={appointmentStats.thisWeek.toString()}
+            status="ok"
+            icon={<CalendarClock size={16} />}
+          />
+        </div>
       </div>
 
-      {/* ── C. Today + Upcoming ── */}
+      {/* ── C. Today + Upcoming + Appointments ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
         <TodayTimeline events={calendarEvents} />
         <UpcomingFeed events={calendarEvents} />
+        <UpcomingAppointments />
       </div>
 
       {/* ── D. Quick access cards ── */}
