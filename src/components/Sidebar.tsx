@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 import "./Sidebar.css";
+import { currentVersion } from "../utils/updater";
 
 interface NavLinkItemProps {
   to: string;
@@ -146,10 +147,15 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() =>
     loadCollapsedGroups()
   );
+  const [appVersion, setAppVersion] = useState<string>("…");
 
   useEffect(() => {
     saveCollapsedGroups(collapsed);
   }, [collapsed]);
+
+  useEffect(() => {
+    currentVersion().then(setAppVersion).catch(() => {});
+  }, []);
 
   function toggleGroup(id: string) {
     setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -190,7 +196,7 @@ export default function Sidebar() {
       {/* Version */}
       <div className="px-6 pb-4">
         <span style={{ fontSize: "11px", color: "rgba(203,213,225,0.4)" }}>
-          v0.1.0
+          v{appVersion}
         </span>
       </div>
     </aside>
