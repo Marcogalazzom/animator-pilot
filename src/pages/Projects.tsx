@@ -764,6 +764,7 @@ function DetailPanel({
                   onSaveTitle={() => saveActionTitle(action.id)}
                   onUpdateProgress={(v) => onUpdateAction(action.id, { progress: v, status: v === 100 ? 'done' : v > 0 ? 'in_progress' : 'todo' })}
                   onUpdateStatus={(s) => onUpdateAction(action.id, { status: s })}
+                  onUpdateDueDate={(d) => onUpdateAction(action.id, { due_date: d })}
                   onDelete={() => onDeleteAction(action.id)}
                 />
               ))}
@@ -901,13 +902,14 @@ interface ActionRowProps {
   onSaveTitle: () => void;
   onUpdateProgress: (v: number) => Promise<void>;
   onUpdateStatus: (s: ActionStatus) => Promise<void>;
+  onUpdateDueDate: (d: string | null) => Promise<void>;
   onDelete: () => Promise<void>;
 }
 
 function ActionRow({
   action, isEditing, editTitle, onEditTitleChange,
   onStartEdit, onSaveTitle,
-  onUpdateProgress, onUpdateStatus, onDelete,
+  onUpdateProgress, onUpdateStatus, onUpdateDueDate, onDelete,
 }: ActionRowProps) {
   const [hovered, setHovered] = useState(false);
   const [localProgress, setLocalProgress] = useState(action.progress);
@@ -987,11 +989,40 @@ function ActionRow({
               {hovered && <Pencil size={10} style={{ color: 'var(--color-text-secondary)', opacity: 0.6 }} />}
             </span>
           )}
-          {action.due_date && (
-            <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)', marginTop: '2px', display: 'block' }}>
-              {formatDate(action.due_date)}
-            </span>
-          )}
+          <div style={{ marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <input
+              type="date"
+              value={action.due_date ?? ''}
+              onChange={e => onUpdateDueDate(e.target.value || null)}
+              style={{
+                fontSize: '11px',
+                fontFamily: 'var(--font-sans)',
+                color: 'var(--color-text-secondary)',
+                background: 'transparent',
+                border: '1px solid transparent',
+                borderRadius: '4px',
+                padding: '1px 4px',
+                cursor: 'pointer',
+                outline: 'none',
+                colorScheme: 'light',
+              }}
+              onFocus={e => { e.currentTarget.style.borderColor = 'var(--color-border)'; }}
+              onBlur={e => { e.currentTarget.style.borderColor = 'transparent'; }}
+            />
+            {action.due_date && hovered && (
+              <button
+                onClick={() => onUpdateDueDate(null)}
+                title="Retirer la date"
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--color-text-secondary)', opacity: 0.6,
+                  padding: '0', display: 'flex', alignItems: 'center',
+                }}
+              >
+                <X size={10} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Status + delete */}
