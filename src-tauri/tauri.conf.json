@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Pilot Animateur",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.marco.pilot-animateur",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -21,13 +21,18 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APPDATA/**", "$APPLOCALDATA/**"]
+        "scope": [
+          "$APPDATA/**",
+          "$APPLOCALDATA/**"
+        ]
       }
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "publisher": "Marcogalazzom",
     "category": "Productivity",
     "shortDescription": "Outil de pilotage pour animateurs/trices en EHPAD",
@@ -43,7 +48,10 @@
       "nsis": {
         "installMode": "perUser",
         "displayLanguageSelector": false,
-        "languages": ["French", "English"]
+        "languages": [
+          "French",
+          "English"
+        ]
       }
     }
   },
