@@ -6,6 +6,7 @@ import { getResidentCount } from '@/db/residents';
 import { getInventoryStats } from '@/db/inventory';
 import { getAlbumStats } from '@/db/photos';
 import { getUnreadAlertCount } from '@/db/alerts';
+import { useActivityViewMode, filterByViewMode } from '@/hooks/useActivityViewMode';
 import type { Project, Activity } from '@/db/types';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -49,6 +50,7 @@ export function useDashboardData(): DashboardData {
   const [inventoryToReplace, setInventoryToReplace] = useState(0);
   const [albumCount, setAlbumCount]             = useState(0);
   const [unreadAlertCount, setUnreadAlertCount] = useState(0);
+  const [mode] = useActivityViewMode();
 
   useEffect(() => {
     let cancelled = false;
@@ -58,7 +60,7 @@ export function useDashboardData(): DashboardData {
         const [dbStats, dbAppt, dbUpcoming, dbProjects, dbResidents, dbInventory, dbAlbums, dbAlerts] = await Promise.all([
           getActivityStats().catch(() => ({ thisMonth: 0, totalParticipants: 0, upcoming: 0, completedThisYear: 0 })),
           getAppointmentStats().catch(() => ({ thisWeek: 0, upcoming: 0, completedThisMonth: 0 })),
-          getUpcomingActivities(5).catch(() => [] as Activity[]),
+          getUpcomingActivities(50).catch(() => [] as Activity[]),
           getProjects('overdue').catch(() => [] as Project[]),
           getResidentCount().catch(() => 0),
           getInventoryStats().catch(() => ({ total: 0, toReplace: 0, categories: 0 })),
@@ -70,7 +72,7 @@ export function useDashboardData(): DashboardData {
 
         setActivityStats(dbStats);
         setAppointmentStats(dbAppt);
-        setUpcomingActivities(dbUpcoming);
+        setUpcomingActivities(filterByViewMode(dbUpcoming, mode).slice(0, 5));
         setOverdueProjects(dbProjects);
         setResidentCount(dbResidents);
         setInventoryToReplace(dbInventory.toReplace);
@@ -85,7 +87,7 @@ export function useDashboardData(): DashboardData {
 
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [mode]);
 
   return {
     activityStats,

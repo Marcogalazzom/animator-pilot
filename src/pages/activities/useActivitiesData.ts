@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getUpcomingPlanned, getPast, getActivityTemplates } from '@/db/activities';
 import { ensureCategoryColors, type CategoryColor } from '@/db/categoryColors';
 import { mondayOf, addDays } from '@/utils/dateUtils';
+import { useActivityViewMode, filterByViewMode } from '@/hooks/useActivityViewMode';
 import type { Activity } from '@/db/types';
 
 export type { Activity };
@@ -62,6 +63,7 @@ export function useActivitiesData(): ActivitiesData {
   const [templates, setTemplates] = useState<Activity[]>([]);
   const [types, setTypes] = useState<CategoryColor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mode] = useActivityViewMode();
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -77,5 +79,16 @@ export function useActivitiesData(): ActivitiesData {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  return { upcoming, past, templates, types, loading, refresh };
+  const filteredUpcoming = useMemo(() => filterByViewMode(upcoming, mode), [upcoming, mode]);
+  const filteredPast = useMemo(() => filterByViewMode(past, mode), [past, mode]);
+  const filteredTemplates = useMemo(() => filterByViewMode(templates, mode), [templates, mode]);
+
+  return {
+    upcoming: filteredUpcoming,
+    past: filteredPast,
+    templates: filteredTemplates,
+    types,
+    loading,
+    refresh,
+  };
 }

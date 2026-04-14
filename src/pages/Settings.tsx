@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Building2, Database, Info, RefreshCw,
-  Save, CheckCircle2, HardDrive, Globe, LogIn, LogOut, Download,
+  Save, CheckCircle2, HardDrive, Globe, LogIn, LogOut, Download, Eye,
 } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
 import { useSyncStore } from '@/stores/syncStore';
+import { useActivityViewMode, type ActivityViewMode } from '@/hooks/useActivityViewMode';
 import { getSetting, setSetting } from '@/db';
 import { getDb } from '@/db/database';
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged, type User } from '@/services/firebase';
@@ -27,6 +28,12 @@ export default function Settings() {
 
   const syncAllModules = useSyncStore((s) => s.syncAllModules);
   const globalSyncStatus = useSyncStore((s) => s.globalStatus);
+
+  const [activityViewMode, setActivityViewMode] = useActivityViewMode();
+  const handleViewModeChange = (m: ActivityViewMode) => {
+    setActivityViewMode(m);
+    addToast(m === 'pasa' ? 'Vue PASA activée' : 'Vue Animations activée', 'success');
+  };
 
   // Settings state
   const [etablissement, setEtablissement] = useState('');
@@ -252,6 +259,58 @@ export default function Settings() {
             {saving ? <CheckCircle2 size={14} /> : <Save size={14} />}
             {saving ? 'Enregistrement...' : 'Enregistrer'}
           </button>
+        </div>
+      </div>
+
+      {/* Activity view mode section */}
+      <div style={{
+        backgroundColor: 'var(--color-surface)', borderRadius: '8px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)', padding: '20px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+          <Eye size={16} style={{ color: 'var(--color-primary)' }} />
+          <h2 style={{
+            fontFamily: 'var(--font-sans)', fontSize: '14px', fontWeight: 600,
+            color: 'var(--color-text-primary)', margin: 0,
+          }}>
+            Affichage des activités
+          </h2>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
+            Choisissez quelles activités sont visibles partout dans l'application (page Activités, Calendrier, Tableau de bord).
+          </p>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {([
+              { value: 'animations', label: 'Animations', hint: 'Masque les activités PASA' },
+              { value: 'pasa',       label: 'PASA',       hint: 'Affiche uniquement les activités PASA' },
+            ] as const).map(({ value, label, hint }) => {
+              const active = activityViewMode === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => handleViewModeChange(value)}
+                  aria-pressed={active}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px',
+                    padding: '10px 14px', borderRadius: '6px',
+                    border: `1.5px solid ${active ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                    backgroundColor: active ? 'rgba(124,58,237,0.06)' : 'transparent',
+                    color: active ? 'var(--color-primary)' : 'var(--color-text-primary)',
+                    fontFamily: 'var(--font-sans)', cursor: 'pointer', minWidth: '160px',
+                    textAlign: 'left',
+                  }}
+                >
+                  <span style={{ fontSize: '13px', fontWeight: 600 }}>{label}</span>
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', fontWeight: 400 }}>{hint}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
+            Préférence enregistrée localement sur cet appareil.
+          </p>
         </div>
       </div>
 

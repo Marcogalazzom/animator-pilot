@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getProjects } from '@/db';
 import { getActivities } from '@/db/activities';
 import { getAppointments } from '@/db/appointments';
+import { useActivityViewMode, filterByViewMode } from '@/hooks/useActivityViewMode';
 import type { Activity, Appointment, Project } from '@/db/types';
 import type { CategoryColor } from '@/db/categoryColors';
 import { autoColor } from '@/db/categoryColors';
@@ -178,6 +179,7 @@ export function useCalendarEvents(): CalendarData {
   const [events, setEvents]   = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
+  const [mode] = useActivityViewMode();
 
   useEffect(() => {
     let cancelled = false;
@@ -189,7 +191,8 @@ export function useCalendarEvents(): CalendarData {
           getAppointments().catch(() => [] as Appointment[]),
         ]);
         if (cancelled) return;
-        setEvents(buildEventsFromDb(activities, projects, appointments));
+        const filteredActivities = filterByViewMode(activities, mode);
+        setEvents(buildEventsFromDb(filteredActivities, projects, appointments));
       } catch (err) {
         if (!cancelled) setError(String(err));
       } finally {
@@ -197,7 +200,7 @@ export function useCalendarEvents(): CalendarData {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [mode]);
 
   return { events, loading, error };
 }
