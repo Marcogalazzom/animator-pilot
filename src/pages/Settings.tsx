@@ -1,14 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Building2, Database, Info, RefreshCw,
-  Save, CheckCircle2, HardDrive, Globe, LogIn, LogOut, Download, Eye,
+  Save, CheckCircle2, HardDrive, Globe, LogIn, LogOut, Download, Eye, Stethoscope,
 } from 'lucide-react';
+import { collection, getDocs } from 'firebase/firestore';
 import { useToastStore } from '@/stores/toastStore';
 import { useSyncStore } from '@/stores/syncStore';
-import { useActivityViewMode, type ActivityViewMode } from '@/hooks/useActivityViewMode';
+import { useActivityViewMode, type ActivityViewMode, ACTIVITY_VIEW_MODE_KEY } from '@/hooks/useActivityViewMode';
 import { getSetting, setSetting } from '@/db';
 import { getDb } from '@/db/database';
-import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged, type User } from '@/services/firebase';
+import { auth, firestore, signInWithEmailAndPassword, signOut, onAuthStateChanged, type User } from '@/services/firebase';
 import { checkForAppUpdate, downloadAndInstall, currentVersion, type UpdateInfo } from '@/utils/updater';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -50,6 +51,78 @@ export default function Settings() {
   const [appVersion, setAppVersion]       = useState<string>('…');
   const [updateCheck, setUpdateCheck]     = useState<UpdateInfo | null | 'checking'>(null);
   const [installing, setInstalling]       = useState(false);
+  const [diagReport, setDiagReport]       = useState<string>('');
+  const [diagRunning, setDiagRunning]     = useState(false);
+
+  const handleRunDiagnostic = useCallback(async () => {
+    setDiagRunning(true);
+    const lines: string[] = [];
+    const push = (s: string) => lines.push(s);
+    try {
+      push(`App v${appVersion}`);
+      push(`Mode: ${localStorage.getItem(ACTIVITY_VIEW_MODE_KEY) ?? '(unset)'} | Firebase: ${auth.currentUser?.email ?? 'NON CONNECTÉ'}`);
+
+      push('\n— Firestore (activities) —');
+      try {
+        const snap = await getDocs(collection(firestore, 'activities'));
+        const docs = snap.docs.map((d) => d.data() as Record<string, unknown>);
+        const main = docs.filter((d) => (d.unit ?? 'main') === 'main').length;
+        const pasa = docs.filter((d) => d.unit === 'pasa').length;
+        const other = docs.length - main - pasa;
+        const pasaRec = docs.filter((d) => d.unit === 'pasa' && d.isRecurring === true).length;
+        const pasaOneshot = pasa - pasaRec;
+        push(`total=${docs.length}  main=${main}  pasa=${pasa}  autre=${other}`);
+        push(`pasa récurrents=${pasaRec}  pasa ponctuels=${pasaOneshot}`);
+        if (pasa > 0) {
+          const sample = docs.find((d) => d.unit === 'pasa');
+          push(`ex. PASA: title="${sample?.title}" day=${sample?.day} time=${sample?.time} weekId=${sample?.weekId} recurring=${sample?.isRecurring}`);
+        }
+      } catch (e) {
+        push(`ERREUR Firestore: ${String(e).slice(0, 120)}`);
+      }
+
+      push('\n— Base locale (activities) —');
+      const db = await getDb();
+      const byUnit = await db.select<{ unit: string; cnt: number }[]>(
+        "SELECT COALESCE(NULLIF(unit,''),'main') as unit, COUNT(*) as cnt FROM activities WHERE is_template=0 GROUP BY 1",
+        [],
+      );
+      const byRec = await db.select<{ is_recurring: number; cnt: number }[]>(
+        'SELECT is_recurring, COUNT(*) as cnt FROM activities WHERE is_template=0 GROUP BY is_recurring',
+        [],
+      );
+      const pasaFuture = await db.select<{ cnt: number }[]>(
+        "SELECT COUNT(*) as cnt FROM activities WHERE unit='pasa' AND date >= date('now') AND is_template=0",
+        [],
+      );
+      const bySource = await db.select<{ src: string; cnt: number }[]>(
+        "SELECT COALESCE(NULLIF(synced_from,''),'local') as src, COUNT(*) as cnt FROM activities WHERE is_template=0 GROUP BY 1",
+        [],
+      );
+      push(`par unit: ${byUnit.map((r) => `${r.unit}=${r.cnt}`).join('  ')}`);
+      push(`par is_recurring: ${byRec.map((r) => `${r.is_recurring}=${r.cnt}`).join('  ')}`);
+      push(`par source: ${bySource.map((r) => `${r.src}=${r.cnt}`).join('  ')}`);
+      push(`PASA à venir (date ≥ aujourd'hui): ${pasaFuture[0]?.cnt ?? 0}`);
+
+      push('\n— Dernier sync activities —');
+      const lastSync = await db.select<{ started_at: string; finished_at: string | null; status: string; items_synced: number; items_failed: number; error_message: string | null }[]>(
+        "SELECT started_at, finished_at, status, items_synced, items_failed, error_message FROM sync_log WHERE module='activities' ORDER BY id DESC LIMIT 1",
+        [],
+      );
+      if (lastSync.length === 0) {
+        push('AUCUN sync log — sync jamais exécuté depuis la dernière migration.');
+      } else {
+        const l = lastSync[0];
+        push(`${l.status} synced=${l.items_synced} failed=${l.items_failed} started=${l.started_at} finished=${l.finished_at ?? '—'}`);
+        if (l.error_message) push(`error: ${l.error_message.slice(0, 200)}`);
+      }
+    } catch (e) {
+      push(`\nEXCEPTION: ${String(e).slice(0, 200)}`);
+    } finally {
+      setDiagReport(lines.join('\n'));
+      setDiagRunning(false);
+    }
+  }, [appVersion]);
 
   // Listen to Firebase auth state
   useEffect(() => {
@@ -312,6 +385,40 @@ export default function Settings() {
             Préférence enregistrée localement sur cet appareil.
           </p>
         </div>
+      </div>
+
+      {/* Diagnostic PASA — à partager en cas de problème */}
+      <div style={{
+        backgroundColor: 'var(--color-surface)', borderRadius: '8px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)', padding: '20px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+          <Stethoscope size={16} style={{ color: 'var(--color-primary)' }} />
+          <h2 style={{ fontFamily: 'var(--font-sans)', fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)', margin: 0 }}>
+            Diagnostic PASA
+          </h2>
+        </div>
+        <p style={{ margin: '0 0 10px', fontSize: '12px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
+          Compare Firestore et la base locale pour identifier où le problème se situe.
+        </p>
+        <button
+          onClick={handleRunDiagnostic}
+          disabled={diagRunning}
+          style={{
+            padding: '8px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
+            border: '1.5px solid var(--color-primary)', background: 'transparent',
+            color: 'var(--color-primary)', cursor: diagRunning ? 'wait' : 'pointer',
+          }}
+        >
+          {diagRunning ? 'Analyse en cours…' : 'Lancer le diagnostic'}
+        </button>
+        {diagReport && (
+          <pre style={{
+            marginTop: '12px', padding: '12px', background: 'var(--color-bg-soft)',
+            borderRadius: '6px', fontSize: '11px', fontFamily: 'ui-monospace, monospace',
+            whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: '300px', overflow: 'auto',
+          }}>{diagReport}</pre>
+        )}
       </div>
 
       {/* Sync section */}
