@@ -93,6 +93,12 @@ pub fn run() {
             sql: include_str!("../migrations/015_activity_unit.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 16,
+            description: "reset activities sync_log to backfill PASA",
+            sql: include_str!("../migrations/016_resync_pasa.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
