@@ -1,7 +1,8 @@
 import { useRef, useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { categoryLabel, type CategoryColor } from '@/db/categoryColors';
-import type { Activity, ActivityStatus } from '@/db/types';
+import type { Activity, ActivityStatus, ActivityUnit } from '@/db/types';
+import { useActivityViewMode } from '@/hooks/useActivityViewMode';
 
 const STATUS_META: Record<ActivityStatus, { label: string }> = {
   planned: { label: 'Planifié' }, in_progress: { label: 'En cours' },
@@ -18,11 +19,19 @@ interface Props {
 
 export default function ActivityFormModal({ initial, defaultMode = 'scheduled', types, onSubmit, onClose }: Props) {
   const formRef = useRef<HTMLFormElement>(null);
+  const [viewMode] = useActivityViewMode();
   const [isTemplate, setIsTemplate] = useState((initial?.is_template === 1) || defaultMode === 'template');
+  const [unit, setUnit] = useState<ActivityUnit>(
+    initial?.unit ?? (viewMode === 'pasa' ? 'pasa' : 'main'),
+  );
 
   useEffect(() => {
     setIsTemplate((initial?.is_template === 1) || defaultMode === 'template');
   }, [initial, defaultMode]);
+
+  useEffect(() => {
+    setUnit(initial?.unit ?? (viewMode === 'pasa' ? 'pasa' : 'main'));
+  }, [initial, viewMode]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -45,6 +54,7 @@ export default function ActivityFormModal({ initial, defaultMode = 'scheduled', 
       linked_project_id: null,
       is_shared: fd.get('is_shared') === 'on' ? 1 : 0,
       is_template: isTemplate ? 1 : 0,
+      unit,
       synced_from: '',
       last_sync_at: null,
       external_id: null,
@@ -62,10 +72,29 @@ export default function ActivityFormModal({ initial, defaultMode = 'scheduled', 
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
         </div>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', borderRadius: '8px', background: 'var(--color-bg-soft)', marginBottom: '14px', fontSize: '13px', cursor: 'pointer' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', borderRadius: '8px', background: 'var(--color-bg-soft)', marginBottom: '10px', fontSize: '13px', cursor: 'pointer' }}>
           <input type="checkbox" checked={isTemplate} onChange={(e) => setIsTemplate(e.target.checked)} />
           📋 Modèle <span style={{ color: 'var(--color-text-secondary)', fontSize: '11px' }}>(activité réutilisable, sans date ni heure)</span>
         </label>
+
+        <div style={{ display: 'flex', gap: '6px', padding: '4px', borderRadius: '8px', background: 'var(--color-bg-soft)', marginBottom: '14px' }}>
+          {(['main', 'pasa'] as ActivityUnit[]).map((u) => (
+            <button
+              key={u}
+              type="button"
+              onClick={() => setUnit(u)}
+              style={{
+                flex: 1, padding: '8px', border: 'none', borderRadius: '6px', cursor: 'pointer',
+                fontSize: '12px', fontWeight: 600,
+                background: unit === u ? 'var(--color-surface)' : 'transparent',
+                color: unit === u ? 'var(--color-text)' : 'var(--color-text-secondary)',
+                boxShadow: unit === u ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+              }}
+            >
+              {u === 'main' ? 'Animation' : 'PASA'}
+            </button>
+          ))}
+        </div>
 
         <form ref={formRef} onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <label style={{ fontSize: '13px', fontWeight: 500 }}>

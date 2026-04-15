@@ -257,8 +257,11 @@ export interface Activity {
   external_id: string | null;
   is_shared: number;
   is_template: number; // 0 ou 1 — templates non synchronisés
+  unit: ActivityUnit;
   created_at: string;
 }
+
+export type ActivityUnit = 'main' | 'pasa';
 
 // ─── Rendez-vous pro (animateur) ─────────────────────────────
 export type AppointmentType = 'meeting' | 'supplier' | 'training' | 'interview' | 'other' | string;

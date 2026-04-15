@@ -19,17 +19,16 @@ export function getActivityViewMode(): ActivityViewMode {
   }
 }
 
-export function isPasaLocation(location: string | null | undefined): boolean {
-  if (!location) return false;
-  return location.trim().toLowerCase() === 'pasa';
+export function normalizeUnit(unit: string | null | undefined): 'main' | 'pasa' {
+  return unit === 'pasa' ? 'pasa' : 'main';
 }
 
-export function filterByViewMode<T extends { location?: string | null }>(
+export function filterByViewMode<T extends { unit?: string | null }>(
   items: T[],
   mode: ActivityViewMode,
 ): T[] {
-  if (mode === 'pasa') return items.filter((i) => isPasaLocation(i.location));
-  return items.filter((i) => !isPasaLocation(i.location));
+  const target = mode === 'pasa' ? 'pasa' : 'main';
+  return items.filter((i) => normalizeUnit(i.unit) === target);
 }
 
 export function useActivityViewMode(): [ActivityViewMode, (m: ActivityViewMode) => void] {

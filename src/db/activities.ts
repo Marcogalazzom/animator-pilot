@@ -5,7 +5,7 @@ const UPDATABLE_FIELDS = new Set([
   'title', 'activity_type', 'description', 'date', 'time_start', 'time_end',
   'location', 'max_participants', 'actual_participants', 'animator_name',
   'status', 'materials_needed', 'notes', 'linked_project_id',
-  'synced_from', 'last_sync_at', 'external_id', 'is_shared', 'is_template',
+  'synced_from', 'last_sync_at', 'external_id', 'is_shared', 'is_template', 'unit',
 ]);
 
 export async function getActivities(status?: ActivityStatus): Promise<Activity[]> {
@@ -65,14 +65,15 @@ export async function createActivity(activity: Omit<Activity, 'id' | 'created_at
   const result = await db.execute(
     `INSERT INTO activities (title, activity_type, description, date, time_start, time_end,
      location, max_participants, actual_participants, animator_name, status, materials_needed,
-     notes, linked_project_id, is_shared, is_template)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     notes, linked_project_id, is_shared, is_template, unit)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       activity.title, activity.activity_type, activity.description, activity.date,
       activity.time_start, activity.time_end, activity.location, activity.max_participants,
       activity.actual_participants, activity.animator_name, activity.status,
       activity.materials_needed, activity.notes, activity.linked_project_id,
       activity.is_shared ?? 1, activity.is_template ?? 0,
+      activity.unit === 'pasa' ? 'pasa' : 'main',
     ]
   );
   return result.lastInsertId ?? 0;

@@ -73,10 +73,9 @@ export async function syncActivities(): Promise<{ synced: number; failed: number
     const db = await getDb();
     const now = new Date().toISOString();
 
-    // ── PULL from Firestore (animation only, not PASA) ──
+    // ── PULL from Firestore (Animation + PASA) ──
     const activitiesRef = collection(firestore, 'activities');
-    const baseQuery = query(activitiesRef, where('unit', '==', 'main'));
-    const snapshot = await getDocs(baseQuery);
+    const snapshot = await getDocs(activitiesRef);
 
     // Filter createdAt client-side to avoid composite index requirement
     const sinceMs = lastSyncRecord?.finished_at
@@ -101,6 +100,7 @@ export async function syncActivities(): Promise<{ synced: number; failed: number
         const animatorName = data.intervenant ?? '';
         const typeLabel = data.typeLabel ?? '';
         const notes = typeLabel ? `${typeLabel}` : '';
+        const unit = data.unit === 'pasa' ? 'pasa' : 'main';
 
         const existing = await db.select<{ id: number }[]>(
           'SELECT id FROM activities WHERE external_id = ?',
@@ -110,18 +110,18 @@ export async function syncActivities(): Promise<{ synced: number; failed: number
         if (existing.length > 0) {
           await db.execute(
             `UPDATE activities SET title=?, activity_type=?, description=?, date=?,
-             time_start=?, location=?, animator_name=?, status=?, notes=?,
+             time_start=?, location=?, animator_name=?, status=?, notes=?, unit=?,
              synced_from='planning-ehpad', last_sync_at=?, is_shared=1
              WHERE external_id=?`,
-            [title, activityType, '', date, timeStart, location, animatorName, status, notes, now, docSnap.id]
+            [title, activityType, '', date, timeStart, location, animatorName, status, notes, unit, now, docSnap.id]
           );
         } else {
           await db.execute(
             `INSERT INTO activities (title, activity_type, description, date, time_start, time_end,
              location, max_participants, actual_participants, animator_name, status,
-             materials_needed, notes, synced_from, last_sync_at, external_id, is_shared)
-             VALUES (?, ?, '', ?, ?, NULL, ?, 0, 0, ?, ?, '', ?, 'planning-ehpad', ?, ?, 1)`,
-            [title, activityType, date, timeStart, location, animatorName, status, notes, now, docSnap.id]
+             materials_needed, notes, synced_from, last_sync_at, external_id, is_shared, unit)
+             VALUES (?, ?, '', ?, ?, NULL, ?, 0, 0, ?, ?, '', ?, 'planning-ehpad', ?, ?, 1, ?)`,
+            [title, activityType, date, timeStart, location, animatorName, status, notes, now, docSnap.id, unit]
           );
         }
         synced++;
@@ -150,7 +150,7 @@ export async function syncActivities(): Promise<{ synced: number; failed: number
           desc: a.location,
           intervenant: a.animator_name,
           cancelled: a.status === 'cancelled',
-          unit: 'main',
+          unit: a.unit === 'pasa' ? 'pasa' : 'main',
           isRecurring: false,
           createdAt: Date.now(),
         };

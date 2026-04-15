@@ -87,6 +87,12 @@ pub fn run() {
             sql: include_str!("../migrations/014_album_by_type.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 15,
+            description: "activities: unit column (main/pasa)",
+            sql: include_str!("../migrations/015_activity_unit.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
