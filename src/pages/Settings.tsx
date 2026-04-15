@@ -28,7 +28,23 @@ export default function Settings() {
   const addToast = useToastStore((s) => s.add);
 
   const syncAllModules = useSyncStore((s) => s.syncAllModules);
+  const syncActivitiesFull = useSyncStore((s) => s.syncActivitiesFull);
+  const activitiesSyncStatus = useSyncStore((s) => s.modules.activities.status);
   const globalSyncStatus = useSyncStore((s) => s.globalStatus);
+
+  const handleFullImport = useCallback(async () => {
+    const confirmed = window.confirm(
+      "Import complet des activités : tire toutes les semaines passées depuis planning-ehpad. Cette opération peut être longue. Continuer ?",
+    );
+    if (!confirmed) return;
+    await syncActivitiesFull();
+    const result = useSyncStore.getState().modules.activities.lastResult;
+    if (result?.error) {
+      addToast(`Import échoué : ${result.error.slice(0, 80)}`, 'error');
+    } else {
+      addToast(`Import complet : ${result?.synced ?? 0} activités importées`, 'success');
+    }
+  }, [syncActivitiesFull, addToast]);
 
   const [activityViewMode, setActivityViewMode] = useActivityViewMode();
   const handleViewModeChange = (m: ActivityViewMode) => {
@@ -556,9 +572,40 @@ export default function Settings() {
             </label>
           </div>
           <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
-            Activités partagées, inventaire et annuaire sont synchronisés avec Firestore (planning-ehpad).
+            « Sync maintenant » et la sync automatique ne tirent que la <strong>semaine courante et les suivantes</strong>.
             Les activités personnelles (réunions, RDV) restent locales.
           </p>
+
+          {/* Import complet — pour récupérer l'historique */}
+          <div style={{
+            marginTop: '4px', padding: '12px 14px', borderRadius: '8px',
+            background: 'var(--color-bg-soft)', display: 'flex', flexDirection: 'column', gap: '8px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+              <HardDrive size={14} style={{ color: 'var(--color-text-secondary)', marginTop: '2px' }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-sans)' }}>
+                  Import complet des activités
+                </div>
+                <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
+                  Rapatrie toutes les activités passées de planning-ehpad. À utiliser pour initialiser ou combler un historique manquant.
+                </p>
+              </div>
+              <button
+                onClick={handleFullImport}
+                disabled={activitiesSyncStatus === 'syncing' || !firebaseUser}
+                style={{
+                  padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
+                  border: '1.5px solid #7C3AED', background: 'transparent', color: '#7C3AED',
+                  cursor: activitiesSyncStatus === 'syncing' || !firebaseUser ? 'not-allowed' : 'pointer',
+                  opacity: activitiesSyncStatus === 'syncing' || !firebaseUser ? 0.5 : 1,
+                  whiteSpace: 'nowrap', fontFamily: 'var(--font-sans)',
+                }}
+              >
+                {activitiesSyncStatus === 'syncing' ? 'Import…' : 'Import complet'}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

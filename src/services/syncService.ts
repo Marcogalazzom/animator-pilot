@@ -118,7 +118,12 @@ async function upsertSyncedActivity(
 
 // ─── Sync Activities ─────────────────────────────────────────
 
-export async function syncActivities(): Promise<{ synced: number; failed: number }> {
+export type ActivitiesSyncScope = 'full' | 'incremental';
+
+export async function syncActivities(
+  options: { scope?: ActivitiesSyncScope } = {},
+): Promise<{ synced: number; failed: number }> {
+  const scope: ActivitiesSyncScope = options.scope ?? 'incremental';
   const logId = await createSyncLog('activities', 'pull');
   let synced = 0;
   let failed = 0;
@@ -126,14 +131,25 @@ export async function syncActivities(): Promise<{ synced: number; failed: number
   try {
     const db = await getDb();
     const now = new Date().toISOString();
+    const baseMonday = mondayOf(todayIso());
 
     // ── PULL from Firestore (Animation + PASA, y compris les récurrentes) ──
     const activitiesRef = collection(firestore, 'activities');
     const snapshot = await getDocs(activitiesRef);
 
+    // En mode incrémental on ne garde que la semaine courante et le futur
+    // (plus les récurrentes, qui sont matérialisées sur 12 semaines).
+    const docs = scope === 'incremental'
+      ? snapshot.docs.filter((d) => {
+          const data = d.data();
+          if (data.isRecurring === true) return true;
+          const weekId = typeof data.weekId === 'string' ? data.weekId : '';
+          return weekId >= baseMonday;
+        })
+      : snapshot.docs;
+
     // Fenêtre de matérialisation : semaine courante + RECURRING_WEEKS_AHEAD-1.
     const windowMondays: string[] = [];
-    const baseMonday = mondayOf(todayIso());
     for (let i = 0; i < RECURRING_WEEKS_AHEAD; i++) {
       windowMondays.push(addDays(baseMonday, i * 7));
     }
@@ -151,7 +167,7 @@ export async function syncActivities(): Promise<{ synced: number; failed: number
       []
     );
 
-    for (const docSnap of snapshot.docs) {
+    for (const docSnap of docs) {
       try {
         const data = docSnap.data();
         const activityType = typeof data.type === 'string' && data.type ? data.type : 'other';

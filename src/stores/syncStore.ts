@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { SyncModule, SyncStatus } from '@/db/types';
 import { syncAll, syncActivities, syncInventory, syncStaff, syncBudget, shouldAutoSync } from '@/services/syncService';
-import type { SyncResult } from '@/services/syncService';
+import type { SyncResult, ActivitiesSyncScope } from '@/services/syncService';
 import { getLastSyncAll } from '@/db/sync';
 
 interface ModuleSyncState {
@@ -18,6 +18,7 @@ interface SyncState {
   // Actions
   syncModule: (module: SyncModule) => Promise<void>;
   syncAllModules: () => Promise<void>;
+  syncActivitiesFull: () => Promise<void>;
   loadLastSyncTimes: () => Promise<void>;
   startAutoSync: (intervalMinutes?: number) => void;
   stopAutoSync: () => void;
@@ -77,7 +78,8 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     }));
 
     try {
-      const syncFn = module === 'activities' ? syncActivities
+      const syncFn: () => Promise<{ synced: number; failed: number }> =
+        module === 'activities' ? () => syncActivities()
         : module === 'inventory' ? syncInventory
         : module === 'staff' ? syncStaff
         : syncBudget;
@@ -104,6 +106,46 @@ export const useSyncStore = create<SyncState>((set, get) => ({
             ...state.modules[module],
             status: 'error' as SyncStatus,
             lastResult: { module, synced: 0, failed: 0, error: String(err) },
+          },
+        },
+        globalStatus: 'error',
+      }));
+    }
+  },
+
+  syncActivitiesFull: async () => {
+    set((state) => ({
+      modules: {
+        ...state.modules,
+        activities: { ...state.modules.activities, status: 'syncing' as SyncStatus },
+      },
+      globalStatus: 'syncing',
+    }));
+
+    try {
+      const scope: ActivitiesSyncScope = 'full';
+      const result = await syncActivities({ scope });
+      const now = new Date().toISOString();
+
+      set((state) => ({
+        modules: {
+          ...state.modules,
+          activities: {
+            status: 'success' as SyncStatus,
+            lastSyncAt: now,
+            lastResult: { module: 'activities', ...result },
+          },
+        },
+        globalStatus: 'success',
+      }));
+    } catch (err) {
+      set((state) => ({
+        modules: {
+          ...state.modules,
+          activities: {
+            ...state.modules.activities,
+            status: 'error' as SyncStatus,
+            lastResult: { module: 'activities', synced: 0, failed: 0, error: String(err) },
           },
         },
         globalStatus: 'error',
