@@ -6,6 +6,7 @@ const UPDATABLE_FIELDS = new Set([
   'location', 'max_participants', 'actual_participants', 'animator_name',
   'status', 'materials_needed', 'notes', 'linked_project_id',
   'synced_from', 'last_sync_at', 'external_id', 'is_shared', 'is_template', 'unit',
+  'is_recurring',
 ]);
 
 export async function getActivities(status?: ActivityStatus): Promise<Activity[]> {
@@ -65,8 +66,8 @@ export async function createActivity(activity: Omit<Activity, 'id' | 'created_at
   const result = await db.execute(
     `INSERT INTO activities (title, activity_type, description, date, time_start, time_end,
      location, max_participants, actual_participants, animator_name, status, materials_needed,
-     notes, linked_project_id, is_shared, is_template, unit)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     notes, linked_project_id, is_shared, is_template, unit, is_recurring)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       activity.title, activity.activity_type, activity.description, activity.date,
       activity.time_start, activity.time_end, activity.location, activity.max_participants,
@@ -74,6 +75,7 @@ export async function createActivity(activity: Omit<Activity, 'id' | 'created_at
       activity.materials_needed, activity.notes, activity.linked_project_id,
       activity.is_shared ?? 1, activity.is_template ?? 0,
       activity.unit === 'pasa' ? 'pasa' : 'main',
+      activity.is_recurring ?? 0,
     ]
   );
   return result.lastInsertId ?? 0;

@@ -7,7 +7,7 @@ function act(overrides: Partial<Activity> = {}): Activity {
     date: '2026-04-15', time_start: '14:00', time_end: null, location: 'A',
     max_participants: 10, actual_participants: 0, animator_name: '',
     status: 'planned', materials_needed: '', notes: '',
-    linked_project_id: null, is_shared: 1, is_template: 0, unit: 'main',
+    linked_project_id: null, is_shared: 1, is_template: 0, unit: 'main', is_recurring: 0,
     synced_from: '', last_sync_at: null, external_id: null, created_at: '',
     ...overrides,
   };

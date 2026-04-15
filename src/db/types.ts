@@ -258,6 +258,7 @@ export interface Activity {
   is_shared: number;
   is_template: number; // 0 ou 1 — templates non synchronisés
   unit: ActivityUnit;
+  is_recurring: number; // 0 ou 1 — activités hebdomadaires issues de planning-ehpad
   created_at: string;
 }
 

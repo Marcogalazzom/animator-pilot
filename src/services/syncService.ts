@@ -23,7 +23,13 @@ import { getDb } from '@/db/database';
 import { createSyncLog, completeSyncLog, getLastSync } from '@/db/sync';
 import { getSetting } from '@/db/settings';
 import type { Activity, SyncModule } from '@/db/types';
-import { addDays, mondayOf } from '@/utils/dateUtils';
+import { addDays, mondayOf, todayIso } from '@/utils/dateUtils';
+
+// Nombre de semaines matérialisées pour les activités récurrentes (semaine
+// courante + N-1 suivantes). Planning-ehpad les affiche dans toutes les
+// semaines côté client ; animator-pilot n'a pas de moteur de récurrence, on
+// matérialise donc une fenêtre glissante à chaque sync.
+const RECURRING_WEEKS_AHEAD = 12;
 
 
 // ─── Day / week helpers ──────────────────────────────────────
@@ -61,6 +67,55 @@ const CONDITION_MAP: Record<string, string> = {
 // (liberal/salarie/benevole ou toute valeur custom), le module
 // Staff utilise category_colors pour afficher chaque rôle.
 
+// ─── Activity upsert helper ─────────────────────────────────
+
+interface SyncedActivityRow {
+  externalId: string;
+  title: string;
+  activityType: string;
+  date: string;
+  timeStart: string | null;
+  location: string;
+  animatorName: string;
+  status: string;
+  notes: string;
+  unit: 'main' | 'pasa';
+  isRecurring: number;
+  now: string;
+}
+
+async function upsertSyncedActivity(
+  db: { select: <T>(q: string, p: unknown[]) => Promise<T>; execute: (q: string, p: unknown[]) => Promise<unknown> },
+  row: SyncedActivityRow,
+): Promise<void> {
+  const existing = await db.select<{ id: number }[]>(
+    'SELECT id FROM activities WHERE external_id = ?',
+    [row.externalId],
+  );
+  if (existing.length > 0) {
+    await db.execute(
+      `UPDATE activities SET title=?, activity_type=?, description=?, date=?,
+       time_start=?, location=?, animator_name=?, status=?, notes=?, unit=?,
+       is_recurring=?, synced_from='planning-ehpad', last_sync_at=?, is_shared=1
+       WHERE external_id=?`,
+      [row.title, row.activityType, '', row.date, row.timeStart, row.location,
+       row.animatorName, row.status, row.notes, row.unit, row.isRecurring,
+       row.now, row.externalId],
+    );
+  } else {
+    await db.execute(
+      `INSERT INTO activities (title, activity_type, description, date, time_start, time_end,
+       location, max_participants, actual_participants, animator_name, status,
+       materials_needed, notes, synced_from, last_sync_at, external_id, is_shared,
+       unit, is_recurring)
+       VALUES (?, ?, '', ?, ?, NULL, ?, 0, 0, ?, ?, '', ?, 'planning-ehpad', ?, ?, 1, ?, ?)`,
+      [row.title, row.activityType, row.date, row.timeStart, row.location,
+       row.animatorName, row.status, row.notes, row.now, row.externalId,
+       row.unit, row.isRecurring],
+    );
+  }
+}
+
 // ─── Sync Activities ─────────────────────────────────────────
 
 export async function syncActivities(): Promise<{ synced: number; failed: number }> {
@@ -69,29 +124,36 @@ export async function syncActivities(): Promise<{ synced: number; failed: number
   let failed = 0;
 
   try {
-    const lastSyncRecord = await getLastSync('activities');
     const db = await getDb();
     const now = new Date().toISOString();
 
-    // ── PULL from Firestore (Animation + PASA) ──
+    // ── PULL from Firestore (Animation + PASA, y compris les récurrentes) ──
     const activitiesRef = collection(firestore, 'activities');
     const snapshot = await getDocs(activitiesRef);
 
-    // Filter createdAt client-side to avoid composite index requirement
-    const sinceMs = lastSyncRecord?.finished_at
-      ? new Date(lastSyncRecord.finished_at).getTime()
-      : 0;
-    const filteredDocs = sinceMs > 0
-      ? snapshot.docs.filter(doc => {
-          const createdAt = doc.data().createdAt;
-          return typeof createdAt === 'number' && createdAt > sinceMs;
-        })
-      : snapshot.docs;
+    // Fenêtre de matérialisation : semaine courante + RECURRING_WEEKS_AHEAD-1.
+    const windowMondays: string[] = [];
+    const baseMonday = mondayOf(todayIso());
+    for (let i = 0; i < RECURRING_WEEKS_AHEAD; i++) {
+      windowMondays.push(addDays(baseMonday, i * 7));
+    }
 
-    for (const docSnap of filteredDocs) {
+    // On purge d'abord les instances récurrentes déjà matérialisées et sans
+    // pointage (actual_participants=0 et status='planned') pour éviter les
+    // orphelins quand la fenêtre glisse. Les instances avec données
+    // utilisateur sont préservées via upsert.
+    await db.execute(
+      `DELETE FROM activities
+       WHERE synced_from = 'planning-ehpad'
+         AND is_recurring = 1
+         AND actual_participants = 0
+         AND status = 'planned'`,
+      []
+    );
+
+    for (const docSnap of snapshot.docs) {
       try {
         const data = docSnap.data();
-        const date = computeDate(data.weekId ?? '', data.day ?? '');
         const activityType = typeof data.type === 'string' && data.type ? data.type : 'other';
         const status = data.cancelled ? 'cancelled' : 'planned';
         const title = data.title ?? '';
@@ -101,30 +163,41 @@ export async function syncActivities(): Promise<{ synced: number; failed: number
         const typeLabel = data.typeLabel ?? '';
         const notes = typeLabel ? `${typeLabel}` : '';
         const unit = data.unit === 'pasa' ? 'pasa' : 'main';
+        const day = data.day ?? '';
+        const isRecurring = data.isRecurring === true;
 
-        const existing = await db.select<{ id: number }[]>(
-          'SELECT id FROM activities WHERE external_id = ?',
-          [docSnap.id]
-        );
+        // Pour les récurrentes, on matérialise une ligne par semaine de la
+        // fenêtre (external_id = "${docId}:${weekMonday}"). Pour les one-shot,
+        // une ligne unique (external_id = docId) à la date d'origine.
+        const instances = isRecurring
+          ? windowMondays.map((weekMonday) => ({
+              externalId: `${docSnap.id}:${weekMonday}`,
+              date: computeDate(weekMonday, day),
+              isRecurring: 1,
+            }))
+          : [{
+              externalId: docSnap.id,
+              date: computeDate(data.weekId ?? '', day),
+              isRecurring: 0,
+            }];
 
-        if (existing.length > 0) {
-          await db.execute(
-            `UPDATE activities SET title=?, activity_type=?, description=?, date=?,
-             time_start=?, location=?, animator_name=?, status=?, notes=?, unit=?,
-             synced_from='planning-ehpad', last_sync_at=?, is_shared=1
-             WHERE external_id=?`,
-            [title, activityType, '', date, timeStart, location, animatorName, status, notes, unit, now, docSnap.id]
-          );
-        } else {
-          await db.execute(
-            `INSERT INTO activities (title, activity_type, description, date, time_start, time_end,
-             location, max_participants, actual_participants, animator_name, status,
-             materials_needed, notes, synced_from, last_sync_at, external_id, is_shared, unit)
-             VALUES (?, ?, '', ?, ?, NULL, ?, 0, 0, ?, ?, '', ?, 'planning-ehpad', ?, ?, 1, ?)`,
-            [title, activityType, date, timeStart, location, animatorName, status, notes, now, docSnap.id, unit]
-          );
+        for (const inst of instances) {
+          await upsertSyncedActivity(db, {
+            externalId: inst.externalId,
+            title,
+            activityType,
+            date: inst.date,
+            timeStart,
+            location,
+            animatorName,
+            status,
+            notes,
+            unit,
+            isRecurring: inst.isRecurring,
+            now,
+          });
+          synced++;
         }
-        synced++;
       } catch {
         failed++;
       }
@@ -151,7 +224,7 @@ export async function syncActivities(): Promise<{ synced: number; failed: number
           intervenant: a.animator_name,
           cancelled: a.status === 'cancelled',
           unit: a.unit === 'pasa' ? 'pasa' : 'main',
-          isRecurring: false,
+          isRecurring: a.is_recurring === 1,
           createdAt: Date.now(),
         };
 

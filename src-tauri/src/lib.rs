@@ -99,6 +99,12 @@ pub fn run() {
             sql: include_str!("../migrations/016_resync_pasa.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 17,
+            description: "activities: is_recurring + reset planning-ehpad rows",
+            sql: include_str!("../migrations/017_recurring_instances.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
