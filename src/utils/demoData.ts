@@ -2,12 +2,14 @@
 // Used from the Settings page to populate / wipe the local SQLite DB so every
 // design v2 feature has realistic content to render.
 
+import { collection, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore';
 import { getDb } from '@/db/database';
+import { firestore } from '@/services/firebase';
 import { createResident } from '@/db/residents';
 import { createActivity } from '@/db/activities';
 import { createJournalEntry } from '@/db/journal';
 import { createProject, createAction } from '@/db/projects';
-import { upsertBudget, createExpense } from '@/db/budget';
+import { createExpense } from '@/db/budget';
 import { createAlbum } from '@/db/photos';
 import { createAppointment } from '@/db/appointments';
 import { createInventoryItem } from '@/db/inventory';
@@ -54,6 +56,11 @@ export async function seedDemoData(): Promise<SeedCounts> {
     expenses: 0, appointments: 0, albums: 0,
     inventory: 0, staff: 0, suppliers: 0,
   };
+  // Track inserted activity + expense IDs so we can mark them as `synced_from='demo'`
+  // after seeding. The sync push filter (`WHERE synced_from IS NULL OR ''`) will then
+  // skip them, so they NEVER get pushed to planning-ehpad.
+  const insertedActivityIds: number[] = [];
+  const insertedExpenseIds: number[] = [];
 
   // ─── Résidents (12) ───
   // Two birthdays in the next 7 days so the "Anniversaires cette semaine" card lights up.
@@ -114,7 +121,7 @@ export async function seedDemoData(): Promise<SeedCounts> {
   ];
 
   for (const t of TEMPLATES) {
-    await createActivity({
+    const id = await createActivity({
       title: t.title,
       activity_type: t.type,
       description: t.desc,
@@ -129,10 +136,11 @@ export async function seedDemoData(): Promise<SeedCounts> {
       notes: '',
       linked_project_id: null,
       synced_from: '', last_sync_at: null, external_id: null,
-      is_shared: 1, is_template: 1, unit: 'main', is_recurring: 0,
+      is_shared: 0, is_template: 1, unit: 'main', is_recurring: 0,
       category: t.category,
       difficulty: t.difficulty,
     });
+    insertedActivityIds.push(id);
     counts.activities++;
   }
 
@@ -156,7 +164,7 @@ export async function seedDemoData(): Promise<SeedCounts> {
   ];
 
   for (const a of SCHEDULED) {
-    await createActivity({
+    const id = await createActivity({
       title: a.title,
       activity_type: a.type,
       description: '',
@@ -171,10 +179,11 @@ export async function seedDemoData(): Promise<SeedCounts> {
       notes: '',
       linked_project_id: null,
       synced_from: '', last_sync_at: null, external_id: null,
-      is_shared: 1, is_template: 0, unit: 'main', is_recurring: 0,
+      is_shared: 0, is_template: 0, unit: 'main', is_recurring: 0,
       category: a.category,
       difficulty: a.difficulty,
     });
+    insertedActivityIds.push(id);
     counts.activities++;
   }
 
@@ -303,9 +312,10 @@ export async function seedDemoData(): Promise<SeedCounts> {
     counts.projects++;
   }
 
-  // ─── Budget + dépenses ───
+  // ─── Dépenses ───
+  // NOTE: on n'appelle plus `upsertBudget` ici — il pourrait écraser un budget réel
+  // déjà saisi par l'utilisateur. Le budget total se règle manuellement dans la page Budget.
   const fiscalYear = new Date().getFullYear();
-  await upsertBudget(fiscalYear, 6000);
 
   const EXPENSES: Array<{
     title: string; category: 'intervenants' | 'materiel' | 'sorties' | 'fetes' | 'other';
@@ -329,7 +339,7 @@ export async function seedDemoData(): Promise<SeedCounts> {
   ];
 
   for (const e of EXPENSES) {
-    await createExpense({
+    const id = await createExpense({
       fiscal_year: fiscalYear,
       title: e.title,
       category: e.category,
@@ -341,6 +351,7 @@ export async function seedDemoData(): Promise<SeedCounts> {
       linked_intervenant_id: null,
       synced_from: '', last_sync_at: null, external_id: null,
     });
+    insertedExpenseIds.push(id);
     counts.expenses++;
   }
 
@@ -480,7 +491,178 @@ export async function seedDemoData(): Promise<SeedCounts> {
     counts.suppliers++;
   }
 
+  // ─── Mark all seeded activities + expenses as DEMO so they're skipped by sync ───
+  // The push filter in syncService.ts is `WHERE synced_from = '' OR synced_from IS NULL`,
+  // so any non-empty value (here `'demo'`) excludes the row. We also force is_shared=0
+  // on activities as belt-and-suspenders.
+  const db = await getDb();
+  if (insertedActivityIds.length > 0) {
+    const ph = insertedActivityIds.map(() => '?').join(',');
+    await db.execute(
+      `UPDATE activities SET synced_from = 'demo', external_id = 'demo', is_shared = 0 WHERE id IN (${ph})`,
+      insertedActivityIds,
+    );
+  }
+  if (insertedExpenseIds.length > 0) {
+    const ph = insertedExpenseIds.map(() => '?').join(',');
+    await db.execute(
+      `UPDATE expenses SET synced_from = 'demo', external_id = 'demo' WHERE id IN (${ph})`,
+      insertedExpenseIds,
+    );
+  }
+
   return counts;
+}
+
+// ─── Cleanup remote demo data (planning-ehpad) ───────────────
+
+/** Demo activity titles — used to identify rows that may have been pushed to
+ *  Firestore by an EARLIER demo seed (before the `synced_from='demo'` marker
+ *  was introduced). Kept in sync with the activity arrays above. */
+const DEMO_ACTIVITY_TITLES = [
+  // Templates
+  'Atelier souvenirs', 'Loto musical', 'Quiz cinéma', 'Gym douce',
+  'Marche au jardin', 'Étirements assis', 'Atelier peinture',
+  'Chant & musique', 'Couture & tricot', 'Sortie au marché',
+  'Goûter intergénérationnel', 'Coiffure', 'Visite docteur',
+  'Préparation Famileo', 'Réunion équipe',
+  // Scheduled
+  'Atelier mémoire', 'Visite famille — Mme Morel',
+  "Préparer le goûter d'anniversaire", 'Compte-rendu atelier mémoire',
+  'Café littéraire',
+];
+
+const DEMO_EXPENSE_TITLES = [
+  'Toiles + peinture acrylique', 'Gâteau anniversaire Mme Roux',
+  'Intervention musicale', 'Jardinières surélevées (×3)',
+  'Bus adapté — sortie marché', 'Bouquets fleurs salle commune',
+  'Pinceaux + crayons', 'Intervenant kiné',
+  'Boissons goûter intergén.', 'Accordéon Marcel — réparation',
+  'Sortie pâtisserie', 'Jeux de société (renouv.)',
+  'Intervention conteuse', 'Imprimante Famileo (toner)',
+  'Décoration printemps',
+];
+
+export interface CleanupCounts {
+  activitiesDeleted: number;
+  expensesDeleted: number;
+  errors: number;
+  scanned: { activities: number; expenses: number };
+}
+
+/** Counts how many DEMO rows are currently pushed to Firestore (preview before
+ *  user confirms). Looks at local rows whose title matches the demo set AND
+ *  which have an external_id (the Firestore doc ID) set by a previous push. */
+export async function countRemoteDemoRows(): Promise<{ activities: number; expenses: number }> {
+  const db = await getDb();
+  const ap = DEMO_ACTIVITY_TITLES.map(() => '?').join(',');
+  const acts = await db.select<{ cnt: number }[]>(
+    `SELECT COUNT(*) AS cnt FROM activities
+     WHERE title IN (${ap})
+       AND external_id IS NOT NULL AND external_id != '' AND external_id != 'demo'`,
+    DEMO_ACTIVITY_TITLES,
+  );
+  const ep = DEMO_EXPENSE_TITLES.map(() => '?').join(',');
+  const exps = await db.select<{ cnt: number }[]>(
+    `SELECT COUNT(*) AS cnt FROM expenses
+     WHERE title IN (${ep})
+       AND external_id IS NOT NULL AND external_id != '' AND external_id != 'demo'`,
+    DEMO_EXPENSE_TITLES,
+  );
+  return { activities: acts[0]?.cnt ?? 0, expenses: exps[0]?.cnt ?? 0 };
+}
+
+/** Deletes Firestore docs whose local rows match a demo title AND have a real
+ *  Firestore external_id (i.e. were pushed by an earlier sync). Also removes
+ *  the local row to leave a clean state. Untouched: anything created by the
+ *  user that doesn't match a demo title. */
+export async function cleanupDemoFromFirestore(): Promise<CleanupCounts> {
+  const db = await getDb();
+  const result: CleanupCounts = {
+    activitiesDeleted: 0, expensesDeleted: 0, errors: 0,
+    scanned: { activities: 0, expenses: 0 },
+  };
+
+  // Activities
+  const ap = DEMO_ACTIVITY_TITLES.map(() => '?').join(',');
+  const acts = await db.select<{ id: number; external_id: string }[]>(
+    `SELECT id, external_id FROM activities
+     WHERE title IN (${ap})
+       AND external_id IS NOT NULL AND external_id != '' AND external_id != 'demo'`,
+    DEMO_ACTIVITY_TITLES,
+  );
+  result.scanned.activities = acts.length;
+
+  for (const a of acts) {
+    try {
+      await deleteDoc(doc(firestore, 'activities', a.external_id));
+    } catch (err) {
+      // Doc might already be gone on Firestore — log but proceed to delete locally.
+      console.warn('[cleanup] activity Firestore delete:', err);
+    }
+    try {
+      await db.execute('DELETE FROM activities WHERE id = ?', [a.id]);
+      result.activitiesDeleted++;
+    } catch (err) {
+      console.error('[cleanup] activity local delete failed:', err);
+      result.errors++;
+    }
+  }
+
+  // Expenses
+  const ep = DEMO_EXPENSE_TITLES.map(() => '?').join(',');
+  const exps = await db.select<{ id: number; external_id: string }[]>(
+    `SELECT id, external_id FROM expenses
+     WHERE title IN (${ep})
+       AND external_id IS NOT NULL AND external_id != '' AND external_id != 'demo'`,
+    DEMO_EXPENSE_TITLES,
+  );
+  result.scanned.expenses = exps.length;
+
+  for (const e of exps) {
+    try {
+      await deleteDoc(doc(firestore, 'animationExpenses', e.external_id));
+    } catch (err) {
+      console.warn('[cleanup] expense Firestore delete:', err);
+    }
+    try {
+      await db.execute('DELETE FROM expenses WHERE id = ?', [e.id]);
+      result.expensesDeleted++;
+    } catch (err) {
+      console.error('[cleanup] expense local delete failed:', err);
+      result.errors++;
+    }
+  }
+
+  return result;
+}
+
+/** Defensive sweep: also queries Firestore directly by title to catch demo
+ *  docs that no longer have a matching local row (e.g. user already deleted
+ *  the local copy but the remote remained). Best-effort; ignores errors. */
+export async function sweepRemoteDemoFirestore(): Promise<{ activitiesDeleted: number }> {
+  let deleted = 0;
+  try {
+    const q = query(
+      collection(firestore, 'activities'),
+      where('title', 'in', DEMO_ACTIVITY_TITLES.slice(0, 10)),  // Firestore 'in' max 10
+    );
+    const snap = await getDocs(q);
+    for (const d of snap.docs) {
+      try { await deleteDoc(d.ref); deleted++; } catch { /* ignore */ }
+    }
+    const q2 = query(
+      collection(firestore, 'activities'),
+      where('title', 'in', DEMO_ACTIVITY_TITLES.slice(10, 20)),
+    );
+    const snap2 = await getDocs(q2);
+    for (const d of snap2.docs) {
+      try { await deleteDoc(d.ref); deleted++; } catch { /* ignore */ }
+    }
+  } catch (err) {
+    console.warn('[cleanup] Firestore sweep failed:', err);
+  }
+  return { activitiesDeleted: deleted };
 }
 
 // ─── Clear ───────────────────────────────────────────────────

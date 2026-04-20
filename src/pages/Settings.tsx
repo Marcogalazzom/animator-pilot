@@ -5,7 +5,11 @@ import {
   FlaskConical, Trash2, AlertTriangle,
 } from 'lucide-react';
 import { useUserSettings, setUserSettings } from '@/hooks/useUserSettings';
-import { seedDemoData, clearAllData, type SeedCounts } from '@/utils/demoData';
+import {
+  seedDemoData, clearAllData,
+  countRemoteDemoRows, cleanupDemoFromFirestore, sweepRemoteDemoFirestore,
+  type SeedCounts,
+} from '@/utils/demoData';
 import { collection, getDocs } from 'firebase/firestore';
 import { useToastStore } from '@/stores/toastStore';
 import { useSyncStore } from '@/stores/syncStore';
@@ -812,6 +816,15 @@ function DemoDataSection() {
   const [confirmClear, setConfirmClear] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [lastSeed, setLastSeed] = useState<SeedCounts | null>(null);
+  const [remoteCount, setRemoteCount] = useState<{ activities: number; expenses: number } | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [cleaningRemote, setCleaningRemote] = useState(false);
+
+  // Auto-detect remote demo data on mount so the user immediately sees if there's
+  // a mess to clean up.
+  useEffect(() => {
+    countRemoteDemoRows().then(setRemoteCount).catch(() => {});
+  }, []);
 
   async function handleSeed() {
     if (seeding) return;
@@ -849,6 +862,46 @@ function DemoDataSection() {
     }
   }
 
+  async function handleScanRemote() {
+    setScanning(true);
+    try {
+      const c = await countRemoteDemoRows();
+      setRemoteCount(c);
+      if (c.activities === 0 && c.expenses === 0) {
+        addToast('Aucune donnée de démo détectée sur le planning distant.', 'info');
+      } else {
+        addToast(`${c.activities} activité(s) + ${c.expenses} dépense(s) à nettoyer.`, 'info');
+      }
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  async function handleCleanRemote() {
+    if (cleaningRemote) return;
+    if (!window.confirm(
+      `Cette action va supprimer définitivement les données de démo qui ont été synchronisées sur planning-ehpad. Continuer ?`,
+    )) return;
+    setCleaningRemote(true);
+    try {
+      const r = await cleanupDemoFromFirestore();
+      // Best-effort sweep for orphan Firestore docs (no local row).
+      const sweep = await sweepRemoteDemoFirestore().catch(() => ({ activitiesDeleted: 0 }));
+      addToast(
+        `Nettoyage : ${r.activitiesDeleted + sweep.activitiesDeleted} activité(s) + ${r.expensesDeleted} dépense(s) supprimée(s) du planning distant.`,
+        'success',
+      );
+      setRemoteCount({ activities: 0, expenses: 0 });
+    } catch (err) {
+      console.error('[demo] remote cleanup failed:', err);
+      addToast(`Erreur nettoyage distant : ${String(err).slice(0, 80)}`, 'error');
+    } finally {
+      setCleaningRemote(false);
+    }
+  }
+
+  const hasRemoteJunk = remoteCount !== null && (remoteCount.activities > 0 || remoteCount.expenses > 0);
+
   return (
     <div className="card" style={{ padding: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
@@ -859,13 +912,60 @@ function DemoDataSection() {
       </div>
 
       <p style={{
-        margin: '0 0 16px', fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.55,
+        margin: '0 0 12px', fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.55,
       }}>
         Charge un jeu de données réaliste pour tester toutes les fonctionnalités : 12 résidents
         (avec anniversaires, humeurs, contacts famille), 25 activités (templates + planning),
         12 entrées de carnet de bord, 6 projets, 15 dépenses, 5 RDV, inventaire, annuaire et
         fournisseurs.
       </p>
+
+      <div style={{
+        margin: '0 0 16px', padding: '8px 12px', borderRadius: 8,
+        background: 'var(--sage-soft)', border: '1px solid var(--sage-soft)',
+        fontSize: 12, color: 'var(--sage-deep)',
+        display: 'flex', alignItems: 'flex-start', gap: 8,
+      }}>
+        <CheckCircle2 size={13} style={{ flexShrink: 0, marginTop: 1 }} />
+        <span>
+          Les nouvelles données de démo sont marquées <code>synced_from='demo'</code> : elles
+          <strong> ne sont jamais poussées</strong> sur le planning distant.
+        </span>
+      </div>
+
+      {hasRemoteJunk && (
+        <div style={{
+          margin: '0 0 16px', padding: 14, borderRadius: 10,
+          background: 'var(--warn-soft)', border: '1px solid var(--warn)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <AlertTriangle size={16} style={{ color: 'var(--warn)', flexShrink: 0, marginTop: 2 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--warn)', marginBottom: 4 }}>
+                Données de démo détectées sur planning-ehpad
+              </div>
+              <p style={{ margin: '0 0 10px', fontSize: 12.5, color: 'var(--warn)', lineHeight: 1.5 }}>
+                Une ancienne démo a été synchronisée à distance :{' '}
+                <strong>{remoteCount?.activities} activité(s)</strong> et{' '}
+                <strong>{remoteCount?.expenses} dépense(s)</strong>. Le bouton ci-dessous les
+                supprime du planning distant et localement, en se basant sur les titres de la démo.
+              </p>
+              <button
+                onClick={handleCleanRemote}
+                disabled={cleaningRemote}
+                className="btn primary sm"
+                style={{
+                  background: 'var(--warn)', borderColor: 'var(--warn)',
+                  opacity: cleaningRemote ? 0.6 : 1,
+                }}
+              >
+                <Trash2 size={12} />
+                {cleaningRemote ? 'Nettoyage en cours…' : 'Nettoyer le planning distant'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <button
@@ -876,6 +976,16 @@ function DemoDataSection() {
         >
           <FlaskConical size={13} />
           {seeding ? 'Chargement…' : 'Charger des données de démo'}
+        </button>
+
+        <button
+          className="btn"
+          onClick={handleScanRemote}
+          disabled={scanning}
+          style={{ opacity: scanning ? 0.6 : 1 }}
+        >
+          <RefreshCw size={13} />
+          {scanning ? 'Vérification…' : 'Vérifier le planning distant'}
         </button>
 
         {!confirmClear ? (
