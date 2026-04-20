@@ -107,6 +107,8 @@ describe('DB Types', () => {
         status: 'todo',
         start_date: null,
         due_date: '2025-12-31',
+        category: '',
+        next_action: '',
         created_at: '2025-01-01T00:00:00.000Z',
       };
       expect(project.start_date).toBeNull();

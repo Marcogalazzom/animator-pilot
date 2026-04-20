@@ -1,7 +1,10 @@
 import { getDb } from './database';
 import type { Project, Action, ProjectStatus } from './types';
 
-const UPDATABLE_PROJECT_FIELDS = new Set(['title', 'description', 'owner_role', 'status', 'start_date', 'due_date']);
+const UPDATABLE_PROJECT_FIELDS = new Set([
+  'title', 'description', 'owner_role', 'status', 'start_date', 'due_date',
+  'category', 'next_action',
+]);
 const UPDATABLE_ACTION_FIELDS = new Set(['title', 'progress', 'due_date', 'status']);
 
 export async function getProjects(status?: ProjectStatus): Promise<Project[]> {
@@ -24,8 +27,8 @@ export async function getProject(id: number): Promise<Project | null> {
 export async function createProject(project: Omit<Project, 'id' | 'created_at'>): Promise<number> {
   const db = await getDb();
   const result = await db.execute(
-    `INSERT INTO projects (title, description, owner_role, status, start_date, due_date)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO projects (title, description, owner_role, status, start_date, due_date, category, next_action)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       project.title,
       project.description,
@@ -33,6 +36,8 @@ export async function createProject(project: Omit<Project, 'id' | 'created_at'>)
       project.status,
       project.start_date,
       project.due_date,
+      project.category,
+      project.next_action,
     ]
   );
   return result.lastInsertId ?? 0;

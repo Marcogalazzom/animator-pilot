@@ -20,30 +20,36 @@ export default function FamileoPreview({ year, month, sections, cover, onCoverCh
 
   return (
     <div style={{
-      background: '#F3F0F9',
-      padding: '24px',
-      borderRadius: '10px',
-      minHeight: 'calc(100vh - 160px)',
+      background: 'var(--surface-2)',
+      padding: 24,
+      borderRadius: 14,
+      minHeight: 'calc(100vh - 200px)',
     }}>
-      {/* A4-like page preview */}
+      {/* A4-like page preview — ratio 1:1.414 */}
       <div style={{
-        maxWidth: '720px', margin: '0 auto',
+        maxWidth: 720, margin: '0 auto',
         background: '#fff',
-        borderRadius: '8px',
-        boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
+        borderRadius: 8,
+        boxShadow: 'var(--shadow-lg)',
         overflow: 'hidden',
+        aspectRatio: '1 / 1.414',
+        display: 'flex', flexDirection: 'column',
       }}>
         {/* Cover */}
         <div style={{
-          background: 'linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%)',
-          color: '#fff',
+          background: 'linear-gradient(135deg, var(--terra-soft), #f9e9df)',
+          color: 'var(--terra-deep)',
           padding: '48px 32px',
           textAlign: 'center',
+          flexShrink: 0,
         }}>
-          <p style={{ margin: 0, fontSize: '12px', letterSpacing: '0.2em', textTransform: 'uppercase', opacity: 0.9 }}>
+          <p className="eyebrow" style={{ margin: 0, color: 'var(--terra-deep)' }}>
             Famileo · Animation
           </p>
-          <h1 style={{ margin: '12px 0 0', fontSize: '36px', fontWeight: 700, fontFamily: 'var(--font-display)', letterSpacing: '-0.01em' }}>
+          <h1 className="serif" style={{
+            margin: '12px 0 0', fontSize: 36, fontWeight: 500,
+            letterSpacing: -0.6, color: 'var(--terra-deep)',
+          }}>
             {MONTHS[month - 1]} {year}
           </h1>
           <textarea
@@ -53,23 +59,26 @@ export default function FamileoPreview({ year, month, sections, cover, onCoverCh
             rows={2}
             style={{
               display: 'block', margin: '24px auto 0', width: '80%',
-              background: 'rgba(255,255,255,0.1)', border: '1px dashed rgba(255,255,255,0.4)',
-              color: '#fff', padding: '8px 12px', borderRadius: '6px',
-              fontSize: '13px', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5,
+              background: 'rgba(255,255,255,0.5)', border: '1px dashed var(--terra)',
+              color: 'var(--terra-deep)', padding: '8px 12px', borderRadius: 6,
+              fontSize: 13, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5,
+              outline: 'none',
             }}
           />
         </div>
 
         {/* Sections */}
-        {included.length === 0 ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: '13px' }}>
-            Aucun album sélectionné. Active un album dans le panneau de gauche.
-          </div>
-        ) : (
-          included.map((s) => (
-            <FamileoSection key={s.album.id} section={s} onTextChange={onTextChange} />
-          ))
-        )}
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          {included.length === 0 ? (
+            <div style={{ padding: 48, textAlign: 'center', color: 'var(--ink-3)', fontSize: 13 }}>
+              Aucun album sélectionné. Active un album dans le panneau de gauche.
+            </div>
+          ) : (
+            included.map((s) => (
+              <FamileoSection key={s.album.id} section={s} onTextChange={onTextChange} />
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

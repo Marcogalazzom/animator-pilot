@@ -1,4 +1,4 @@
-import { ChevronUp, ChevronDown, Eye, EyeOff, ImageOff, AlertCircle, FileDown } from 'lucide-react';
+import { ChevronUp, ChevronDown, Eye, EyeOff, ImageOff, AlertCircle, FileDown, Check, AlertTriangle, Circle } from 'lucide-react';
 import { categoryLabel } from '@/db/categoryColors';
 import type { UIFamileoSection } from './useFamileoData';
 
@@ -40,17 +40,14 @@ export default function FamileoControls({
   const years = [year - 1, year, year + 1];
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', gap: '16px',
-      background: 'var(--color-surface)', borderRadius: '10px',
-      boxShadow: 'var(--shadow-card)', padding: '16px',
-      maxHeight: 'calc(100vh - 140px)', overflowY: 'auto',
+    <div className="card" style={{
+      display: 'flex', flexDirection: 'column', gap: 16,
+      padding: 16,
+      maxHeight: 'calc(100vh - 200px)', overflowY: 'auto',
     }}>
       <div>
-        <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          Mois
-        </label>
-        <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+        <div className="eyebrow" style={{ marginBottom: 6 }}>Mois</div>
+        <div style={{ display: 'flex', gap: 6 }}>
           <select value={month} onChange={(e) => onMonthChange(year, Number(e.target.value))} style={selectStyle}>
             {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
           </select>
@@ -61,39 +58,54 @@ export default function FamileoControls({
       </div>
 
       <div>
-        <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <div className="eyebrow" style={{ marginBottom: 8 }}>
           Albums du mois ({sorted.length})
-        </label>
+        </div>
         {sorted.length === 0 ? (
-          <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
+          <p style={{ fontSize: 12, color: 'var(--ink-3)', margin: '4px 0 0' }}>
             Aucun album pour ce mois. Depuis une activité, clique sur « Photos » pour créer l'album du type.
           </p>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {sorted.map((s, i) => {
               const noPhotos = s.photos.length === 0;
-              const color = s.category?.color ?? '#7C3AED';
+              const noText = s.text.length === 0;
+              // Completeness: ok if has photos + text; warn if missing one; dot if both empty
+              const status: 'ok' | 'warn' | 'dot' =
+                (!noPhotos && !noText) ? 'ok'
+                : (noPhotos && noText) ? 'dot'
+                : 'warn';
               return (
                 <div key={s.album.id} style={{
-                  display: 'flex', alignItems: 'center', gap: '6px',
-                  padding: '8px 10px', borderRadius: '6px',
-                  background: s.included ? `${color}0F` : 'var(--color-bg-soft)',
-                  border: `1px solid ${s.included ? `${color}33` : 'var(--color-border)'}`,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '8px 10px', borderRadius: 8,
+                  background: s.included ? 'var(--terra-soft)' : 'var(--surface-2)',
+                  border: `1px solid ${s.included ? 'var(--terra-soft)' : 'var(--line)'}`,
                 }}>
+                  <span style={{
+                    width: 18, height: 18, borderRadius: '50%',
+                    background: status === 'ok' ? 'var(--sage-soft)' : status === 'warn' ? 'var(--warn-soft)' : 'var(--surface-2)',
+                    color: status === 'ok' ? 'var(--sage-deep)' : status === 'warn' ? 'var(--warn)' : 'var(--ink-4)',
+                    display: 'grid', placeItems: 'center', flexShrink: 0,
+                  }} title={status === 'ok' ? 'Complet' : status === 'warn' ? 'Incomplet' : 'Vide'}>
+                    {status === 'ok' && <Check size={11} strokeWidth={3} />}
+                    {status === 'warn' && <AlertTriangle size={10} strokeWidth={2.5} />}
+                    {status === 'dot' && <Circle size={6} fill="currentColor" stroke="none" />}
+                  </span>
                   <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {s.album.title}
                     </span>
-                    <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)', display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                      {s.category && <span style={{ color, fontWeight: 500 }}>{categoryLabel(s.category)}</span>}
+                    <span style={{ fontSize: 10.5, color: 'var(--ink-3)', display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      {s.category && <span style={{ fontWeight: 500 }}>{categoryLabel(s.category)}</span>}
                       <span>· {s.photos.length} photo{s.photos.length > 1 ? 's' : ''}</span>
                       {noPhotos && (
-                        <span style={{ color: 'var(--color-warning)', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                        <span style={{ color: 'var(--warn)', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
                           <ImageOff size={10} /> vide
                         </span>
                       )}
-                      {s.text.length === 0 && (
-                        <span style={{ color: 'var(--color-warning)', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                      {noText && !noPhotos && (
+                        <span style={{ color: 'var(--warn)', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
                           <AlertCircle size={10} /> pas de texte
                         </span>
                       )}
@@ -102,7 +114,7 @@ export default function FamileoControls({
                   <button onClick={() => move(s.album.id, -1)} disabled={i === 0} style={iconBtn} title="Monter"><ChevronUp size={12} /></button>
                   <button onClick={() => move(s.album.id, 1)} disabled={i === sorted.length - 1} style={iconBtn} title="Descendre"><ChevronDown size={12} /></button>
                   <button onClick={() => toggle(s.album.id)} style={iconBtn} title={s.included ? 'Masquer' : 'Inclure'}>
-                    {s.included ? <Eye size={12} style={{ color }} /> : <EyeOff size={12} />}
+                    {s.included ? <Eye size={12} style={{ color: 'var(--terra-deep)' }} /> : <EyeOff size={12} />}
                   </button>
                 </div>
               );
@@ -114,13 +126,12 @@ export default function FamileoControls({
       <button
         onClick={onExport}
         disabled={exporting || sorted.filter((s) => s.included).length === 0}
+        className="btn primary"
         style={{
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-          padding: '10px', background: '#7C3AED', color: '#fff',
-          border: 'none', borderRadius: '8px',
-          fontSize: '14px', fontWeight: 600, cursor: exporting ? 'not-allowed' : 'pointer',
-          opacity: exporting ? 0.6 : 1,
+          justifyContent: 'center',
           marginTop: 'auto',
+          opacity: exporting ? 0.6 : 1,
+          cursor: exporting ? 'not-allowed' : 'pointer',
         }}
       >
         <FileDown size={14} /> {exporting ? 'Export en cours…' : 'Exporter PDF'}
@@ -131,11 +142,11 @@ export default function FamileoControls({
 
 const selectStyle: React.CSSProperties = {
   flex: 1, padding: '7px 10px',
-  border: '1px solid var(--color-border)', borderRadius: '6px',
-  fontSize: '13px', background: 'var(--color-surface)', cursor: 'pointer',
+  border: '1px solid var(--line)', borderRadius: 8,
+  fontSize: 13, background: 'var(--surface)', color: 'var(--ink)', cursor: 'pointer',
 };
 const iconBtn: React.CSSProperties = {
-  background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-  borderRadius: '4px', padding: '3px 5px', cursor: 'pointer',
-  color: 'var(--color-text-secondary)',
+  background: 'var(--surface)', border: '1px solid var(--line)',
+  borderRadius: 4, padding: '3px 5px', cursor: 'pointer',
+  color: 'var(--ink-3)',
 };

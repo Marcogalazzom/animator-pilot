@@ -34,12 +34,12 @@ export default function CalendarToolbar(p: Props) {
   const isToday = p.date === todayIso();
 
   return (
-    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '20px' }}>
+    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
       {/* View switcher */}
       <div style={{
-        display: 'inline-flex', borderRadius: '10px',
-        border: '1px solid var(--color-border)', overflow: 'hidden',
-        background: 'var(--color-surface)',
+        display: 'inline-flex', borderRadius: 999,
+        border: '1px solid var(--line)', overflow: 'hidden',
+        background: 'var(--surface)',
       }}>
         {(Object.keys(VIEW_META) as CalendarView[]).map((v) => {
           const { label, Icon } = VIEW_META[v];
@@ -49,21 +49,17 @@ export default function CalendarToolbar(p: Props) {
               key={v}
               onClick={() => p.onViewChange(v)}
               style={{
-                display: 'inline-flex', alignItems: 'center', gap: '6px',
-                padding: '8px 14px',
-                border: 'none',
-                background: active ? 'var(--color-primary)' : 'transparent',
-                color: active ? '#fff' : 'var(--color-text-primary)',
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '7px 14px', border: 'none',
+                background: active ? 'var(--terra-soft)' : 'transparent',
+                color: active ? 'var(--terra-deep)' : 'var(--ink-2)',
                 cursor: 'pointer',
-                fontSize: '13px',
+                fontSize: 13,
                 fontWeight: active ? 600 : 500,
-                fontFamily: 'var(--font-sans)',
-                transition: 'var(--transition-fast)',
-                boxShadow: active ? '0 1px 3px rgba(30,64,175,0.3)' : 'none',
+                transition: 'background 0.12s, color 0.12s',
               }}
             >
-              <Icon size={13} />
-              {label}
+              <Icon size={13} /> {label}
             </button>
           );
         })}
@@ -76,9 +72,9 @@ export default function CalendarToolbar(p: Props) {
             <ChevronLeft size={15} />
           </button>
           <span style={{
-            minWidth: '180px', textAlign: 'center', fontWeight: 600, fontSize: '13px',
-            padding: '6px 12px', borderRadius: '8px',
-            background: 'var(--color-bg-soft)', color: 'var(--color-text-primary)',
+            minWidth: 180, textAlign: 'center', fontWeight: 600, fontSize: 13,
+            padding: '6px 12px', borderRadius: 999,
+            background: 'var(--surface-2)', color: 'var(--ink)',
             textTransform: p.view === 'day' ? 'capitalize' : 'none',
           }}>
             {p.dateLabel}
@@ -88,16 +84,9 @@ export default function CalendarToolbar(p: Props) {
           </button>
           <button
             onClick={p.onToday}
-            style={{
-              padding: '6px 12px', borderRadius: '8px',
-              border: '1px solid ' + (isToday ? 'var(--color-border)' : 'var(--color-primary)'),
-              background: isToday ? 'var(--color-surface)' : 'var(--color-primary)',
-              color: isToday ? 'var(--color-text-secondary)' : '#fff',
-              cursor: isToday ? 'default' : 'pointer',
-              fontSize: '12px', fontWeight: 500, fontFamily: 'var(--font-sans)',
-              transition: 'var(--transition-fast)',
-            }}
+            className={isToday ? 'btn sm' : 'btn primary sm'}
             disabled={isToday}
+            style={{ opacity: isToday ? 0.7 : 1 }}
           >
             Aujourd'hui
           </button>
@@ -105,21 +94,20 @@ export default function CalendarToolbar(p: Props) {
       )}
 
       {/* Filters */}
-      <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
         <button
           type="button"
           onClick={() => p.onShowAppointmentsChange(!p.showAppointments)}
           title={p.showAppointments ? 'Masquer les rendez-vous' : 'Afficher les rendez-vous'}
           style={{
-            display: 'inline-flex', alignItems: 'center', gap: '6px',
-            padding: '7px 10px', borderRadius: '8px',
-            border: '1px solid ' + (p.showAppointments ? '#7C3AED' : 'var(--color-border)'),
-            background: p.showAppointments ? '#F3EEFF' : 'var(--color-surface)',
-            color: p.showAppointments ? '#7C3AED' : 'var(--color-text-secondary)',
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '6px 12px', borderRadius: 999,
+            border: `1px solid ${p.showAppointments ? 'var(--cat-rdv)' : 'var(--line)'}`,
+            background: p.showAppointments ? 'var(--cat-rdv-bg)' : 'var(--surface)',
+            color: p.showAppointments ? 'var(--cat-rdv)' : 'var(--ink-3)',
             cursor: 'pointer',
-            fontSize: '12px', fontWeight: 500,
-            fontFamily: 'var(--font-sans)',
-            transition: 'var(--transition-fast)',
+            fontSize: 12, fontWeight: 500,
+            transition: 'all 0.15s ease',
           }}
         >
           <CalendarClock size={13} />
@@ -154,20 +142,20 @@ export default function CalendarToolbar(p: Props) {
 
 const chevronBtn: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  width: '30px', height: '30px', borderRadius: '50%',
-  border: '1px solid var(--color-border)',
-  background: 'var(--color-surface)', cursor: 'pointer',
-  color: 'var(--color-text-primary)',
-  transition: 'var(--transition-fast)',
+  width: 30, height: 30, borderRadius: '50%',
+  border: '1px solid var(--line)',
+  background: 'var(--surface)', cursor: 'pointer',
+  color: 'var(--ink-2)',
+  transition: 'all 0.15s ease',
 };
 const filterWrap: React.CSSProperties = {
   position: 'relative', display: 'inline-flex', alignItems: 'center',
 };
 const filterIcon: React.CSSProperties = {
-  position: 'absolute', left: '10px', color: 'var(--color-text-secondary)', pointerEvents: 'none',
+  position: 'absolute', left: 12, color: 'var(--ink-3)', pointerEvents: 'none',
 };
 const selectStyle: React.CSSProperties = {
-  padding: '7px 10px 7px 30px', border: '1px solid var(--color-border)',
-  borderRadius: '8px', fontSize: '12px', background: 'var(--color-surface)',
-  fontFamily: 'var(--font-sans)', cursor: 'pointer',
+  padding: '7px 12px 7px 32px', border: '1px solid var(--line)',
+  borderRadius: 999, fontSize: 12.5, background: 'var(--surface)',
+  color: 'var(--ink)', cursor: 'pointer', appearance: 'none',
 };

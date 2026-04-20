@@ -1,8 +1,10 @@
 import { useState, useRef, useMemo } from 'react';
 import {
   Plus, X, Trash2, Pencil, ChevronDown,
-  Receipt, Paperclip, FileText as FileIcon,
+  Receipt, Paperclip, FileText as FileIcon, Wallet,
 } from 'lucide-react';
+
+type BudgetTab = 'annual' | 'activity' | 'balance';
 import { useToastStore } from '@/stores/toastStore';
 import { useBudgetData, CATEGORIES, CATEGORY_KEYS } from './budget/useBudgetData';
 import { SyncButton, SyncStatus } from '@/components/SyncIndicator';
@@ -20,9 +22,9 @@ function formatDate(d: string): string {
 }
 
 function progressColor(pct: number): string {
-  if (pct < 75) return 'var(--color-success)';
-  if (pct < 90) return 'var(--color-warning)';
-  return 'var(--color-danger)';
+  if (pct < 75) return 'var(--sage-deep)';
+  if (pct < 90) return 'var(--warn)';
+  return 'var(--danger)';
 }
 
 // ─── Component ───────────────────────────────────────────────
@@ -40,6 +42,7 @@ export default function Budget() {
   const [editingTotal, setEditingTotal] = useState(false);
   const [totalInput, setTotalInput] = useState('');
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
+  const [budgetTab, setBudgetTab] = useState<BudgetTab>('annual');
   const formRef = useRef<HTMLFormElement>(null);
 
   const totalAllocated = budget?.total_allocated ?? 0;
@@ -118,43 +121,84 @@ export default function Budget() {
 
   if (loading) {
     return (
-      <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ width: '200px', height: '28px', borderRadius: '6px', background: 'var(--color-border)' }} className="shimmer" />
-        <div style={{ width: '100%', height: '120px', borderRadius: '8px', background: 'var(--color-surface)' }} className="shimmer" />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="card" style={{ height: 92 }} />
+        <div className="card" style={{ height: 200 }} />
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1200px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1200, animation: 'slide-in 0.22s ease-out' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
-        <div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
-            Budget Animation
-          </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px' }}>
-            <select value={year} onChange={(e) => setYear(parseInt(e.target.value))}
-              style={{ padding: '4px 8px', border: '1px solid var(--color-border)', borderRadius: '4px', fontSize: '13px', fontFamily: 'var(--font-sans)', backgroundColor: 'var(--color-surface)' }}>
-              {[2024, 2025, 2026, 2027].map((y) => <option key={y} value={y}>{y}</option>)}
-            </select>
-            <SyncStatus module="budget" />
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <SyncButton module="budget" />
-          <button onClick={() => { setEditId(null); setShowForm(true); setInvoiceFile(null); }}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <select
+            value={year}
+            onChange={(e) => setYear(parseInt(e.target.value))}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: '6px',
-              padding: '8px 16px', backgroundColor: 'var(--color-primary)',
-              color: '#fff', border: 'none', borderRadius: '6px',
-              fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-sans)', cursor: 'pointer',
-            }}>
-            <Plus size={14} /> Nouvelle dépense
-          </button>
+              padding: '6px 14px', border: '1px solid var(--line)', borderRadius: 999,
+              fontSize: 13, background: 'var(--surface)', color: 'var(--ink)',
+              cursor: 'pointer', appearance: 'none',
+            }}
+          >
+            {[2024, 2025, 2026, 2027].map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <SyncStatus module="budget" />
         </div>
+        <div style={{ flex: 1 }} />
+        <SyncButton module="budget" />
+        <button
+          className="btn primary"
+          onClick={() => { setEditId(null); setShowForm(true); setInvoiceFile(null); }}
+        >
+          <Plus size={13} strokeWidth={2.5} /> Nouvelle dépense
+        </button>
       </div>
 
+      {/* Tabs */}
+      <div style={{
+        display: 'inline-flex', borderRadius: 999,
+        border: '1px solid var(--line)', overflow: 'hidden',
+        background: 'var(--surface)', alignSelf: 'flex-start',
+      }}>
+        {([
+          { id: 'annual' as const,   label: 'Annuel' },
+          { id: 'activity' as const, label: 'Par activité' },
+          { id: 'balance' as const,  label: 'Solde rapide' },
+        ]).map((t) => {
+          const active = budgetTab === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setBudgetTab(t.id)}
+              style={{
+                padding: '7px 16px', border: 'none',
+                background: active ? 'var(--terra-soft)' : 'transparent',
+                color: active ? 'var(--terra-deep)' : 'var(--ink-2)',
+                fontSize: 13, fontWeight: active ? 600 : 500,
+                cursor: 'pointer',
+                transition: 'background 0.12s, color 0.12s',
+              }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {budgetTab === 'balance' && (
+        <BalanceTab
+          totalAllocated={totalAllocated}
+          totalSpent={totalSpent}
+          remaining={remaining}
+          percentUsed={percentUsed}
+          onEditTotal={() => { setTotalInput(String(totalAllocated)); setEditingTotal(true); }}
+        />
+      )}
+
+      {budgetTab === 'annual' && (
+      <>
       {/* Progress bar */}
       <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', padding: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
@@ -247,8 +291,11 @@ export default function Budget() {
           })}
         </div>
       </div>
+      </>
+      )}
 
-      {/* Expense list */}
+      {/* Expense list — Par activité tab */}
+      {budgetTab === 'activity' && (
       <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Receipt size={16} style={{ color: 'var(--color-text-secondary)' }} />
@@ -322,6 +369,7 @@ export default function Budget() {
           </table>
         )}
       </div>
+      )}
 
       {/* Modal form */}
       {showForm && (
@@ -398,6 +446,57 @@ export default function Budget() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+interface BalanceTabProps {
+  totalAllocated: number;
+  totalSpent: number;
+  remaining: number;
+  percentUsed: number;
+  onEditTotal: () => void;
+}
+
+function BalanceTab({ totalAllocated, totalSpent, remaining, percentUsed, onEditTotal }: BalanceTabProps) {
+  const positive = remaining >= 0;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div
+        onClick={onEditTotal}
+        style={{
+          padding: 32,
+          borderRadius: 14,
+          background: positive
+            ? 'linear-gradient(135deg, var(--sage-soft), #f4f9eb)'
+            : 'linear-gradient(135deg, var(--danger-soft), #f7e0dc)',
+          border: `1px solid ${positive ? 'var(--sage-soft)' : 'var(--danger-soft)'}`,
+          cursor: 'pointer',
+        }}
+        title="Cliquer pour modifier le budget total"
+      >
+        <div className="eyebrow" style={{ color: positive ? 'var(--sage-deep)' : 'var(--danger)' }}>
+          <Wallet size={11} style={{ verticalAlign: -2, marginRight: 4 }} />
+          Solde restant
+        </div>
+        <div className="serif num" style={{
+          fontSize: 64, fontWeight: 500, letterSpacing: -2,
+          color: positive ? 'var(--sage-deep)' : 'var(--danger)',
+          margin: '8px 0 6px', lineHeight: 1,
+        }}>
+          {fmt(remaining)} <span style={{ fontSize: 24, fontWeight: 400 }}>EUR</span>
+        </div>
+        <div style={{ fontSize: 14, color: positive ? 'var(--sage-deep)' : 'var(--danger)', opacity: 0.85 }}>
+          {fmt(totalSpent)} EUR dépensés sur {fmt(totalAllocated)} EUR · {percentUsed.toFixed(0)} % consommés
+        </div>
+      </div>
+
+      <div className="card-soft" style={{ padding: 20 }}>
+        <div className="eyebrow" style={{ marginBottom: 12 }}>Prélèvements à venir</div>
+        <div style={{ fontSize: 13.5, color: 'var(--ink-3)', fontStyle: 'italic' }}>
+          Aucun prélèvement programmé pour le moment.
+        </div>
+      </div>
     </div>
   );
 }

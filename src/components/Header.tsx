@@ -1,9 +1,28 @@
 import { useMemo, useRef, useState, useEffect } from "react";
-import { Settings, Bell } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Bell, Plus, Search } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import AlertDropdown from "@/components/AlertDropdown";
 import { SyncBadge } from "@/components/SyncIndicator";
 import { getUnreadAlertCount } from "@/db/alerts";
+
+const ROUTE_TITLES: Record<string, { title: string; subtitle?: string }> = {
+  "/":             { title: "Accueil" },
+  "/budget":       { title: "Budget" },
+  "/projects":     { title: "Projets" },
+  "/notes":        { title: "Notes" },
+  "/calendar":     { title: "Calendrier" },
+  "/activities":   { title: "Activités" },
+  "/appointments": { title: "Rendez-vous" },
+  "/residents":    { title: "Résidents" },
+  "/inventory":    { title: "Inventaire" },
+  "/staff":        { title: "Annuaire" },
+  "/photos":       { title: "Photos" },
+  "/famileo":      { title: "Famileo" },
+  "/journal":      { title: "Carnet de bord" },
+  "/suppliers":    { title: "Fournisseurs" },
+  "/import":       { title: "Import" },
+  "/settings":     { title: "Paramètres" },
+};
 
 function formatFrenchDate(date: Date): string {
   return date.toLocaleDateString("fr-FR", {
@@ -16,21 +35,24 @@ function formatFrenchDate(date: Date): string {
 
 export default function Header() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+
   const dateDisplay = useMemo(() => {
     const d = formatFrenchDate(new Date());
     return d.charAt(0).toUpperCase() + d.slice(1);
   }, []);
 
+  const route = ROUTE_TITLES[pathname] ?? { title: "Pilot Animateur" };
+  const subtitle = pathname === "/" ? dateDisplay : route.subtitle;
+
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const bellRef = useRef<HTMLDivElement>(null);
 
-  // Load unread count on mount
   useEffect(() => {
     getUnreadAlertCount().then(setUnreadCount).catch(() => {});
   }, []);
 
-  // Close dropdown on outside click
   useEffect(() => {
     if (!dropdownOpen) return;
     function handleClick(e: MouseEvent) {
@@ -42,95 +64,127 @@ export default function Header() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [dropdownOpen]);
 
+  function handleNewActivity() {
+    window.dispatchEvent(new CustomEvent("open-new-activity"));
+    if (pathname !== "/activities") navigate("/activities");
+  }
+
   return (
     <header
-      className="flex items-center justify-between px-6 flex-shrink-0"
+      className="flex-shrink-0"
       style={{
-        height: "56px",
-        backgroundColor: "var(--color-surface)",
-        borderBottom: "1px solid var(--color-border)",
+        background: "var(--bg)",
+        padding: "18px 28px 14px",
+        borderBottom: "1px solid var(--line)",
+        display: "flex",
+        alignItems: "flex-end",
+        gap: 16,
       }}
     >
-      {/* Left: establishment name + date */}
-      <div className="flex items-center gap-4">
-        <span
-          className="font-semibold"
+      {/* Title + optional subtitle */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <h1
+          className="serif"
           style={{
-            fontFamily: "var(--font-sans)",
-            fontSize: "15px",
-            color: "var(--color-text-primary)",
+            margin: 0,
+            fontSize: "var(--t-h1)",
+            fontWeight: 500,
+            letterSpacing: -0.6,
+            lineHeight: 1.15,
+            color: "var(--ink)",
           }}
         >
-          Service Animation
-        </span>
-        <span
-          style={{
-            fontSize: "13px",
-            color: "var(--color-text-secondary)",
-          }}
-        >
-          {dateDisplay}
-        </span>
-      </div>
-
-      {/* Right: sync + bell + settings */}
-      <div className="flex items-center gap-1">
-        {/* Sync badge */}
-        <SyncBadge />
-
-        {/* Bell with dropdown */}
-        <div ref={bellRef} style={{ position: "relative" }}>
-          <button
-            onClick={() => setDropdownOpen((prev) => !prev)}
-            className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors duration-150"
-            style={{ color: "var(--color-text-secondary)", position: "relative" }}
-            aria-label="Notifications"
-            title="Notifications"
+          {route.title}
+        </h1>
+        {subtitle && (
+          <div
+            style={{
+              fontSize: 14,
+              color: "var(--ink-3)",
+              marginTop: 3,
+            }}
           >
-            <Bell size={16} />
-            {unreadCount > 0 && (
-              <span
-                style={{
-                  position: "absolute",
-                  top: "2px",
-                  right: "2px",
-                  backgroundColor: "var(--color-danger)",
-                  color: "#fff",
-                  borderRadius: "50%",
-                  fontSize: "10px",
-                  fontWeight: 700,
-                  lineHeight: "14px",
-                  width: "14px",
-                  height: "14px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  pointerEvents: "none",
-                }}
-              >
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            )}
-          </button>
-
-          {dropdownOpen && (
-            <AlertDropdown
-              onUnreadChange={(count) => setUnreadCount(count)}
-            />
-          )}
-        </div>
-
-        {/* Settings */}
-        <button
-          onClick={() => navigate("/settings")}
-          className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors duration-150"
-          style={{ color: "var(--color-text-secondary)" }}
-          aria-label="Paramètres"
-          title="Paramètres"
-        >
-          <Settings size={16} />
-        </button>
+            {subtitle}
+          </div>
+        )}
       </div>
+
+      {/* Search pill (placeholder — wired to ⌘K palette) */}
+      <button
+        onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          background: "var(--surface)",
+          border: "1px solid var(--line)",
+          borderRadius: 999,
+          padding: "6px 14px",
+          width: 280,
+          color: "var(--ink-3)",
+          fontSize: 13,
+          textAlign: "left",
+        }}
+        aria-label="Rechercher (⌘K)"
+      >
+        <Search size={15} />
+        <span>Rechercher…</span>
+        <span style={{ flex: 1 }} />
+        <span className="kbd">⌘K</span>
+      </button>
+
+      {/* Sync badge */}
+      <SyncBadge />
+
+      {/* Bell with dropdown */}
+      <div ref={bellRef} style={{ position: "relative" }}>
+        <button
+          onClick={() => setDropdownOpen((prev) => !prev)}
+          className="btn"
+          style={{
+            padding: 8,
+            borderRadius: "50%",
+            position: "relative",
+          }}
+          aria-label="Notifications"
+          title="Notifications"
+        >
+          <Bell size={16} />
+          {unreadCount > 0 && (
+            <span
+              style={{
+                position: "absolute",
+                top: 2,
+                right: 2,
+                background: "var(--terra-deep)",
+                color: "#fff",
+                borderRadius: "50%",
+                fontSize: 10,
+                fontWeight: 700,
+                lineHeight: "14px",
+                width: 14,
+                height: 14,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                pointerEvents: "none",
+              }}
+            >
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </button>
+
+        {dropdownOpen && (
+          <AlertDropdown onUnreadChange={(count) => setUnreadCount(count)} />
+        )}
+      </div>
+
+      {/* Primary action — Nouvelle activité */}
+      <button className="btn primary" onClick={handleNewActivity}>
+        <Plus size={14} strokeWidth={2.5} />
+        Nouvelle activité
+      </button>
     </header>
   );
 }

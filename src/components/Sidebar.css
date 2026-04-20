@@ -1,39 +1,42 @@
 .sidebar-nav-link {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px 10px 13px;
+  gap: 10px;
+  padding: 9px 10px;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
   text-decoration: none;
-  transition: all 150ms ease;
-  color: var(--color-sidebar-text);
-  border-left: 3px solid transparent;
+  transition: background 0.12s ease, color 0.12s ease;
+  color: var(--ink-2);
   background-color: transparent;
 }
 
 .sidebar-nav-link:hover {
-  background-color: rgba(255, 255, 255, 0.04);
-  color: #ffffff;
+  background-color: var(--surface-2);
+  color: var(--ink);
 }
 
 .sidebar-nav-link[aria-current="page"] {
-  color: #ffffff;
-  border-left-color: var(--color-primary);
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: var(--terra-soft);
+  color: var(--terra-deep);
+  font-weight: 600;
 }
 
 .sidebar-nav-icon {
   flex-shrink: 0;
-  opacity: 0.85;
   display: flex;
+  opacity: 0.9;
 }
 
-/* ── Group styles ──────────────────────────────────────────── */
+.sidebar-nav-link[aria-current="page"] .sidebar-nav-icon {
+  opacity: 1;
+}
+
+/* ── Group headers ─────────────────────────────────────────── */
 
 .sidebar-group {
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .sidebar-group-header {
@@ -41,7 +44,7 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 6px 13px 4px;
+  padding: 10px 10px 6px;
   background: none;
   border: none;
   cursor: pointer;
@@ -49,36 +52,35 @@
 }
 
 .sidebar-group-label {
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.35);
-  font-family: var(--font-sans, sans-serif);
+  color: var(--ink-3);
   flex: 1;
   text-align: left;
-  transition: color 150ms ease;
+  transition: color 0.15s ease;
 }
 
 .sidebar-group-header:hover .sidebar-group-label {
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--ink-2);
 }
 
 .sidebar-group-chevron {
-  color: rgba(255, 255, 255, 0.25);
+  color: var(--ink-4);
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  transition: color 150ms ease;
+  transition: color 0.15s ease;
 }
 
 .sidebar-group-header:hover .sidebar-group-chevron {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--ink-3);
 }
 
 .sidebar-group-items {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding-bottom: 4px;
+  padding-bottom: 2px;
 }

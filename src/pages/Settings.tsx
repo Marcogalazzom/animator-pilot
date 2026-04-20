@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Building2, Database, Info, RefreshCw,
-  Save, CheckCircle2, HardDrive, Globe, LogIn, LogOut, Download, Eye, Stethoscope,
+  Save, CheckCircle2, HardDrive, Globe, LogIn, LogOut, Download, Eye, Stethoscope, User as UserIcon,
+  FlaskConical, Trash2, AlertTriangle,
 } from 'lucide-react';
+import { useUserSettings, setUserSettings } from '@/hooks/useUserSettings';
+import { seedDemoData, clearAllData, type SeedCounts } from '@/utils/demoData';
 import { collection, getDocs } from 'firebase/firestore';
 import { useToastStore } from '@/stores/toastStore';
 import { useSyncStore } from '@/stores/syncStore';
@@ -275,22 +278,14 @@ export default function Settings() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '800px' }}>
-      {/* Header */}
-      <div>
-        <h1 style={{
-          fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: 700,
-          color: 'var(--color-text-primary)', margin: 0,
-        }}>
-          Paramètres
-        </h1>
-        <p style={{
-          fontSize: '14px', color: 'var(--color-text-secondary)',
-          margin: '4px 0 0', fontFamily: 'var(--font-sans)',
-        }}>
-          Configuration de l'application
-        </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 820, animation: 'slide-in 0.22s ease-out' }}>
+      <div className="eyebrow">
+        Configuration de l'application
       </div>
+
+      <IdentitySection />
+
+      <DemoDataSection />
 
       {/* Établissement section */}
       <div style={{
@@ -714,6 +709,261 @@ export default function Settings() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function IdentitySection() {
+  const settings = useUserSettings();
+  const addToast = useToastStore((s) => s.add);
+  const [first, setFirst]   = useState(settings.user_first_name);
+  const [last, setLast]     = useState(settings.user_last_name);
+  const [role, setRole]     = useState(settings.user_role);
+  const [resName, setResName] = useState(settings.residence_name);
+  const [resKind, setResKind] = useState(settings.residence_kind);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setFirst(settings.user_first_name);
+    setLast(settings.user_last_name);
+    setRole(settings.user_role);
+    setResName(settings.residence_name);
+    setResKind(settings.residence_kind);
+  }, [settings]);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await setUserSettings({
+        user_first_name: first,
+        user_last_name: last,
+        user_role: role,
+        residence_name: resName,
+        residence_kind: resKind,
+      });
+      addToast('Identité mise à jour', 'success');
+    } catch {
+      addToast('Erreur lors de l\'enregistrement', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '8px 12px', marginTop: 4,
+    border: '1px solid var(--line)', borderRadius: 8, fontSize: 13,
+    background: 'var(--surface)', color: 'var(--ink)', outline: 'none',
+    fontFamily: 'inherit',
+  };
+
+  return (
+    <div className="card" style={{ padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+        <UserIcon size={16} style={{ color: 'var(--terra-deep)' }} />
+        <h2 className="serif" style={{ margin: 0, fontSize: 18, fontWeight: 500, letterSpacing: -0.3 }}>
+          Identité
+        </h2>
+      </div>
+
+      <div style={{ display: 'grid', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <label>
+            <div className="eyebrow" style={{ marginBottom: 6 }}>Prénom</div>
+            <input value={first} onChange={(e) => setFirst(e.target.value)} style={inputStyle} />
+          </label>
+          <label>
+            <div className="eyebrow" style={{ marginBottom: 6 }}>Nom</div>
+            <input value={last} onChange={(e) => setLast(e.target.value)} style={inputStyle} />
+          </label>
+        </div>
+        <label>
+          <div className="eyebrow" style={{ marginBottom: 6 }}>Rôle</div>
+          <input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Animatrice" style={inputStyle} />
+        </label>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+          <label>
+            <div className="eyebrow" style={{ marginBottom: 6 }}>Nom de la résidence</div>
+            <input value={resName} onChange={(e) => setResName(e.target.value)} style={inputStyle} />
+          </label>
+          <label>
+            <div className="eyebrow" style={{ marginBottom: 6 }}>Type</div>
+            <select value={resKind} onChange={(e) => setResKind(e.target.value)} style={{ ...inputStyle, cursor: 'pointer', appearance: 'auto' }}>
+              <option>EHPAD</option>
+              <option>Résidence services</option>
+              <option>Résidence autonomie</option>
+              <option>USLD</option>
+              <option>Autre</option>
+            </select>
+          </label>
+        </div>
+        <button onClick={save} disabled={saving} className="btn primary" style={{ width: 'fit-content' }}>
+          {saving ? <CheckCircle2 size={14} /> : <Save size={14} />}
+          {saving ? 'Enregistrement…' : 'Enregistrer'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DemoDataSection() {
+  const addToast = useToastStore((s) => s.add);
+  const [seeding, setSeeding] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [lastSeed, setLastSeed] = useState<SeedCounts | null>(null);
+
+  async function handleSeed() {
+    if (seeding) return;
+    setSeeding(true);
+    try {
+      const counts = await seedDemoData();
+      setLastSeed(counts);
+      addToast(
+        `Démo chargée : ${counts.residents} résidents, ${counts.activities} activités, ${counts.journal} notes…`,
+        'success',
+      );
+    } catch (err) {
+      console.error('[demo] seed failed:', err);
+      addToast(`Erreur au chargement : ${String(err).slice(0, 80)}`, 'error');
+    } finally {
+      setSeeding(false);
+    }
+  }
+
+  async function handleClear() {
+    if (clearing) return;
+    if (confirmText !== 'EFFACER') return;
+    setClearing(true);
+    try {
+      await clearAllData();
+      addToast('Toutes les données utilisateur ont été effacées.', 'success');
+      setConfirmClear(false);
+      setConfirmText('');
+      setLastSeed(null);
+    } catch (err) {
+      console.error('[demo] clear failed:', err);
+      addToast(`Erreur lors de l'effacement : ${String(err).slice(0, 80)}`, 'error');
+    } finally {
+      setClearing(false);
+    }
+  }
+
+  return (
+    <div className="card" style={{ padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+        <FlaskConical size={16} style={{ color: 'var(--terra-deep)' }} />
+        <h2 className="serif" style={{ margin: 0, fontSize: 18, fontWeight: 500, letterSpacing: -0.3 }}>
+          Données de démo
+        </h2>
+      </div>
+
+      <p style={{
+        margin: '0 0 16px', fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.55,
+      }}>
+        Charge un jeu de données réaliste pour tester toutes les fonctionnalités : 12 résidents
+        (avec anniversaires, humeurs, contacts famille), 25 activités (templates + planning),
+        12 entrées de carnet de bord, 6 projets, 15 dépenses, 5 RDV, inventaire, annuaire et
+        fournisseurs.
+      </p>
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <button
+          className="btn primary"
+          onClick={handleSeed}
+          disabled={seeding}
+          style={{ opacity: seeding ? 0.6 : 1 }}
+        >
+          <FlaskConical size={13} />
+          {seeding ? 'Chargement…' : 'Charger des données de démo'}
+        </button>
+
+        {!confirmClear ? (
+          <button
+            className="btn"
+            onClick={() => setConfirmClear(true)}
+            style={{ color: 'var(--danger)', borderColor: 'var(--danger-soft)' }}
+          >
+            <Trash2 size={13} /> Effacer toutes les données
+          </button>
+        ) : (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 12px', borderRadius: 999,
+            background: 'var(--danger-soft)',
+            border: '1px solid var(--danger)',
+          }}>
+            <AlertTriangle size={14} style={{ color: 'var(--danger)', flexShrink: 0 }} />
+            <input
+              autoFocus
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="Tape EFFACER pour confirmer"
+              style={{
+                border: 'none', outline: 'none', background: 'transparent',
+                fontSize: 12.5, color: 'var(--danger)', minWidth: 200,
+                fontWeight: 600,
+              }}
+            />
+            <button
+              onClick={handleClear}
+              disabled={confirmText !== 'EFFACER' || clearing}
+              className="btn sm"
+              style={{
+                background: confirmText === 'EFFACER' ? 'var(--danger)' : 'transparent',
+                color: confirmText === 'EFFACER' ? '#fff' : 'var(--danger)',
+                border: '1px solid var(--danger)',
+                opacity: clearing ? 0.6 : 1,
+              }}
+            >
+              {clearing ? 'Effacement…' : 'Confirmer'}
+            </button>
+            <button
+              onClick={() => { setConfirmClear(false); setConfirmText(''); }}
+              className="btn ghost sm"
+              style={{ color: 'var(--ink-3)' }}
+            >
+              Annuler
+            </button>
+          </div>
+        )}
+      </div>
+
+      {lastSeed && (
+        <div style={{
+          marginTop: 16, padding: 12, borderRadius: 10,
+          background: 'var(--sage-soft)',
+          border: '1px solid var(--sage-soft)',
+          display: 'grid', gap: 4,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+          fontSize: 12, color: 'var(--sage-deep)',
+        }}>
+          {([
+            ['Résidents',     lastSeed.residents],
+            ['Activités',     lastSeed.activities],
+            ['Carnet (entrées)', lastSeed.journal],
+            ['Projets',       lastSeed.projects],
+            ['Dépenses',      lastSeed.expenses],
+            ['Rendez-vous',   lastSeed.appointments],
+            ['Albums',        lastSeed.albums],
+            ['Inventaire',    lastSeed.inventory],
+            ['Annuaire',      lastSeed.staff],
+            ['Fournisseurs',  lastSeed.suppliers],
+          ] as Array<[string, number]>).map(([label, n]) => (
+            <div key={label}>
+              <span className="num" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>+{n}</span>
+              {' '}<span style={{ opacity: 0.85 }}>{label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p style={{
+        margin: '14px 0 0', fontSize: 11, color: 'var(--ink-4)', fontStyle: 'italic',
+      }}>
+        L'identité (Marie Coste / Les Glycines) reste préservée. Le bouton « Effacer » ne touche pas aux paramètres
+        ni aux logs de synchronisation, uniquement aux données utilisateur (résidents, activités, journal, projets, etc.).
+      </p>
     </div>
   );
 }

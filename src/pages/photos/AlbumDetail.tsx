@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { ArrowLeft, Plus, Calendar } from 'lucide-react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { ArrowLeft, Plus, Calendar, CheckSquare, Trash2, X, Mail, Square } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useToastStore } from '@/stores/toastStore';
 import { getAlbum, getPhotos, createPhoto, updatePhoto, deletePhoto } from '@/db/photos';
@@ -7,6 +7,7 @@ import { storePhoto, deletePhotoFiles } from '@/utils/photoStorage';
 import { ensureCategoryColors, categoryLabel, type CategoryColor } from '@/db/categoryColors';
 import type { PhotoAlbum, Photo } from '@/db/types';
 import PhotoGrid from './PhotoGrid';
+import Lightbox from './Lightbox';
 
 interface Props {
   albumId: number;
@@ -25,6 +26,9 @@ export default function AlbumDetail({ albumId, onBack, onEditAlbum }: Props) {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const addToast = useToastStore((s) => s.add);
 
   const refresh = useCallback(async () => {
@@ -43,6 +47,11 @@ export default function AlbumDetail({ albumId, onBack, onEditAlbum }: Props) {
   }, [albumId]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // Reset selection when leaving select mode.
+  useEffect(() => {
+    if (!selectMode) setSelectedIds(new Set());
+  }, [selectMode]);
 
   async function handleAddPhotos() {
     if (uploading) return;
@@ -98,76 +107,170 @@ export default function AlbumDetail({ albumId, onBack, onEditAlbum }: Props) {
     setPhotos((prev) => prev.filter((x) => x.id !== id));
   }
 
+  function toggleSelect(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAll() {
+    setSelectedIds(new Set(photos.map((p) => p.id)));
+  }
+
+  async function deleteSelected() {
+    if (selectedIds.size === 0) return;
+    const targets = photos.filter((p) => selectedIds.has(p.id));
+    let ok = 0, fail = 0;
+    for (const p of targets) {
+      try {
+        await deletePhoto(p.id);
+        await deletePhotoFiles(p.file_path, p.thumbnail_path);
+        ok++;
+      } catch { fail++; }
+    }
+    if (ok > 0) addToast(`${ok} photo${ok > 1 ? 's' : ''} supprimée${ok > 1 ? 's' : ''}`, 'success');
+    if (fail > 0) addToast(`${fail} échec${fail > 1 ? 's' : ''} de suppression`, 'error');
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    await refresh();
+  }
+
+  const allSelected = useMemo(() =>
+    photos.length > 0 && selectedIds.size === photos.length,
+    [photos.length, selectedIds.size],
+  );
+
   if (loading || !album) {
-    return <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px' }}>Chargement…</p>;
+    return <p style={{ color: 'var(--ink-3)', fontSize: 13 }}>Chargement…</p>;
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <button onClick={onBack} style={{
-        alignSelf: 'flex-start',
-        display: 'inline-flex', alignItems: 'center', gap: '6px',
-        background: 'none', border: 'none', cursor: 'pointer',
-        fontSize: '13px', color: 'var(--color-text-secondary)', padding: 0,
-      }}>
-        <ArrowLeft size={14} /> Retour aux albums
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <button onClick={onBack} className="btn ghost sm" style={{ alignSelf: 'flex-start' }}>
+        <ArrowLeft size={13} /> Retour aux albums
       </button>
 
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: 700, margin: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <h1 className="serif" style={{
+              fontSize: 28, fontWeight: 500, margin: 0, letterSpacing: -0.6,
+            }}>
               {album.title}
             </h1>
             {category && (
-              <span style={{
-                padding: '3px 10px', borderRadius: '12px',
-                fontSize: '11px', fontWeight: 600,
-                color: category.color, backgroundColor: category.bg,
-                border: `1px solid ${category.color}33`,
+              <span className="chip" style={{
+                background: category.bg, color: category.color,
               }}>
                 {categoryLabel(category)}
               </span>
             )}
           </div>
-          <div style={{ display: 'flex', gap: '14px', marginTop: '6px', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', textTransform: 'capitalize' }}>
+          <div style={{ display: 'flex', gap: 14, marginTop: 6, fontSize: 12, color: 'var(--ink-3)' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, textTransform: 'capitalize' }}>
               <Calendar size={11} /> {formatMonth(album.activity_date)}
             </span>
+            <span>{photos.length} photo{photos.length > 1 ? 's' : ''}</span>
           </div>
           {album.description && (
-            <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: '10px 0 0', maxWidth: '700px', lineHeight: 1.5 }}>
+            <p style={{ fontSize: 13.5, color: 'var(--ink-2)', margin: '10px 0 0', maxWidth: 700, lineHeight: 1.5 }}>
               {album.description}
             </p>
           )}
         </div>
-        <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-          <button onClick={() => onEditAlbum(album)} style={secondaryBtn}>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          {photos.length > 0 && (
+            <button
+              onClick={() => setSelectMode((v) => !v)}
+              className={selectMode ? 'btn primary' : 'btn'}
+            >
+              {selectMode ? <X size={13} /> : <CheckSquare size={13} />}
+              {selectMode ? 'Annuler' : 'Sélectionner'}
+            </button>
+          )}
+          <button onClick={() => onEditAlbum(album)} className="btn">
             Modifier l'album
           </button>
-          <button onClick={handleAddPhotos} disabled={uploading} style={{
-            ...primaryBtn,
-            opacity: uploading ? 0.6 : 1,
-            cursor: uploading ? 'not-allowed' : 'pointer',
-          }}>
-            <Plus size={14} /> {uploading ? 'Import…' : 'Ajouter des photos'}
+          <button
+            onClick={handleAddPhotos}
+            disabled={uploading}
+            className="btn primary"
+            style={{ opacity: uploading ? 0.6 : 1, cursor: uploading ? 'not-allowed' : 'pointer' }}
+          >
+            <Plus size={13} strokeWidth={2.5} /> {uploading ? 'Import…' : 'Ajouter des photos'}
           </button>
         </div>
       </div>
 
-      <PhotoGrid photos={photos} onCaption={handleCaption} onDelete={handleDeletePhoto} />
+      <PhotoGrid
+        photos={photos}
+        selectMode={selectMode}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
+        onOpenLightbox={(i) => setLightboxIndex(i)}
+      />
+
+      {/* Contextual toolbar (sticky bottom) */}
+      {selectMode && (
+        <div
+          style={{
+            position: 'sticky', bottom: 16, alignSelf: 'center',
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: '10px 16px',
+            background: 'var(--surface)',
+            border: '1px solid var(--line-strong)',
+            borderRadius: 999,
+            boxShadow: 'var(--shadow-lg)',
+          }}
+        >
+          <span className="num" style={{
+            fontFamily: 'var(--font-mono)', fontSize: 12.5, color: 'var(--ink-2)',
+          }}>
+            {selectedIds.size} / {photos.length} sélectionnée{selectedIds.size > 1 ? 's' : ''}
+          </span>
+          <button
+            onClick={allSelected ? () => setSelectedIds(new Set()) : selectAll}
+            className="btn ghost sm"
+          >
+            {allSelected ? <X size={12} /> : <Square size={12} />}
+            {allSelected ? 'Tout désélectionner' : 'Tout sélectionner'}
+          </button>
+          <button
+            onClick={() => addToast('Bientôt : ajout direct au Famileo du mois', 'info')}
+            className="btn sm"
+            disabled={selectedIds.size === 0}
+            style={{ opacity: selectedIds.size === 0 ? 0.5 : 1 }}
+          >
+            <Mail size={12} /> Ajouter au Famileo
+          </button>
+          <button
+            onClick={deleteSelected}
+            className="btn sm"
+            disabled={selectedIds.size === 0}
+            style={{
+              color: 'var(--danger)',
+              opacity: selectedIds.size === 0 ? 0.5 : 1,
+            }}
+          >
+            <Trash2 size={12} /> Supprimer
+          </button>
+        </div>
+      )}
+
+      {lightboxIndex !== null && (
+        <Lightbox
+          photos={photos}
+          startIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onCaption={handleCaption}
+          onDelete={async (id) => {
+            await handleDeletePhoto(id);
+            setLightboxIndex(null);
+          }}
+        />
+      )}
     </div>
   );
 }
-
-const primaryBtn: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', gap: '6px',
-  padding: '8px 14px', background: 'var(--color-primary)', color: '#fff',
-  border: 'none', borderRadius: '8px',
-  fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-sans)', cursor: 'pointer',
-};
-const secondaryBtn: React.CSSProperties = {
-  padding: '8px 14px', background: 'var(--color-surface)', color: 'var(--color-text-primary)',
-  border: '1px solid var(--color-border)', borderRadius: '8px',
-  fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)', cursor: 'pointer',
-};

@@ -75,15 +75,10 @@ export default function Activities() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1200px' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
-        <div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: 700, margin: 0, lineHeight: 1.15, letterSpacing: '-0.01em' }}>
-            Ateliers & Activités
-          </h1>
-          <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: '6px 0 0' }}>
-            Planification, suivi et bibliothèque de modèles
-          </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1200, animation: 'slide-in 0.22s ease-out' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
+        <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          Planification, suivi et bibliothèque de modèles
           <SyncStatus module="activities" />
         </div>
         <SyncButton module="activities" />

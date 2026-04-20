@@ -1,56 +1,87 @@
-import { useState, useEffect, useRef } from 'react';
-import {
-  BookOpen, Plus, Trash2, X, Pencil, Search, Tag,
-} from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { BookOpen, Plus, Trash2, X, Pencil, Search, Tag, Pin, Users as UsersIcon, Eye, EyeOff } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
 import {
   getJournalEntries, createJournalEntry, updateJournalEntry, deleteJournalEntry,
 } from '@/db/journal';
-import type { JournalEntry, JournalMood } from '@/db/types';
+import { getResidents } from '@/db/residents';
+import type { JournalEntry, JournalMood, Resident } from '@/db/types';
 
-// ─── Constants ───────────────────────────────────────────────
-
-const MOODS: Record<JournalMood, { label: string; emoji: string; color: string }> = {
-  great:     { label: 'Super',     emoji: '\u2600\uFE0F', color: '#059669' },
-  good:      { label: 'Bien',      emoji: '\uD83D\uDE0A', color: '#1E40AF' },
-  neutral:   { label: 'Neutre',    emoji: '\uD83D\uDE10', color: '#64748B' },
-  difficult: { label: 'Difficile', emoji: '\uD83D\uDE15', color: '#D97706' },
-  bad:       { label: 'Mauvais',   emoji: '\uD83D\uDE1E', color: '#DC2626' },
+const MOODS: Record<JournalMood, { label: string; emoji: string; chip: string }> = {
+  great:     { label: 'Super',     emoji: '\u2600\uFE0F', chip: 'done' },
+  good:      { label: 'Bien',      emoji: '\uD83D\uDE0A', chip: 'info' },
+  neutral:   { label: 'Neutre',    emoji: '\uD83D\uDE10', chip: 'ghost' },
+  difficult: { label: 'Difficile', emoji: '\uD83D\uDE15', chip: 'warn' },
+  bad:       { label: 'Mauvais',   emoji: '\uD83D\uDE1E', chip: 'danger' },
 };
 
 const MOOD_KEYS = Object.keys(MOODS) as JournalMood[];
 
+type JournalTab = 'feed' | 'by-resident';
+
 function formatDate(d: string): string {
-  return new Date(d).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  return new Date(d).toLocaleDateString('fr-FR', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
 }
 
-// ─── Component ───────────────────────────────────────────────
+function parseLinkedIds(csv: string): number[] {
+  if (!csv) return [];
+  return csv.split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0);
+}
+
+function joinLinkedIds(ids: number[]): string {
+  return ids.join(',');
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return (parts[0]?.[0] ?? '?').toUpperCase() + (parts[1]?.[0] ?? '').toUpperCase();
+}
 
 export default function Journal() {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [residents, setResidents] = useState<Resident[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<JournalTab>('feed');
+  const [selectedResidentId, setSelectedResidentId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [mood, setMood] = useState<JournalMood>('good');
+  const [isShared, setIsShared] = useState(false);
+  const [linkedIds, setLinkedIds] = useState<number[]>([]);
   const addToast = useToastStore((s) => s.add);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
-    getJournalEntries()
-      .then((rows) => setEntries(rows))
-      .catch((err) => {
+    Promise.all([
+      getJournalEntries().catch((err) => {
         console.error('[journal] load failed:', err);
         addToast('Impossible de charger le carnet de bord', 'error');
-      })
-      .finally(() => setLoading(false));
+        return [] as JournalEntry[];
+      }),
+      getResidents().catch(() => [] as Resident[]),
+    ]).then(([j, r]) => {
+      setEntries(j);
+      setResidents(r);
+      if (r[0]) setSelectedResidentId(r[0].id);
+    }).finally(() => setLoading(false));
   }, [addToast]);
 
-  const filtered = entries.filter((e) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return e.content.toLowerCase().includes(q) || e.tags.toLowerCase().includes(q);
-  });
+  const residentMap = useMemo(() => new Map(residents.map((r) => [r.id, r])), [residents]);
+
+  const filtered = useMemo(() => {
+    let list = entries;
+    if (tab === 'by-resident' && selectedResidentId) {
+      list = list.filter((e) => parseLinkedIds(e.linked_resident_ids).includes(selectedResidentId));
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter((e) => e.content.toLowerCase().includes(q) || e.tags.toLowerCase().includes(q));
+    }
+    return list;
+  }, [entries, search, tab, selectedResidentId]);
 
   async function handleSubmit(ev: React.FormEvent) {
     ev.preventDefault();
@@ -61,8 +92,10 @@ export default function Journal() {
     const data = {
       date: fd.get('date') as string,
       content: fd.get('content') as string,
-      mood: fd.get('mood') as JournalMood,
+      mood,
       tags: fd.get('tags') as string,
+      is_shared: isShared ? 1 : 0,
+      linked_resident_ids: joinLinkedIds(linkedIds),
     };
 
     try {
@@ -97,10 +130,25 @@ export default function Journal() {
     }
   }
 
+  async function toggleShare(entry: JournalEntry) {
+    const next = entry.is_shared ? 0 : 1;
+    try {
+      await updateJournalEntry(entry.id, { is_shared: next });
+      setEntries((prev) => prev.map((e) => e.id === entry.id ? { ...e, is_shared: next } : e));
+    } catch (err) {
+      console.error('[journal] toggle share failed:', err);
+      addToast('Erreur', 'error');
+    }
+  }
+
   const editItem = editId ? entries.find((e) => e.id === editId) : null;
 
   useEffect(() => {
-    if (showForm) setMood(editItem?.mood ?? 'good');
+    if (showForm) {
+      setMood(editItem?.mood ?? 'good');
+      setIsShared((editItem?.is_shared ?? 0) === 1);
+      setLinkedIds(editItem ? parseLinkedIds(editItem.linked_resident_ids) : []);
+    }
   }, [showForm, editItem]);
 
   useEffect(() => {
@@ -111,128 +159,217 @@ export default function Journal() {
   }, [editId, editItem]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '800px' }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: 20,
+      maxWidth: 1100, animation: 'slide-in 0.22s ease-out',
+    }}>
+
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
-        <div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
-            Carnet de bord
-          </h1>
-          <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)', margin: '4px 0 0', fontFamily: 'var(--font-sans)' }}>
-            Notes quotidiennes — privé, non synchronisé
-          </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Pin size={11} /> Notes quotidiennes — partagez avec l'équipe ou gardez privé
         </div>
-        <button onClick={() => { setEditId(null); setShowForm(true); }}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: '6px',
-            padding: '8px 16px', backgroundColor: 'var(--color-primary)',
-            color: '#fff', border: 'none', borderRadius: '6px',
-            fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-sans)', cursor: 'pointer',
-          }}>
-          <Plus size={14} /> Nouvelle entrée
+        <div style={{ flex: 1 }} />
+        <button className="btn primary" onClick={() => { setEditId(null); setShowForm(true); }}>
+          <Plus size={13} strokeWidth={2.5} /> Nouvelle entrée
         </button>
       </div>
 
-      {/* Search */}
-      <div style={{ position: 'relative', maxWidth: '400px' }}>
-        <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)' }} />
-        <input type="text" placeholder="Rechercher dans le journal..." value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{
-            width: '100%', padding: '8px 10px 8px 32px',
-            border: '1px solid var(--color-border)', borderRadius: '6px',
-            fontSize: '13px', fontFamily: 'var(--font-sans)', backgroundColor: 'var(--color-surface)',
-          }} />
+      {/* Tabs + Search */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{
+          display: 'inline-flex', borderRadius: 999,
+          border: '1px solid var(--line)', overflow: 'hidden',
+          background: 'var(--surface)',
+        }}>
+          {([
+            { id: 'feed', label: 'Fil du jour' },
+            { id: 'by-resident', label: 'Par résident' },
+          ] as Array<{ id: JournalTab; label: string }>).map((t) => {
+            const active = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                style={{
+                  padding: '7px 16px', border: 'none',
+                  background: active ? 'var(--terra-soft)' : 'transparent',
+                  color: active ? 'var(--terra-deep)' : 'var(--ink-2)',
+                  fontSize: 13, fontWeight: active ? 600 : 500,
+                  cursor: 'pointer',
+                  transition: 'background 0.12s, color 0.12s',
+                }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{
+          flex: '1 1 240px', maxWidth: 400,
+          display: 'flex', alignItems: 'center', gap: 8,
+          background: 'var(--surface)', border: '1px solid var(--line)',
+          borderRadius: 999, padding: '6px 14px',
+        }}>
+          <Search size={14} style={{ color: 'var(--ink-3)' }} />
+          <input
+            type="text"
+            placeholder="Rechercher dans le carnet…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{
+              flex: 1, border: 'none', outline: 'none',
+              background: 'transparent', fontSize: 13, color: 'var(--ink)',
+            }}
+          />
+        </div>
       </div>
 
-      {/* Entries */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {loading ? (
-          <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px' }}>Chargement...</p>
-        ) : filtered.length === 0 ? (
-          <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: '8px', padding: '40px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-            <BookOpen size={36} style={{ color: 'var(--color-border)', marginBottom: '12px' }} />
-            <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)' }}>Aucune entrée. Commencez votre journal !</p>
-          </div>
-        ) : filtered.map((entry) => {
-          const mood = MOODS[entry.mood];
-          return (
-            <div key={entry.id} style={{
-              backgroundColor: 'var(--color-surface)', borderRadius: '8px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.06)', padding: '16px 20px',
-              borderLeft: `3px solid ${mood.color}`,
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '20px' }}>{mood.emoji}</span>
-                  <div>
-                    <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)', fontFamily: 'var(--font-sans)' }}>
-                      {formatDate(entry.date)}
-                    </p>
-                    <span style={{ fontSize: '11px', fontWeight: 500, color: mood.color }}>{mood.label}</span>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <button onClick={() => { setEditId(entry.id); setShowForm(true); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', padding: '4px' }} title="Modifier">
-                    <Pencil size={13} />
-                  </button>
-                  <button onClick={() => handleDelete(entry.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-danger)', padding: '4px' }} title="Supprimer">
-                    <Trash2 size={13} />
-                  </button>
-                </div>
+      {/* Body — Feed or By-resident */}
+      {tab === 'feed' ? (
+        <FeedList
+          entries={filtered}
+          loading={loading}
+          search={search}
+          residentMap={residentMap}
+          onEdit={(id) => { setEditId(id); setShowForm(true); }}
+          onDelete={handleDelete}
+          onToggleShare={toggleShare}
+          onCreate={() => { setEditId(null); setShowForm(true); }}
+        />
+      ) : (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(240px, 280px) 1fr',
+          gap: 20,
+        }}>
+          {/* Resident list */}
+          <div className="card" style={{
+            display: 'flex', flexDirection: 'column',
+            overflow: 'hidden', maxHeight: 'calc(100vh - 260px)',
+          }}>
+            {residents.length === 0 ? (
+              <div style={{ padding: 24, color: 'var(--ink-3)', fontSize: 13, textAlign: 'center' }}>
+                Aucun résident.
               </div>
+            ) : (
+              <div style={{ flex: 1, overflow: 'auto' }}>
+                {residents.map((r) => {
+                  const active = r.id === selectedResidentId;
+                  const count = entries.filter((e) => parseLinkedIds(e.linked_resident_ids).includes(r.id)).length;
+                  return (
+                    <button
+                      key={r.id}
+                      onClick={() => setSelectedResidentId(r.id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        width: '100%', padding: '10px 14px', textAlign: 'left',
+                        background: active ? 'var(--terra-soft)' : 'transparent',
+                        borderBottom: '1px solid var(--line)',
+                        border: 'none', cursor: 'pointer',
+                      }}
+                    >
+                      <div style={{
+                        width: 32, height: 32, borderRadius: '50%',
+                        background: active ? 'var(--terra)' : 'var(--surface-2)',
+                        color: active ? '#fff' : 'var(--ink-2)',
+                        display: 'grid', placeItems: 'center',
+                        fontWeight: 600, fontSize: 12,
+                        border: active ? 'none' : '1px solid var(--line)',
+                      }}>
+                        {initials(r.display_name)}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontWeight: 600, fontSize: 13.5,
+                          color: active ? 'var(--terra-deep)' : 'var(--ink)',
+                        }}>
+                          {r.display_name}
+                        </div>
+                      </div>
+                      <span className={count > 0 ? 'chip memory' : 'chip ghost'}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
-              <p style={{ margin: '0 0 8px', fontSize: '13px', color: 'var(--color-text-primary)', fontFamily: 'var(--font-sans)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                {entry.content}
-              </p>
-
-              {entry.tags && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                  {entry.tags.split(',').map((tag, i) => (
-                    <span key={i} style={{
-                      fontSize: '11px', color: 'var(--color-primary)',
-                      backgroundColor: 'rgba(30,64,175,0.08)', padding: '2px 6px',
-                      borderRadius: '4px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '3px',
-                    }}>
-                      <Tag size={9} /> {tag.trim()}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+          {/* Filtered feed */}
+          <FeedList
+            entries={filtered}
+            loading={loading}
+            search={search}
+            residentMap={residentMap}
+            onEdit={(id) => { setEditId(id); setShowForm(true); }}
+            onDelete={handleDelete}
+            onToggleShare={toggleShare}
+            onCreate={() => {
+              setEditId(null);
+              if (selectedResidentId) setLinkedIds([selectedResidentId]);
+              setShowForm(true);
+            }}
+            emptyHint={selectedResidentId
+              ? "Aucune note pour ce résident — taggez-le dans une nouvelle entrée."
+              : "Sélectionnez un résident."}
+          />
+        </div>
+      )}
 
       {/* Modal form */}
       {showForm && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
-          onClick={() => { setShowForm(false); setEditId(null); }}>
-          <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: '12px', padding: '24px', width: '520px', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
-            onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: 700 }}>
+        <div
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(35, 29, 24, 0.4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 50,
+          }}
+          onClick={() => { setShowForm(false); setEditId(null); }}
+        >
+          <div
+            className="card"
+            style={{ padding: 24, width: 580, maxHeight: '85vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 18 }}>
+              <h2 className="serif" style={{ margin: 0, fontSize: 22, fontWeight: 500, letterSpacing: -0.4 }}>
                 {editId ? 'Modifier l\'entrée' : 'Nouvelle entrée'}
               </h2>
-              <button onClick={() => { setShowForm(false); setEditId(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)' }}><X size={18} /></button>
+              <div style={{ flex: 1 }} />
+              <button
+                className="btn ghost"
+                onClick={() => { setShowForm(false); setEditId(null); }}
+                style={{ padding: 6 }}
+                aria-label="Fermer"
+              >
+                <X size={16} />
+              </button>
             </div>
-            <form ref={formRef} onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
-                  Date
-                  <input name="date" type="date" defaultValue={editItem?.date ?? new Date().toISOString().slice(0, 10)} required
-                    style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }} />
-                </label>
-                <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
-                  Humeur
-                  <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+
+            <form ref={formRef} onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Field label="Date">
+                  <input
+                    name="date"
+                    type="date"
+                    defaultValue={editItem?.date ?? new Date().toISOString().slice(0, 10)}
+                    required
+                    style={inputStyle}
+                  />
+                </Field>
+                <Field label="Humeur">
+                  <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
                     {MOOD_KEYS.map((k) => {
                       const checked = mood === k;
                       return (
                         <label key={k} style={{ cursor: 'pointer', textAlign: 'center' }}>
                           <input
                             type="radio"
-                            name="mood"
+                            name="mood-radio"
                             value={k}
                             checked={checked}
                             onChange={() => setMood(k)}
@@ -240,8 +377,7 @@ export default function Journal() {
                           />
                           <span
                             style={{
-                              fontSize: '22px',
-                              display: 'block',
+                              fontSize: 22, display: 'block',
                               opacity: checked ? 1 : 0.45,
                               transform: checked ? 'scale(1.15)' : 'scale(1)',
                               filter: checked ? 'none' : 'grayscale(0.4)',
@@ -255,24 +391,75 @@ export default function Journal() {
                       );
                     })}
                   </div>
-                </label>
+                </Field>
               </div>
-              <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
-                Notes de la journée
-                <textarea name="content" rows={6} defaultValue={editItem?.content ?? ''} required
-                  placeholder="Ce qui s'est passé, ce qui a marché, idées pour demain..."
-                  style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px', resize: 'vertical', lineHeight: 1.6 }} />
-              </label>
-              <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
-                Tags (séparés par des virgules)
-                <input name="tags" defaultValue={editItem?.tags ?? ''} placeholder="peinture, réunion, idée..."
-                  style={{ width: '100%', padding: '8px 10px', marginTop: '4px', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }} />
-              </label>
-              <button type="submit" style={{
-                padding: '10px', backgroundColor: 'var(--color-primary)', color: '#fff',
-                border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600,
-                fontFamily: 'var(--font-sans)', cursor: 'pointer', marginTop: '4px',
+
+              <Field label="Notes de la journée">
+                <textarea
+                  name="content" rows={6}
+                  defaultValue={editItem?.content ?? ''}
+                  required
+                  placeholder="Ce qui s'est passé, ce qui a marché, idées pour demain…"
+                  style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
+                />
+              </Field>
+
+              <Field label="Tags (séparés par des virgules)">
+                <input
+                  name="tags"
+                  defaultValue={editItem?.tags ?? ''}
+                  placeholder="peinture, réunion, idée…"
+                  style={inputStyle}
+                />
+              </Field>
+
+              <Field label="Résidents concernés">
+                {residents.length === 0 ? (
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)', fontStyle: 'italic' }}>
+                    Ajoutez d'abord des résidents pour pouvoir les tagger.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                    {residents.map((r) => {
+                      const checked = linkedIds.includes(r.id);
+                      return (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => setLinkedIds((prev) =>
+                            prev.includes(r.id)
+                              ? prev.filter((id) => id !== r.id)
+                              : [...prev, r.id]
+                          )}
+                          className={checked ? 'chip memory' : 'chip ghost'}
+                          style={{ border: 'none', cursor: 'pointer' }}
+                        >
+                          {r.display_name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </Field>
+
+              <label style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 12px', borderRadius: 10,
+                background: isShared ? 'var(--sage-soft)' : 'var(--surface-2)',
+                cursor: 'pointer',
               }}>
+                <input
+                  type="checkbox"
+                  checked={isShared}
+                  onChange={(e) => setIsShared(e.target.checked)}
+                />
+                {isShared ? <Eye size={14} style={{ color: 'var(--sage-deep)' }} /> : <EyeOff size={14} style={{ color: 'var(--ink-3)' }} />}
+                <span style={{ fontSize: 13, fontWeight: 500, color: isShared ? 'var(--sage-deep)' : 'var(--ink-2)' }}>
+                  {isShared ? 'Partagé avec l\'équipe' : 'Privé (visible par vous seul)'}
+                </span>
+              </label>
+
+              <button type="submit" className="btn primary" style={{ justifyContent: 'center' }}>
                 {editId ? 'Mettre à jour' : 'Enregistrer'}
               </button>
             </form>
@@ -280,5 +467,149 @@ export default function Journal() {
         </div>
       )}
     </div>
+  );
+}
+
+interface FeedListProps {
+  entries: JournalEntry[];
+  loading: boolean;
+  search: string;
+  residentMap: Map<number, Resident>;
+  onEdit: (id: number) => void;
+  onDelete: (id: number) => void;
+  onToggleShare: (entry: JournalEntry) => void;
+  onCreate: () => void;
+  emptyHint?: string;
+}
+
+function FeedList({
+  entries, loading, search, residentMap,
+  onEdit, onDelete, onToggleShare, onCreate, emptyHint,
+}: FeedListProps) {
+  if (loading) {
+    return <p style={{ color: 'var(--ink-3)', fontSize: 13 }}>Chargement…</p>;
+  }
+  if (entries.length === 0) {
+    return (
+      <div className="card" style={{
+        padding: 48, textAlign: 'center',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+      }}>
+        <BookOpen size={36} style={{ color: 'var(--ink-4)' }} />
+        <div className="serif" style={{ fontSize: 18, fontWeight: 500, color: 'var(--ink)' }}>
+          {search ? 'Aucun résultat' : 'Aucune entrée pour le moment'}
+        </div>
+        <p style={{ fontSize: 13.5, color: 'var(--ink-3)', margin: 0, maxWidth: 360 }}>
+          {emptyHint ?? (search ? 'Essayez un autre mot-clé.' : 'Commencez votre carnet — quelques lignes par jour suffisent.')}
+        </p>
+        {!search && (
+          <button className="btn primary" onClick={onCreate} style={{ marginTop: 6 }}>
+            <Plus size={13} strokeWidth={2.5} /> Ajouter une entrée
+          </button>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {entries.map((entry) => {
+        const m = MOODS[entry.mood];
+        const isPrivate = entry.is_shared !== 1;
+        const linkedResidents = parseLinkedIds(entry.linked_resident_ids)
+          .map((id) => residentMap.get(id))
+          .filter((r): r is Resident => !!r);
+        return (
+          <div key={entry.id} className="card" style={{ padding: '16px 20px' }}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between',
+              alignItems: 'flex-start', marginBottom: 8,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 22, lineHeight: 1 }}>{m.emoji}</span>
+                <div>
+                  <p style={{
+                    margin: 0, fontSize: 13.5, fontWeight: 600,
+                    color: 'var(--ink)', textTransform: 'capitalize',
+                  }}>
+                    {formatDate(entry.date)}
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                    <span className={`chip ${m.chip}`}>{m.label}</span>
+                    <button
+                      onClick={() => onToggleShare(entry)}
+                      className={isPrivate ? 'chip ghost' : 'chip done'}
+                      style={{ border: 'none', cursor: 'pointer' }}
+                      title={isPrivate ? 'Cliquer pour partager' : 'Cliquer pour rendre privé'}
+                    >
+                      {isPrivate ? <Pin size={10} fill="currentColor" /> : <Eye size={10} />}
+                      {isPrivate ? 'Privé' : 'Partagé'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button
+                  onClick={() => onEdit(entry.id)}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--ink-3)', padding: 4, display: 'flex',
+                  }}
+                  title="Modifier"
+                >
+                  <Pencil size={13} />
+                </button>
+                <button
+                  onClick={() => onDelete(entry.id)}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--danger)', padding: 4, display: 'flex',
+                  }}
+                  title="Supprimer"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+
+            <p style={{
+              margin: '0 0 8px', fontSize: 13.5, color: 'var(--ink)',
+              lineHeight: 1.65, whiteSpace: 'pre-wrap',
+            }}>
+              {entry.content}
+            </p>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {linkedResidents.length > 0 && (
+                <span className="chip creative" style={{ alignItems: 'center' }}>
+                  <UsersIcon size={9} />
+                  {linkedResidents.map((r) => r.display_name.split(/\s+/)[0]).join(', ')}
+                </span>
+              )}
+              {entry.tags.split(',').filter(Boolean).map((tag, i) => (
+                <span key={i} className="chip memory">
+                  <Tag size={9} /> {tag.trim()}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '8px 12px',
+  border: '1px solid var(--line)', borderRadius: 8,
+  fontSize: 13, fontFamily: 'inherit', background: 'var(--surface)',
+  color: 'var(--ink)', outline: 'none',
+};
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label style={{ display: 'block' }}>
+      <div className="eyebrow" style={{ marginBottom: 6 }}>{label}</div>
+      {children}
+    </label>
   );
 }

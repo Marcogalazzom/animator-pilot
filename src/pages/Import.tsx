@@ -54,21 +54,9 @@ export default function Import() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '900px' }}>
-      {/* Header */}
-      <div>
-        <h1 style={{
-          fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: 700,
-          color: 'var(--color-text-primary)', margin: 0,
-        }}>
-          Import de données
-        </h1>
-        <p style={{
-          fontSize: '14px', color: 'var(--color-text-secondary)',
-          margin: '4px 0 0', fontFamily: 'var(--font-sans)',
-        }}>
-          Importez des fichiers CSV ou Excel pour enrichir vos données
-        </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 900, animation: 'slide-in 0.22s ease-out' }}>
+      <div className="eyebrow">
+        Importez des fichiers CSV ou Excel pour enrichir vos données
       </div>
 
       {/* Drop zone */}

@@ -65,30 +65,16 @@ export default function Calendar() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ width: '220px', height: '28px', borderRadius: '6px', background: 'var(--color-border)' }} className="shimmer" />
-        <div style={{ width: '100%', height: '400px', borderRadius: '10px', background: 'var(--color-surface)' }} className="shimmer" />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="card" style={{ height: 44 }} />
+        <div className="card" style={{ height: 400 }} />
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '1300px' }}>
-      <div>
-        <h1 style={{
-          fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: 700,
-          margin: 0, lineHeight: 1.15, letterSpacing: '-0.01em',
-          color: 'var(--color-text-primary)',
-        }}>
-          Calendrier
-        </h1>
-        <p style={{
-          fontSize: '13px', color: 'var(--color-text-secondary)',
-          margin: '6px 0 0', fontFamily: 'var(--font-sans)',
-        }}>
-          Planning des activités, projets et créneaux par lieu
-        </p>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1300, animation: 'slide-in 0.22s ease-out' }}>
+      <div className="eyebrow">Planning des activités, projets et créneaux par lieu</div>
 
       <CalendarToolbar
         view={view}

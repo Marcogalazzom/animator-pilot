@@ -59,6 +59,8 @@ export interface Project {
   status: ProjectStatus;
   start_date: string | null;
   due_date: string | null;
+  category: string;
+  next_action: string;
   created_at: string;
 }
 
@@ -120,6 +122,8 @@ export interface JournalEntry {
   content: string;
   mood: JournalMood;
   tags: string;
+  is_shared: number;
+  linked_resident_ids: string;
   created_at: string;
 }
 
@@ -222,6 +226,8 @@ export interface Photo {
 }
 
 // ─── Résidents (suivi animation — sans données médicales/RGPD) ─
+export type ResidentMood = 'happy' | 'calm' | 'sleep' | 'quiet';
+
 export interface Resident {
   id: number;
   display_name: string;
@@ -229,12 +235,18 @@ export interface Resident {
   interests: string;
   animation_notes: string;
   participation_level: 'active' | 'moderate' | 'occasional' | 'observer';
+  birthday: string | null;
+  arrival_date: string | null;
+  mood: ResidentMood;
+  family_contacts: string;
   created_at: string;
 }
 
 // ─── Ateliers / Activités ────────────────────────────────────
 export type ActivityType = string;
 export type ActivityStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled';
+export type ActivityCategory = 'memory' | 'creative' | 'body' | 'outing' | 'rdv' | 'prep';
+export type ActivityDifficulty = 'facile' | 'moyen' | 'difficile';
 
 export interface Activity {
   id: number;
@@ -259,6 +271,8 @@ export interface Activity {
   is_template: number; // 0 ou 1 — templates non synchronisés
   unit: ActivityUnit;
   is_recurring: number; // 0 ou 1 — activités hebdomadaires issues de planning-ehpad
+  category: ActivityCategory;
+  difficulty: ActivityDifficulty;
   created_at: string;
 }
 

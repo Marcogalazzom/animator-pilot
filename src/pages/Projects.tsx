@@ -1,24 +1,24 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useToastStore } from '@/stores/toastStore';
 import {
-  Plus, LayoutGrid, List, X, ChevronRight, Trash2,
+  Plus, LayoutGrid, List, Columns, X, ChevronRight, Trash2,
   Calendar, User, AlertCircle, CheckCircle2, Clock,
-  ArrowUpDown, ChevronUp, ChevronDown, Pencil, Check,
+  ArrowUpDown, ChevronUp, ChevronDown, Pencil, Check, Users,
 } from 'lucide-react';
 import { useProjectsData } from './projects/useProjectsData';
 import type { Project, Action, ProjectStatus, ActionStatus } from './projects/useProjectsData';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-type ViewMode = 'kanban' | 'list';
+type ViewMode = 'kanban' | 'list' | 'detail';
 type SortField = 'title' | 'owner_role' | 'status' | 'due_date' | 'progress';
 type SortDir = 'asc' | 'desc';
 
 const STATUS_COLUMNS: { key: ProjectStatus; label: string; color: string; bg: string; light: string }[] = [
-  { key: 'todo',        label: 'À faire',   color: '#64748B', bg: '#F1F5F9', light: 'rgba(100,116,139,0.08)' },
-  { key: 'in_progress', label: 'En cours',  color: '#1E40AF', bg: '#EFF6FF', light: 'rgba(30,64,175,0.07)'   },
-  { key: 'done',        label: 'Terminé',   color: '#059669', bg: '#ECFDF5', light: 'rgba(5,150,105,0.07)'   },
-  { key: 'overdue',     label: 'En retard', color: '#DC2626', bg: '#FEF2F2', light: 'rgba(220,38,38,0.07)'   },
+  { key: 'todo',        label: 'À faire',   color: 'var(--ink-3)',     bg: 'var(--surface-2)',     light: 'rgba(120,105,92,0.08)' },
+  { key: 'in_progress', label: 'En cours',  color: 'var(--cat-outing)', bg: 'var(--cat-outing-bg)', light: 'rgba(107,139,176,0.08)' },
+  { key: 'done',        label: 'Terminé',   color: 'var(--sage-deep)', bg: 'var(--sage-soft)',     light: 'rgba(85,103,68,0.08)' },
+  { key: 'overdue',     label: 'En retard', color: 'var(--danger)',    bg: 'var(--danger-soft)',   light: 'rgba(176,74,63,0.08)' },
 ];
 
 
@@ -30,9 +30,9 @@ function formatDate(d: string | null): string {
 }
 
 function progressColor(pct: number): string {
-  if (pct >= 70) return '#059669';
-  if (pct >= 30) return '#D97706';
-  return '#DC2626';
+  if (pct >= 70) return 'var(--sage-deep)';
+  if (pct >= 30) return 'var(--warn)';
+  return 'var(--danger)';
 }
 
 function computeProgress(actions: Action[]): number {
@@ -340,6 +340,8 @@ function CreateProjectModal({ onClose, onCreate }: CreateProjectModalProps) {
         status: 'todo',
         start_date: startDate || null,
         due_date: dueDate || null,
+        category: '',
+        next_action: '',
       });
       onClose();
     } catch (err) {
@@ -1298,35 +1300,352 @@ const inputStyle: React.CSSProperties = {
 };
 
 const primaryBtnStyle: React.CSSProperties = {
-  padding: '8px 16px',
-  background: 'var(--color-primary)',
-  border: 'none',
-  borderRadius: '6px',
-  color: '#fff',
-  fontSize: '13px',
-  fontWeight: 600,
-  fontFamily: 'var(--font-sans)',
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '6px',
-  whiteSpace: 'nowrap',
-};
-
-const secondaryBtnStyle: React.CSSProperties = {
   padding: '8px 14px',
-  background: 'var(--color-surface)',
-  border: '1px solid var(--color-border)',
-  borderRadius: '6px',
-  color: 'var(--color-text-primary)',
-  fontSize: '13px',
+  background: 'var(--terra)',
+  border: '1px solid var(--terra-deep)',
+  borderRadius: 999,
+  color: '#fff',
+  fontSize: 13,
   fontWeight: 500,
   fontFamily: 'var(--font-sans)',
   cursor: 'pointer',
   display: 'flex',
   alignItems: 'center',
-  gap: '6px',
+  gap: 6,
+  whiteSpace: 'nowrap',
 };
+
+const secondaryBtnStyle: React.CSSProperties = {
+  padding: '8px 14px',
+  background: 'var(--surface)',
+  border: '1px solid var(--line-strong)',
+  borderRadius: 999,
+  color: 'var(--ink)',
+  fontSize: 13,
+  fontWeight: 500,
+  fontFamily: 'var(--font-sans)',
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+};
+
+// ─── Detail View (3rd mode: list 340px + detail right) ───────────────────────
+
+interface DetailViewProps {
+  projects: Project[];
+  progressMap: Record<number, number>;
+  actionsCountMap: Record<number, number>;
+  selectedProject: Project | null;
+  selectedActions: Action[];
+  onSelectProject: (p: Project) => void;
+  onUpdateProject: (id: number, updates: Partial<Project>) => Promise<void>;
+  onUpdateAction: (id: number, updates: Partial<Action>) => Promise<void>;
+}
+
+function DetailView({
+  projects, progressMap, actionsCountMap,
+  selectedProject, selectedActions,
+  onSelectProject, onUpdateProject, onUpdateAction,
+}: DetailViewProps) {
+  const [statusFilter, setStatusFilter] = useState<ProjectStatus | ''>('');
+  const filtered: Project[] = useMemo(
+    () => statusFilter ? projects.filter((p: Project) => p.status === statusFilter) : projects,
+    [projects, statusFilter],
+  );
+  // Auto-select first project when entering detail mode if none is selected.
+  useEffect(() => {
+    if (!selectedProject && filtered[0]) onSelectProject(filtered[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered.length]);
+
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'minmax(280px, 340px) 1fr',
+      gap: 20,
+      maxHeight: 'calc(100vh - 220px)',
+    }}>
+      {/* List */}
+      <div className="card" style={{
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setStatusFilter('')}
+              className={statusFilter === '' ? 'chip creative' : 'chip ghost'}
+              style={{ border: 'none', cursor: 'pointer' }}
+            >
+              Tous · {projects.length}
+            </button>
+            {STATUS_COLUMNS.map((s) => (
+              <button
+                key={s.key}
+                onClick={() => setStatusFilter(s.key === statusFilter ? '' : s.key)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '3px 9px', borderRadius: 4,
+                  fontSize: 11.5, fontWeight: 500,
+                  background: statusFilter === s.key ? s.bg : 'transparent',
+                  color: statusFilter === s.key ? s.color : 'var(--ink-3)',
+                  border: statusFilter === s.key ? 'none' : '1px solid var(--line)',
+                  cursor: 'pointer',
+                }}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: 28, color: 'var(--ink-3)', fontSize: 13, textAlign: 'center' }}>
+              Aucun projet
+            </div>
+          ) : filtered.map((p) => {
+            const active = selectedProject?.id === p.id;
+            const progress = progressMap[p.id] ?? 0;
+            const count = actionsCountMap[p.id] ?? 0;
+            const meta = statusMeta(p.status);
+            return (
+              <button
+                key={p.id}
+                onClick={() => onSelectProject(p)}
+                style={{
+                  display: 'flex', flexDirection: 'column', gap: 6,
+                  width: '100%', padding: '12px 14px', textAlign: 'left',
+                  background: active ? 'var(--terra-soft)' : 'transparent',
+                  borderBottom: '1px solid var(--line)',
+                  border: 'none', cursor: 'pointer',
+                }}
+                onMouseEnter={(ev) => !active && (ev.currentTarget.style.background = 'var(--surface-2)')}
+                onMouseLeave={(ev) => !active && (ev.currentTarget.style.background = 'transparent')}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {p.category && (
+                    <span className="chip" style={{
+                      background: meta.bg, color: meta.color,
+                    }}>
+                      {p.category}
+                    </span>
+                  )}
+                  <div style={{ flex: 1 }} />
+                  <span className="num" style={{
+                    fontSize: 11.5, color: progressColor(progress),
+                    fontFamily: 'var(--font-mono)', fontWeight: 600,
+                  }}>
+                    {progress}%
+                  </span>
+                </div>
+                <div className="serif" style={{
+                  fontSize: 15, fontWeight: 500, letterSpacing: -0.2,
+                  color: active ? 'var(--terra-deep)' : 'var(--ink)',
+                  overflow: 'hidden', textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {p.title}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <ProgressBar value={progress} />
+                  <span style={{ fontSize: 11, color: 'var(--ink-3)', minWidth: 66, textAlign: 'right' }}>
+                    {count} action{count > 1 ? 's' : ''}
+                  </span>
+                </div>
+                {p.due_date && (
+                  <div style={{ fontSize: 11, color: p.status === 'overdue' ? 'var(--danger)' : 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Calendar size={10} /> {formatDate(p.due_date)}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Detail */}
+      {selectedProject ? (
+        <div className="card" style={{ padding: 28, overflow: 'auto' }}>
+          <ProjectDetailPanel
+            project={selectedProject}
+            actions={selectedActions}
+            onUpdateProject={onUpdateProject}
+            onUpdateAction={onUpdateAction}
+          />
+        </div>
+      ) : (
+        <div className="card" style={{
+          padding: 60, display: 'grid', placeItems: 'center',
+          color: 'var(--ink-3)', fontSize: 14,
+        }}>
+          Sélectionnez un projet pour voir le détail.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProjectDetailPanel({ project, actions, onUpdateProject, onUpdateAction }: {
+  project: Project;
+  actions: Action[];
+  onUpdateProject: (id: number, updates: Partial<Project>) => Promise<void>;
+  onUpdateAction: (id: number, updates: Partial<Action>) => Promise<void>;
+}) {
+  const meta = statusMeta(project.status);
+  const progress = computeProgress(actions);
+  const [nextAction, setNextAction] = useState(project.next_action);
+  useEffect(() => setNextAction(project.next_action), [project]);
+
+  async function commitNextAction() {
+    if (nextAction !== project.next_action) {
+      await onUpdateProject(project.id, { next_action: nextAction });
+    }
+  }
+
+  return (
+    <>
+      <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        Projet{project.category && ` · ${project.category}`}
+        <StatusBadge status={project.status} />
+      </div>
+      <h1 className="serif" style={{
+        fontSize: 36, fontWeight: 500, margin: '6px 0 0',
+        letterSpacing: -1, lineHeight: 1.05,
+      }}>
+        {project.title}
+      </h1>
+      {project.description && (
+        <p style={{
+          fontSize: 14, color: 'var(--ink-2)', margin: '14px 0 0',
+          lineHeight: 1.6, maxWidth: 640,
+        }}>
+          {project.description}
+        </p>
+      )}
+
+      {/* 3 soft cards */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14,
+        marginTop: 24,
+      }}>
+        <div className="card-soft" style={{ padding: 16 }}>
+          <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+            <Calendar size={11} /> Échéance
+          </div>
+          <div className="serif" style={{
+            fontSize: 18, fontWeight: 500,
+            color: project.status === 'overdue' ? 'var(--danger)' : 'var(--ink)',
+          }}>
+            {formatDate(project.due_date)}
+          </div>
+        </div>
+        <div className="card-soft" style={{ padding: 16 }}>
+          <div className="eyebrow" style={{ marginBottom: 6 }}>Avancement</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+            <span className="serif num" style={{
+              fontSize: 28, fontWeight: 500, letterSpacing: -0.6,
+              color: progressColor(progress),
+            }}>
+              {progress}
+            </span>
+            <span style={{ fontSize: 14, color: 'var(--ink-3)' }}>%</span>
+          </div>
+          <div style={{ marginTop: 6 }}>
+            <ProgressBar value={progress} height={5} />
+          </div>
+        </div>
+        <div className="card-soft" style={{ padding: 16 }}>
+          <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+            <Users size={11} /> Équipe
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink)' }}>
+            {project.owner_role || '—'}
+          </div>
+        </div>
+      </div>
+
+      {/* Next action */}
+      <div className="card-soft" style={{
+        padding: 16, marginTop: 14,
+        borderLeft: '3px solid var(--terra)',
+      }}>
+        <div className="eyebrow" style={{ marginBottom: 6, color: 'var(--terra-deep)' }}>
+          Prochaine action
+        </div>
+        <textarea
+          value={nextAction}
+          onChange={(e) => setNextAction(e.target.value)}
+          onBlur={commitNextAction}
+          placeholder="Quelle est la prochaine étape ?"
+          rows={2}
+          style={{
+            width: '100%', padding: '6px 0',
+            border: 'none', background: 'transparent',
+            fontSize: 14, fontFamily: 'inherit', color: 'var(--ink)',
+            outline: 'none', resize: 'vertical', lineHeight: 1.5,
+          }}
+        />
+      </div>
+
+      {/* Steps */}
+      <div style={{ marginTop: 24 }}>
+        <div className="eyebrow" style={{ marginBottom: 12 }}>
+          Étapes ({actions.length})
+        </div>
+        {actions.length === 0 ? (
+          <div style={{ fontSize: 13, color: 'var(--ink-3)', fontStyle: 'italic' }}>
+            Aucune étape pour ce projet — ajoutez-en depuis le panneau Kanban ou Liste.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {actions.map((a) => {
+              const done = a.status === 'done' || a.progress === 100;
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => onUpdateAction(a.id, {
+                    status: done ? 'todo' : 'done',
+                    progress: done ? 0 : 100,
+                  })}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '10px 14px', borderRadius: 10,
+                    background: 'var(--surface-2)',
+                    border: '1px solid var(--line)',
+                    cursor: 'pointer', textAlign: 'left',
+                    transition: 'background 0.15s ease',
+                  }}
+                >
+                  <div style={{
+                    width: 20, height: 20, borderRadius: 4,
+                    border: `2px solid ${done ? meta.color : 'var(--line-strong)'}`,
+                    background: done ? meta.color : 'transparent',
+                    display: 'grid', placeItems: 'center', flexShrink: 0,
+                    transition: 'all 0.15s ease',
+                  }}>
+                    {done && <Check size={12} color="#fff" strokeWidth={3} />}
+                  </div>
+                  <div style={{
+                    flex: 1, fontSize: 13.5, fontWeight: 500,
+                    color: done ? 'var(--ink-3)' : 'var(--ink)',
+                    textDecoration: done ? 'line-through' : 'none',
+                  }}>
+                    {a.title}
+                  </div>
+                  {a.due_date && (
+                    <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>
+                      {formatDate(a.due_date)}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -1484,80 +1803,48 @@ export default function Projects() {
         }}
       >
         {/* ── A. Page header ── */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-          <div>
-            <h1 style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: '24px',
-              fontWeight: 700,
-              color: 'var(--color-text-primary)',
-              margin: 0,
-              lineHeight: 1.2,
-            }}>
-              Projets
-            </h1>
-            <p style={{
-              fontSize: '14px',
-              color: 'var(--color-text-secondary)',
-              margin: '4px 0 0',
-              fontFamily: 'var(--font-sans)',
-            }}>
-              Gestion des projets d'établissement
-            </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <div className="eyebrow">Gestion des projets d'établissement</div>
+          <div style={{ flex: 1 }} />
+          {/* View toggle (3 modes) */}
+          <div style={{
+            display: 'inline-flex',
+            border: '1px solid var(--line)',
+            borderRadius: 999,
+            overflow: 'hidden',
+            background: 'var(--surface)',
+          }}>
+            {([
+              { id: 'kanban' as const, Icon: LayoutGrid, title: 'Vue Kanban' },
+              { id: 'list' as const,   Icon: List,       title: 'Vue Liste' },
+              { id: 'detail' as const, Icon: Columns,    title: 'Vue Liste + Détail' },
+            ]).map(({ id, Icon, title }) => {
+              const active = viewMode === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setViewMode(id)}
+                  title={title}
+                  style={{
+                    padding: '7px 12px',
+                    background: active ? 'var(--terra-soft)' : 'transparent',
+                    border: 'none', cursor: 'pointer',
+                    color: active ? 'var(--terra-deep)' : 'var(--ink-3)',
+                    display: 'flex', alignItems: 'center',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <Icon size={15} />
+                </button>
+              );
+            })}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {/* View toggle */}
-            <div style={{
-              display: 'flex',
-              border: '1px solid var(--color-border)',
-              borderRadius: '8px',
-              overflow: 'hidden',
-            }}>
-              <button
-                onClick={() => setViewMode('kanban')}
-                title="Vue Kanban"
-                style={{
-                  padding: '7px 10px',
-                  background: viewMode === 'kanban' ? 'var(--color-primary)' : 'var(--color-surface)',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: viewMode === 'kanban' ? '#fff' : 'var(--color-text-secondary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <LayoutGrid size={15} />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                title="Vue Liste"
-                style={{
-                  padding: '7px 10px',
-                  background: viewMode === 'list' ? 'var(--color-primary)' : 'var(--color-surface)',
-                  border: 'none',
-                  borderLeft: '1px solid var(--color-border)',
-                  cursor: 'pointer',
-                  color: viewMode === 'list' ? '#fff' : 'var(--color-text-secondary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <List size={15} />
-              </button>
-            </div>
-
-            {/* New project button */}
-            <button
-              onClick={() => setShowCreate(true)}
-              style={primaryBtnStyle}
-            >
-              <Plus size={15} />
-              Nouveau projet
-            </button>
-          </div>
+          {/* New project button */}
+          <button onClick={() => setShowCreate(true)} className="btn primary">
+            <Plus size={13} strokeWidth={2.5} />
+            Nouveau projet
+          </button>
         </div>
 
         {/* Error / mock notice */}
@@ -1575,7 +1862,7 @@ export default function Projects() {
           </div>
         )}
 
-        {/* ── B/C. Kanban or List view ── */}
+        {/* ── B/C. Kanban / List / Detail view ── */}
         {viewMode === 'kanban' ? (
           <div style={{
             display: 'flex',
@@ -1599,12 +1886,23 @@ export default function Projects() {
               />
             ))}
           </div>
-        ) : (
+        ) : viewMode === 'list' ? (
           <ListView
             projects={projects}
             progressMap={progressMap}
             actionsCountMap={actionsCountMap}
             onSelectProject={handleSelectProject}
+          />
+        ) : (
+          <DetailView
+            projects={projects}
+            progressMap={progressMap}
+            actionsCountMap={actionsCountMap}
+            selectedProject={selectedProject}
+            selectedActions={selectedActions}
+            onSelectProject={handleSelectProject}
+            onUpdateProject={updateProject}
+            onUpdateAction={updateAction}
           />
         )}
       </div>

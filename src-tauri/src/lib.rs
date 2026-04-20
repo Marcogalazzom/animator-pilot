@@ -105,6 +105,12 @@ pub fn run() {
             sql: include_str!("../migrations/017_recurring_instances.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 18,
+            description: "design v2: residents/activities/journal/projects fields + user identity seeds",
+            sql: include_str!("../migrations/018_design_v2_fields.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

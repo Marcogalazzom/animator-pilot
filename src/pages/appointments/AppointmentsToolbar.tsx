@@ -25,12 +25,12 @@ interface Props {
 
 export default function AppointmentsToolbar(p: Props) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <div style={{
-          display: 'inline-flex', borderRadius: '10px',
-          border: '1px solid var(--color-border)', overflow: 'hidden',
-          background: 'var(--color-surface)',
+          display: 'inline-flex', borderRadius: 999,
+          border: '1px solid var(--line)', overflow: 'hidden',
+          background: 'var(--surface)',
         }}>
           {(Object.keys(TAB_LABELS) as AppointmentsTab[]).map((t) => {
             const active = p.tab === t;
@@ -39,58 +39,80 @@ export default function AppointmentsToolbar(p: Props) {
                 key={t}
                 onClick={() => p.onTabChange(t)}
                 style={{
-                  padding: '8px 16px', border: 'none',
-                  background: active ? 'var(--color-primary)' : 'transparent',
-                  color: active ? '#fff' : 'var(--color-text-primary)',
-                  fontSize: '13px', fontWeight: active ? 600 : 500,
-                  fontFamily: 'var(--font-sans)', cursor: 'pointer',
-                  transition: 'var(--transition-fast)',
+                  padding: '7px 16px', border: 'none',
+                  background: active ? 'var(--cat-rdv-bg)' : 'transparent',
+                  color: active ? 'var(--cat-rdv)' : 'var(--ink-2)',
+                  fontSize: 13, fontWeight: active ? 600 : 500,
+                  cursor: 'pointer',
+                  transition: 'background 0.12s, color 0.12s',
                 }}
               >
-                {TAB_LABELS[t]} <span style={{ opacity: 0.7, marginLeft: '4px' }}>· {p.counts[t]}</span>
+                {TAB_LABELS[t]}
+                <span style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 11.5,
+                  marginLeft: 6,
+                  color: active ? 'var(--cat-rdv)' : 'var(--ink-3)',
+                  opacity: 0.85,
+                }}>
+                  {p.counts[t]}
+                </span>
               </button>
             );
           })}
         </div>
-        <button
-          onClick={p.onCreate}
-          style={{
-            marginLeft: 'auto',
-            display: 'inline-flex', alignItems: 'center', gap: '6px',
-            padding: '8px 14px', background: 'var(--color-primary)', color: '#fff',
-            border: 'none', borderRadius: '8px',
-            fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-sans)', cursor: 'pointer',
-          }}
-        >
-          <Plus size={14} /> Nouveau rendez-vous
+        <div style={{ flex: 1 }} />
+        <button className="btn primary" onClick={p.onCreate}>
+          <Plus size={13} strokeWidth={2.5} /> Nouveau rendez-vous
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: '1 1 240px', maxWidth: '320px' }}>
-          <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)' }} />
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', flex: '1 1 240px', maxWidth: 320 }}>
+          <Search size={14} style={{
+            position: 'absolute', left: 12, top: '50%',
+            transform: 'translateY(-50%)', color: 'var(--ink-3)',
+          }} />
           <input
-            type="text" placeholder="Rechercher un titre, participant…" value={p.search}
+            type="text"
+            placeholder="Rechercher un titre, participant…"
+            value={p.search}
             onChange={(e) => p.onSearchChange(e.target.value)}
             style={{
-              width: '100%', padding: '8px 10px 8px 32px',
-              border: '1px solid var(--color-border)', borderRadius: '8px',
-              fontSize: '13px', fontFamily: 'var(--font-sans)', background: 'var(--color-surface)',
+              width: '100%', padding: '7px 12px 7px 34px',
+              border: '1px solid var(--line)', borderRadius: 999,
+              fontSize: 13, background: 'var(--surface)', color: 'var(--ink)',
+              outline: 'none',
             }}
           />
         </div>
         <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-          <Filter size={12} style={{ position: 'absolute', left: '10px', color: 'var(--color-text-secondary)', pointerEvents: 'none' }} />
-          <select value={p.typeFilter} onChange={(e) => p.onTypeFilterChange(e.target.value)}
-            style={{ padding: '7px 10px 7px 30px', border: '1px solid var(--color-border)', borderRadius: '8px', fontSize: '12px', background: 'var(--color-surface)', cursor: 'pointer' }}>
+          <Filter size={12} style={{ position: 'absolute', left: 12, color: 'var(--ink-3)', pointerEvents: 'none' }} />
+          <select
+            value={p.typeFilter}
+            onChange={(e) => p.onTypeFilterChange(e.target.value)}
+            style={{
+              padding: '7px 12px 7px 32px',
+              border: '1px solid var(--line)', borderRadius: 999,
+              fontSize: 12.5, background: 'var(--surface)', color: 'var(--ink)',
+              cursor: 'pointer', appearance: 'none',
+            }}
+          >
             <option value="">Tous types</option>
             {p.types.map((c) => <option key={c.name} value={c.name}>{categoryLabel(c)}</option>)}
           </select>
         </div>
         <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-          <MapPin size={12} style={{ position: 'absolute', left: '10px', color: 'var(--color-text-secondary)', pointerEvents: 'none' }} />
-          <select value={p.locationFilter} onChange={(e) => p.onLocationFilterChange(e.target.value)}
-            style={{ padding: '7px 10px 7px 30px', border: '1px solid var(--color-border)', borderRadius: '8px', fontSize: '12px', background: 'var(--color-surface)', cursor: 'pointer' }}>
+          <MapPin size={12} style={{ position: 'absolute', left: 12, color: 'var(--ink-3)', pointerEvents: 'none' }} />
+          <select
+            value={p.locationFilter}
+            onChange={(e) => p.onLocationFilterChange(e.target.value)}
+            style={{
+              padding: '7px 12px 7px 32px',
+              border: '1px solid var(--line)', borderRadius: 999,
+              fontSize: 12.5, background: 'var(--surface)', color: 'var(--ink)',
+              cursor: 'pointer', appearance: 'none',
+            }}
+          >
             <option value="">Tous lieux</option>
             {p.locations.map((l) => <option key={l} value={l}>{l}</option>)}
           </select>

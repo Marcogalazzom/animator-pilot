@@ -8,6 +8,7 @@ function act(overrides: Partial<Activity> = {}): Activity {
     max_participants: 10, actual_participants: 0, animator_name: '',
     status: 'planned', materials_needed: '', notes: '',
     linked_project_id: null, is_shared: 1, is_template: 0, unit: 'main', is_recurring: 0,
+    category: 'prep', difficulty: 'facile',
     synced_from: '', last_sync_at: null, external_id: null, created_at: '',
     ...overrides,
   };

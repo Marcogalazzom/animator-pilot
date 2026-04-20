@@ -36,20 +36,15 @@ export default function Famileo() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1400px' }}>
-      <div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: 700, margin: 0, lineHeight: 1.15, letterSpacing: '-0.01em' }}>
-          Famileo mensuel
-        </h1>
-        <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: '6px 0 0' }}>
-          Récapitulatif du mois envoyé aux familles — assemblage auto, édition rapide, export PDF
-        </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1400, animation: 'slide-in 0.22s ease-out' }}>
+      <div className="eyebrow">
+        Récapitulatif du mois envoyé aux familles — assemblage auto, édition rapide, export PDF
       </div>
 
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'minmax(260px, 320px) 1fr',
-        gap: '20px',
+        gap: 20,
         alignItems: 'start',
       }}>
         <FamileoControls
@@ -62,7 +57,7 @@ export default function Famileo() {
           exporting={exporting}
         />
         {data.loading ? (
-          <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px', padding: '20px' }}>Chargement…</p>
+          <p style={{ color: 'var(--ink-3)', fontSize: 13, padding: 20 }}>Chargement…</p>
         ) : (
           <FamileoPreview
             year={year}

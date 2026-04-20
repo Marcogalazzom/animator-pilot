@@ -860,25 +860,8 @@ export default function Notes() {
         flexWrap: 'wrap',
         gap: '12px',
       }}>
-        <div>
-          <h1 style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: '26px',
-            fontWeight: 700,
-            color: 'var(--color-text-primary)',
-            margin: 0,
-            lineHeight: 1.2,
-          }}>
-            Notes de service &amp; Comptes-rendus
-          </h1>
-          <p style={{
-            fontSize: '13px',
-            color: 'var(--color-text-secondary)',
-            margin: '4px 0 0',
-            fontFamily: 'var(--font-sans)',
-          }}>
-            Rédigez et archivez vos documents institutionnels
-          </p>
+        <div className="eyebrow">
+          Rédigez et archivez vos documents institutionnels
         </div>
 
         {/* New document button with dropdown */}

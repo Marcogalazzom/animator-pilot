@@ -1,21 +1,24 @@
-import { Trash2, Pencil, Check } from 'lucide-react';
-import { useState } from 'react';
+import { Check } from 'lucide-react';
 import { photoSrc } from '@/utils/photoStorage';
 import type { Photo } from '@/db/types';
 
 interface Props {
   photos: Photo[];
-  onCaption: (id: number, caption: string) => Promise<void>;
-  onDelete: (id: number) => Promise<void>;
+  selectMode?: boolean;
+  selectedIds?: Set<number>;
+  onToggleSelect?: (id: number) => void;
+  onOpenLightbox?: (index: number) => void;
 }
 
-export default function PhotoGrid({ photos, onCaption, onDelete }: Props) {
-  const [editing, setEditing] = useState<number | null>(null);
-  const [draft, setDraft] = useState('');
-
+export default function PhotoGrid({
+  photos, selectMode = false, selectedIds, onToggleSelect, onOpenLightbox,
+}: Props) {
   if (photos.length === 0) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: '13px' }}>
+      <div style={{
+        padding: 48, textAlign: 'center',
+        color: 'var(--ink-3)', fontSize: 13,
+      }}>
         Aucune photo dans cet album. Cliquez sur « Ajouter des photos » pour commencer.
       </div>
     );
@@ -25,68 +28,73 @@ export default function PhotoGrid({ photos, onCaption, onDelete }: Props) {
     <div style={{
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-      gap: '12px',
+      gap: 12,
     }}>
-      {photos.map((p) => {
+      {photos.map((p, idx) => {
         const src = photoSrc(p.thumbnail_path || p.file_path);
-        const isEditing = editing === p.id;
+        const selected = selectedIds?.has(p.id) ?? false;
         return (
-          <div
+          <button
             key={p.id}
-            style={{
-              background: 'var(--color-surface)', borderRadius: '8px',
-              overflow: 'hidden', boxShadow: 'var(--shadow-card)',
-              display: 'flex', flexDirection: 'column',
+            onClick={() => {
+              if (selectMode) onToggleSelect?.(p.id);
+              else onOpenLightbox?.(idx);
             }}
+            style={{
+              position: 'relative',
+              background: 'var(--surface)',
+              borderRadius: 10,
+              overflow: 'hidden',
+              boxShadow: selected ? '0 0 0 3px var(--terra)' : 'var(--shadow-sm)',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              transition: 'box-shadow 0.15s ease, transform 0.18s ease',
+            }}
+            onMouseEnter={(ev) => { if (!selected) ev.currentTarget.style.boxShadow = 'var(--shadow-md)'; }}
+            onMouseLeave={(ev) => { if (!selected) ev.currentTarget.style.boxShadow = 'var(--shadow-sm)'; }}
+            title={p.caption || undefined}
           >
-            <div style={{ aspectRatio: '4/3', background: '#111', overflow: 'hidden' }}>
+            <div style={{ aspectRatio: '4/3', background: 'var(--surface-3)', overflow: 'hidden' }}>
               <img src={src} alt={p.caption || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
-            <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {isEditing ? (
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <input
-                    autoFocus
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { onCaption(p.id, draft); setEditing(null); } }}
-                    style={{ flex: 1, padding: '4px 6px', border: '1px solid var(--color-border)', borderRadius: '4px', fontSize: '12px' }}
-                  />
-                  <button
-                    onClick={() => { onCaption(p.id, draft); setEditing(null); }}
-                    style={{ background: 'var(--color-primary)', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 6px', cursor: 'pointer' }}
-                  ><Check size={12} /></button>
-                </div>
-              ) : (
-                <p
-                  onClick={() => { setEditing(p.id); setDraft(p.caption); }}
-                  style={{
-                    margin: 0, fontSize: '12px', color: p.caption ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                    fontStyle: p.caption ? 'normal' : 'italic', cursor: 'text',
-                    minHeight: '16px',
-                  }}
-                >
-                  {p.caption || 'Ajouter une légende…'}
-                </p>
-              )}
-              <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
-                {!isEditing && (
-                  <button onClick={() => { setEditing(p.id); setDraft(p.caption); }}
-                    style={iconBtn} title="Légende"><Pencil size={12} /></button>
-                )}
-                <button onClick={() => onDelete(p.id)} style={{ ...iconBtn, color: 'var(--color-danger)' }} title="Supprimer">
-                  <Trash2 size={12} />
-                </button>
+
+            {/* Selection indicator — always visible in select mode, on hover otherwise */}
+            {selectMode && (
+              <div
+                style={{
+                  position: 'absolute', top: 8, left: 8,
+                  width: 22, height: 22, borderRadius: '50%',
+                  background: selected ? 'var(--terra)' : 'rgba(255,255,255,0.85)',
+                  border: `2px solid ${selected ? 'var(--terra-deep)' : 'var(--line-strong)'}`,
+                  color: '#fff',
+                  display: 'grid', placeItems: 'center',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {selected && <Check size={12} strokeWidth={3} />}
               </div>
-            </div>
-          </div>
+            )}
+
+            {p.caption && (
+              <div
+                style={{
+                  position: 'absolute', bottom: 0, left: 0, right: 0,
+                  padding: '16px 10px 8px',
+                  background: 'linear-gradient(180deg, transparent, rgba(0,0,0,0.6))',
+                  color: '#fff', fontSize: 12,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  textAlign: 'left',
+                }}
+              >
+                {p.caption}
+              </div>
+            )}
+          </button>
         );
       })}
     </div>
   );
 }
-
-const iconBtn: React.CSSProperties = {
-  background: 'var(--color-bg-soft)', border: 'none', borderRadius: '4px',
-  padding: '3px 6px', cursor: 'pointer', color: 'var(--color-text-secondary)',
-};

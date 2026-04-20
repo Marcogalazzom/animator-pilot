@@ -60,15 +60,8 @@ export default function Appointments() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1200px' }}>
-      <div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: 700, margin: 0, lineHeight: 1.15, letterSpacing: '-0.01em' }}>
-          Rendez-vous
-        </h1>
-        <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: '6px 0 0' }}>
-          Réunions, fournisseurs, formations et entretiens
-        </p>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1200, animation: 'slide-in 0.22s ease-out' }}>
+      <div className="eyebrow">Réunions, fournisseurs, formations et entretiens</div>
 
       <AppointmentsToolbar
         tab={tab}

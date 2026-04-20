@@ -121,33 +121,24 @@ export default function Inventory() {
   const syncedCount = items.filter((it) => it.synced_from === 'planning-ehpad').length;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1200px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1200, animation: 'slide-in 0.22s ease-out' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
-        <div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
-            Inventaire
-          </h1>
-          <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)', margin: '4px 0 0', fontFamily: 'var(--font-sans)' }}>
-            Matériel et fournitures d'animation — {syncedCount > 0 && <span style={{ color: 'var(--color-success)' }}>{syncedCount} synchronisés depuis planning-ehpad</span>}
-          </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          Matériel et fournitures d'animation
+          {syncedCount > 0 && (
+            <span className="chip done">{syncedCount} sync.</span>
+          )}
           <SyncStatus module="inventory" />
         </div>
-
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <SyncButton module="inventory" />
-          <button
-            onClick={() => { setEditId(null); setShowForm(true); }}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: '6px',
-              padding: '8px 16px', backgroundColor: 'var(--color-primary)',
-              color: '#fff', border: 'none', borderRadius: '6px',
-              fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-sans)', cursor: 'pointer',
-            }}
-          >
-            <Plus size={14} /> Ajouter
-          </button>
-        </div>
+        <div style={{ flex: 1 }} />
+        <SyncButton module="inventory" />
+        <button
+          className="btn primary"
+          onClick={() => { setEditId(null); setShowForm(true); }}
+        >
+          <Plus size={13} strokeWidth={2.5} /> Ajouter
+        </button>
       </div>
 
       {/* Filters */}

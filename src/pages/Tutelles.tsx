@@ -453,6 +453,8 @@ function DetailPanel({ event, checklist, correspondences, onClose, onEditEvent, 
         status: 'todo',
         start_date: null,
         due_date: null,
+        category: '',
+        next_action: '',
       });
       await onEditEvent(event.id, { linked_project_id: newId });
       const proj = await getProject(newId);

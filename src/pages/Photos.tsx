@@ -73,7 +73,7 @@ export default function Photos() {
   // ── Detail view ──
   if (openedId) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1200px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1200, animation: 'slide-in 0.22s ease-out' }}>
         <AlbumDetail
           albumId={openedId}
           onBack={() => setOpenedId(null)}
@@ -93,40 +93,41 @@ export default function Photos() {
 
   // ── List view ──
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1200px' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
-        <div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: 700, margin: 0, lineHeight: 1.15, letterSpacing: '-0.01em' }}>
-            Photos & comptes rendus
-          </h1>
-          <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: '6px 0 0' }}>
-            Albums liés aux activités — la base du Famileo mensuel
-          </p>
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1200, animation: 'slide-in 0.22s ease-out' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div className="eyebrow">Albums liés aux activités — la base du Famileo mensuel</div>
         <button
+          className="btn primary"
           onClick={() => { setEditing(null); setShowForm(true); }}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: '6px',
-            padding: '8px 14px', background: 'var(--color-primary)', color: '#fff',
-            border: 'none', borderRadius: '8px',
-            fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-          }}
         >
-          <Plus size={14} /> Nouvel album
+          <Plus size={13} strokeWidth={2.5} /> Nouvel album
         </button>
       </div>
 
       {data.loading ? (
-        <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px' }}>Chargement…</p>
+        <p style={{ color: 'var(--ink-3)', fontSize: 13 }}>Chargement…</p>
       ) : data.albums.length === 0 ? (
-        <div style={{ background: 'var(--color-surface)', borderRadius: '8px', padding: '40px', textAlign: 'center', boxShadow: 'var(--shadow-card)' }}>
-          <Camera size={40} style={{ color: 'var(--color-border)', marginBottom: '12px' }} />
-          <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)' }}>
-            Aucun album pour le moment. Créez votre premier album !
+        <div className="card" style={{
+          padding: 48, textAlign: 'center',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+        }}>
+          <Camera size={40} style={{ color: 'var(--ink-4)' }} />
+          <div className="serif" style={{ fontSize: 18, fontWeight: 500, color: 'var(--ink)' }}>
+            Aucun album pour le moment
+          </div>
+          <p style={{ fontSize: 13.5, color: 'var(--ink-3)', margin: 0, maxWidth: 360 }}>
+            Créez votre premier album et regroupez les photos d'une activité — elles serviront pour le Famileo du mois.
           </p>
+          <button
+            className="btn primary"
+            onClick={() => { setEditing(null); setShowForm(true); }}
+            style={{ marginTop: 6 }}
+          >
+            <Plus size={13} strokeWidth={2.5} /> Créer un album
+          </button>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
           {data.albums.map((item) => (
             <AlbumCard
               key={item.album.id}
