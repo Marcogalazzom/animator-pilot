@@ -32,15 +32,19 @@ export default function Journal() {
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
+  const [mood, setMood] = useState<JournalMood>('good');
   const addToast = useToastStore((s) => s.add);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     getJournalEntries()
       .then((rows) => setEntries(rows))
-      .catch(() => {})
+      .catch((err) => {
+        console.error('[journal] load failed:', err);
+        addToast('Impossible de charger le carnet de bord', 'error');
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [addToast]);
 
   const filtered = entries.filter((e) => {
     if (!search) return true;
@@ -63,29 +67,48 @@ export default function Journal() {
 
     try {
       if (editId) {
-        await updateJournalEntry(editId, data).catch(() => {});
+        await updateJournalEntry(editId, data);
         setEntries((prev) => prev.map((e) => e.id === editId ? { ...e, ...data } : e));
         addToast('Entrée mise à jour', 'success');
       } else {
-        const id = await createJournalEntry(data).catch(() => Date.now());
-        setEntries((prev) => [{ ...data, id: id as number, created_at: new Date().toISOString() }, ...prev]);
+        const id = await createJournalEntry(data);
+        setEntries((prev) => [
+          { ...data, id, created_at: new Date().toISOString() },
+          ...prev,
+        ]);
         addToast('Entrée ajoutée', 'success');
       }
-    } catch {
-      addToast('Erreur', 'error');
+      setShowForm(false);
+      setEditId(null);
+    } catch (err) {
+      console.error('[journal] save failed:', err);
+      addToast('Erreur lors de l\'enregistrement', 'error');
     }
-
-    setShowForm(false);
-    setEditId(null);
   }
 
   async function handleDelete(id: number) {
-    await deleteJournalEntry(id).catch(() => {});
-    setEntries((prev) => prev.filter((e) => e.id !== id));
-    addToast('Entrée supprimée', 'success');
+    try {
+      await deleteJournalEntry(id);
+      setEntries((prev) => prev.filter((e) => e.id !== id));
+      addToast('Entrée supprimée', 'success');
+    } catch (err) {
+      console.error('[journal] delete failed:', err);
+      addToast('Erreur lors de la suppression', 'error');
+    }
   }
 
   const editItem = editId ? entries.find((e) => e.id === editId) : null;
+
+  useEffect(() => {
+    if (showForm) setMood(editItem?.mood ?? 'good');
+  }, [showForm, editItem]);
+
+  useEffect(() => {
+    if (editId && !editItem) {
+      setEditId(null);
+      setShowForm(false);
+    }
+  }, [editId, editItem]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '800px' }}>
@@ -203,15 +226,34 @@ export default function Journal() {
                 <label style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
                   Humeur
                   <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
-                    {MOOD_KEYS.map((k) => (
-                      <label key={k} style={{ cursor: 'pointer', textAlign: 'center' }}>
-                        <input type="radio" name="mood" value={k} defaultChecked={editItem ? editItem.mood === k : k === 'good'} style={{ display: 'none' }} />
-                        <span style={{ fontSize: '22px', display: 'block', opacity: 0.7, transition: 'opacity 0.15s' }}
-                          title={MOODS[k].label}>
-                          {MOODS[k].emoji}
-                        </span>
-                      </label>
-                    ))}
+                    {MOOD_KEYS.map((k) => {
+                      const checked = mood === k;
+                      return (
+                        <label key={k} style={{ cursor: 'pointer', textAlign: 'center' }}>
+                          <input
+                            type="radio"
+                            name="mood"
+                            value={k}
+                            checked={checked}
+                            onChange={() => setMood(k)}
+                            style={{ display: 'none' }}
+                          />
+                          <span
+                            style={{
+                              fontSize: '22px',
+                              display: 'block',
+                              opacity: checked ? 1 : 0.45,
+                              transform: checked ? 'scale(1.15)' : 'scale(1)',
+                              filter: checked ? 'none' : 'grayscale(0.4)',
+                              transition: 'opacity 0.15s, transform 0.15s, filter 0.15s',
+                            }}
+                            title={MOODS[k].label}
+                          >
+                            {MOODS[k].emoji}
+                          </span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </label>
               </div>

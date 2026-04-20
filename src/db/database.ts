@@ -7,6 +7,7 @@ export function getDb(): Promise<Database> {
     dbPromise = Database.load('sqlite:pilot-animateur.db')
       .then(async (db) => {
         await ensureActivitiesSchema(db);
+        await ensureJournalSchema(db);
         return db;
       })
       .catch((err) => {
@@ -68,5 +69,27 @@ async function ensureActivitiesSchema(db: Database): Promise<void> {
     }
   } catch (err) {
     console.error('[schema-guard] ensureActivitiesSchema failed:', err);
+  }
+}
+
+async function ensureJournalSchema(db: Database): Promise<void> {
+  try {
+    await db.execute(
+      `CREATE TABLE IF NOT EXISTS journal (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        date            TEXT    NOT NULL,
+        content         TEXT    NOT NULL DEFAULT '',
+        mood            TEXT    NOT NULL DEFAULT 'neutral',
+        tags            TEXT    NOT NULL DEFAULT '',
+        created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+      )`,
+      [],
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_journal_date ON journal(date)',
+      [],
+    );
+  } catch (err) {
+    console.error('[schema-guard] ensureJournalSchema failed:', err);
   }
 }
