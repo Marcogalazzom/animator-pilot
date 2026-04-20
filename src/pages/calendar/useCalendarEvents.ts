@@ -82,7 +82,7 @@ export function buildEventsFromDb(
       animator: a.animator_name ?? '',
       status: a.status,
       source: 'activity',
-      link: '/activities',
+      link: `/activities?edit=${a.id}`,
     });
   }
 
@@ -118,7 +118,7 @@ export function buildEventsFromDb(
       animator: r.participants ?? '',
       status: r.status,
       source: 'appointment',
-      link: '/appointments',
+      link: `/appointments?edit=${r.id}`,
     });
   }
 

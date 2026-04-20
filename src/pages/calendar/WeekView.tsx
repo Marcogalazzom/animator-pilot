@@ -57,7 +57,6 @@ export default function WeekView({ events, mondayDate, types, typeFilter, locati
           borderRadius: '4px',
           borderLeft: `2px solid ${c.color}`,
           cursor: 'pointer',
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           transition: 'var(--transition-fast)',
           lineHeight: 1.3,
         }}
@@ -71,7 +70,17 @@ export default function WeekView({ events, mondayDate, types, typeFilter, locati
         }}
         title={`${e.time ?? ''} ${e.title}${e.location ? ' · ' + e.location : ''}`}
       >
-        <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{e.time ?? ''}</strong> {prefix}{e.title}
+        <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{e.time ?? ''}</strong> {prefix}{e.title}
+        </div>
+        {e.location && (
+          <div style={{
+            fontSize: 10, opacity: 0.75, marginTop: 1,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            📍 {e.location}
+          </div>
+        )}
       </div>
     );
   }

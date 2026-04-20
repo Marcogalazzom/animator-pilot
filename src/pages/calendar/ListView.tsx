@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, ChevronRight, CalendarClock } from 'lucide-react';
+import { Search, ChevronRight, CalendarClock, MapPin } from 'lucide-react';
 import { resolveEventColor, type CalendarEvent } from './useCalendarEvents';
 import { categoryLabel, type CategoryColor } from '@/db/categoryColors';
+import { todayIso } from '@/utils/dateUtils';
 
 interface Props {
   events: CalendarEvent[];
@@ -11,30 +12,53 @@ interface Props {
   locationFilter: string;
 }
 
-const MONTH_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
-const DAY_FR = ['Dim.', 'Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.'];
+const MONTH_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const DAY_FR_LONG = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 
-function formatDay(iso: string): string {
+function daysBetween(iso: string, todayIsoStr: string): number {
+  const a = new Date(iso + 'T00:00:00');
+  const b = new Date(todayIsoStr + 'T00:00:00');
+  return Math.round((a.getTime() - b.getTime()) / 86400000);
+}
+
+/** Returns a relative header label like "Aujourd'hui", "Demain",
+ *  "Dans 3 jours", "Dans 1 semaine", "Dans 2 semaines", "Dans 1 mois". */
+function relativeLabel(days: number): string {
+  if (days === 0) return "Aujourd'hui";
+  if (days === 1) return 'Demain';
+  if (days < 7) return `Dans ${days} jours`;
+  if (days < 14) return 'Dans 1 semaine';
+  if (days < 28) return `Dans ${Math.floor(days / 7)} semaines`;
+  const months = Math.floor(days / 30);
+  if (months <= 1) return 'Dans 1 mois';
+  return `Dans ${months} mois`;
+}
+
+function absoluteLabel(iso: string): string {
   const d = new Date(iso + 'T00:00:00');
-  return `${DAY_FR[d.getDay()]} ${d.getDate()} ${MONTH_FR[d.getMonth()].toLowerCase()} ${d.getFullYear()}`;
+  const day = DAY_FR_LONG[d.getDay()];
+  return `${day.charAt(0).toUpperCase()}${day.slice(1)} ${d.getDate()} ${MONTH_FR[d.getMonth()]}`;
 }
 
 export default function ListView({ events, types, typeFilter, locationFilter }: Props) {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
-  const [focused, setFocused] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const today = todayIso();
   const typeMap = new Map(types.map((c) => [c.name, c]));
   const colorFor = (e: CalendarEvent): CategoryColor => resolveEventColor(e, typeMap);
 
+  // Agenda = future-only: today included, strictly anything before today excluded.
   const filtered = useMemo(() => {
     return events.filter((e) => {
+      if (e.date < today) return false;
+      if (e.status === 'cancelled' || e.status === 'completed') return false;
       if (typeFilter && e.type !== typeFilter) return false;
       if (locationFilter && e.location !== locationFilter) return false;
       if (search && !(`${e.title} ${e.location} ${e.animator}`.toLowerCase().includes(search.toLowerCase()))) return false;
       return true;
     });
-  }, [events, typeFilter, locationFilter, search]);
+  }, [events, today, typeFilter, locationFilter, search]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
@@ -43,124 +67,135 @@ export default function ListView({ events, types, typeFilter, locationFilter }: 
       list.push(e);
       map.set(e.date, list);
     }
-    return Array.from(map.entries());
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [filtered]);
 
   return (
     <div>
-      <div style={{ position: 'relative', marginBottom: '14px', maxWidth: '440px' }}>
-        <Search size={15} style={{
-          position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)',
-          color: focused ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-          transition: 'var(--transition-fast)',
-        }} />
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14,
+        padding: '8px 14px', maxWidth: 440,
+        background: 'var(--surface)', border: '1px solid var(--line)',
+        borderRadius: 999,
+      }}>
+        <Search size={14} style={{ color: 'var(--ink-3)' }} />
         <input
           type="text"
-          placeholder="Rechercher un titre, un lieu, un intervenant…"
+          placeholder="Rechercher dans l'agenda…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
           style={{
-            width: '100%', padding: '10px 14px 10px 36px',
-            border: `1px solid ${focused ? 'var(--color-primary)' : 'var(--color-border)'}`,
-            borderRadius: '10px',
-            fontSize: '13px', fontFamily: 'var(--font-sans)',
-            background: 'var(--color-surface)',
-            outline: 'none',
-            boxShadow: focused ? '0 0 0 3px rgba(30,64,175,0.12)' : 'none',
-            transition: 'var(--transition-fast)',
+            flex: 1, border: 'none', outline: 'none',
+            background: 'transparent', fontSize: 13, color: 'var(--ink)',
           }}
         />
       </div>
 
-      <div style={{
-        background: 'var(--color-surface)', borderRadius: 'var(--radius-card)',
-        boxShadow: 'var(--shadow-card)', overflow: 'hidden',
-      }}>
+      <div className="card" style={{ overflow: 'hidden' }}>
         {grouped.length === 0 && (
-          <p style={{
-            color: 'var(--color-text-secondary)', fontSize: '13px',
-            padding: '40px', textAlign: 'center', margin: 0,
+          <div style={{
+            padding: 48, textAlign: 'center',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
           }}>
-            Aucune activité.
-          </p>
-        )}
-        {grouped.map(([date, list]) => (
-          <div key={date}>
-            <div style={{
-              padding: '12px 18px', background: 'var(--color-bg-soft)',
-              fontSize: '14px', fontWeight: 700,
-              fontFamily: 'var(--font-display)',
-              color: 'var(--color-text-primary)',
-              position: 'sticky', top: 0, zIndex: 1,
-              borderLeft: '3px solid var(--color-primary)',
-              textTransform: 'capitalize',
-            }}>
-              {formatDay(date)}
+            <CalendarClock size={32} style={{ color: 'var(--ink-4)' }} />
+            <div className="serif" style={{ fontSize: 16, fontWeight: 500, color: 'var(--ink)' }}>
+              Aucun événement à venir
             </div>
-            {list.map((e) => {
-              const c = colorFor(e);
-              const isHover = hoveredId === e.id;
-              const isAppt = e.source === 'appointment';
-              return (
-                <div
-                  key={e.id}
-                  onClick={() => navigate(e.link)}
-                  onMouseEnter={() => setHoveredId(e.id)}
-                  onMouseLeave={() => setHoveredId(null)}
-                  style={{
-                    display: 'flex', gap: '14px', padding: '12px 18px',
-                    borderBottom: '1px solid var(--color-border)',
-                    cursor: 'pointer', alignItems: 'center',
-                    background: isHover ? 'var(--color-bg-soft)' : 'transparent',
-                    transition: 'var(--transition-fast)',
-                  }}
-                >
-                  <div style={{
-                    width: '52px', textAlign: 'center', padding: '4px 6px',
-                    borderRadius: '6px', background: 'var(--color-bg-soft)',
-                    fontSize: '12px', fontWeight: 700,
-                    fontVariantNumeric: 'tabular-nums',
-                    color: 'var(--color-text-primary)',
-                  }}>
-                    {e.time ?? '—'}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      {isAppt && <CalendarClock size={12} style={{ color: c.color }} />}
-                      <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
-                        {e.title}
-                      </span>
-                      <span style={{
-                        fontSize: '10px', padding: '1px 7px', borderRadius: '10px',
-                        color: c.color, backgroundColor: c.bg,
-                        border: `1px solid ${c.color}33`,
-                        fontWeight: 500,
-                      }}>
-                        {categoryLabel(c)}
-                      </span>
-                    </div>
-                    {(e.location || e.animator) && (
-                      <div style={{ color: 'var(--color-text-secondary)', fontSize: '11px', marginTop: '3px' }}>
-                        {[e.location, e.animator].filter(Boolean).join(' · ')}
-                      </div>
-                    )}
-                  </div>
-                  <ChevronRight
-                    size={14}
-                    style={{
-                      color: 'var(--color-text-secondary)',
-                      opacity: isHover ? 1 : 0,
-                      transform: isHover ? 'translateX(0)' : 'translateX(-4px)',
-                      transition: 'var(--transition-fast)',
-                    }}
-                  />
-                </div>
-              );
-            })}
+            <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: 0, maxWidth: 360 }}>
+              {search
+                ? 'Essayez un autre mot-clé ou retirez les filtres.'
+                : "L'agenda ne montre que les activités futures. Passez à l'onglet Historique pour voir les passées."}
+            </p>
           </div>
-        ))}
+        )}
+
+        {grouped.map(([date, list]) => {
+          const days = daysBetween(date, today);
+          return (
+            <div key={date}>
+              <div style={{
+                padding: '10px 18px 8px', background: 'var(--surface-2)',
+                position: 'sticky', top: 0, zIndex: 1,
+                borderBottom: '1px solid var(--line)',
+              }}>
+                <div style={{
+                  fontSize: 14, fontWeight: 700, color: 'var(--terra-deep)',
+                  fontFamily: 'var(--font-serif)', letterSpacing: -0.2,
+                }}>
+                  {relativeLabel(days)}
+                </div>
+                <div style={{
+                  fontSize: 11.5, color: 'var(--ink-3)', marginTop: 2,
+                  textTransform: 'capitalize',
+                }}>
+                  {absoluteLabel(date)}
+                </div>
+              </div>
+              {list.map((e) => {
+                const c = colorFor(e);
+                const isHover = hoveredId === e.id;
+                const isAppt = e.source === 'appointment';
+                return (
+                  <div
+                    key={e.id}
+                    onClick={() => navigate(e.link)}
+                    onMouseEnter={() => setHoveredId(e.id)}
+                    onMouseLeave={() => setHoveredId(null)}
+                    style={{
+                      display: 'flex', gap: 14, padding: '12px 18px',
+                      borderBottom: '1px solid var(--line)',
+                      cursor: 'pointer', alignItems: 'center',
+                      background: isHover ? 'var(--surface-2)' : 'transparent',
+                      transition: 'background 0.12s ease',
+                    }}
+                  >
+                    <div className="num" style={{
+                      width: 52, textAlign: 'center', padding: '4px 6px',
+                      borderRadius: 6, background: 'var(--surface-2)',
+                      fontSize: 12, fontWeight: 600,
+                      fontFamily: 'var(--font-mono)',
+                      color: 'var(--ink-2)',
+                    }}>
+                      {e.time ?? '—'}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        {isAppt && <CalendarClock size={12} style={{ color: c.color }} />}
+                        <span style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)' }}>
+                          {e.title}
+                        </span>
+                        <span className="chip" style={{ background: c.bg, color: c.color }}>
+                          {categoryLabel(c)}
+                        </span>
+                      </div>
+                      {(e.location || e.animator) && (
+                        <div style={{
+                          color: 'var(--ink-3)', fontSize: 11.5, marginTop: 3,
+                          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+                        }}>
+                          {e.location && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                              <MapPin size={10} /> {e.location}
+                            </span>
+                          )}
+                          {e.animator && <span>{e.animator}</span>}
+                        </div>
+                      )}
+                    </div>
+                    <ChevronRight
+                      size={14}
+                      style={{
+                        color: 'var(--ink-4)',
+                        opacity: isHover ? 1 : 0,
+                        transition: 'opacity 0.12s ease',
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

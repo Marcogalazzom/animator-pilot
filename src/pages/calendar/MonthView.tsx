@@ -152,23 +152,38 @@ export default function MonthView({ events, date, types, typeFilter, locationFil
                       key={e.id}
                       onClick={(ev) => { ev.stopPropagation(); navigate(e.link); }}
                       style={{
-                        display: 'flex', alignItems: 'center', gap: 4,
-                        padding: '2px 5px', borderRadius: 3,
+                        padding: '3px 5px', borderRadius: 3,
                         background: c.bg, color: c.color,
                         fontSize: 10.5, fontWeight: 500,
-                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        lineHeight: 1.25,
                         cursor: 'pointer',
+                        overflow: 'hidden',
                       }}
                       title={`${e.time ?? ''} ${e.title}${e.location ? ' · ' + e.location : ''}`}
                     >
-                      {e.time && (
-                        <span className="num" style={{
-                          fontFamily: 'var(--font-mono)', fontWeight: 600, opacity: 0.85,
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>
+                        {e.time && (
+                          <span className="num" style={{
+                            fontFamily: 'var(--font-mono)', fontWeight: 600, opacity: 0.85,
+                            flexShrink: 0,
+                          }}>
+                            {e.time.slice(0, 5)}
+                          </span>
+                        )}
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.title}</span>
+                      </div>
+                      {e.location && (
+                        <div style={{
+                          fontSize: 9.5, opacity: 0.75,
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                          marginTop: 1,
                         }}>
-                          {e.time.slice(0, 5)}
-                        </span>
+                          {e.location}
+                        </div>
                       )}
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.title}</span>
                     </div>
                   );
                 })}

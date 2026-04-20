@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useToastStore } from '@/stores/toastStore';
 import AppointmentsToolbar, { type AppointmentsTab } from './appointments/AppointmentsToolbar';
@@ -6,7 +6,7 @@ import UpcomingTab from './appointments/UpcomingTab';
 import PastTab from './appointments/PastTab';
 import AppointmentFormModal from './appointments/AppointmentFormModal';
 import { useAppointmentsData } from './appointments/useAppointmentsData';
-import { createAppointment, updateAppointment } from '@/db/appointments';
+import { createAppointment, updateAppointment, getAppointment } from '@/db/appointments';
 import type { Appointment } from '@/db/types';
 
 export default function Appointments() {
@@ -42,6 +42,21 @@ export default function Appointments() {
   function openEdit(a: Appointment) {
     setEditing(a); setShowForm(true);
   }
+
+  // Deep-link from the Calendar: ?edit={id} auto-opens the edit modal.
+  useEffect(() => {
+    const editId = params.get('edit');
+    if (!editId) return;
+    const id = Number(editId);
+    if (!Number.isFinite(id)) return;
+    getAppointment(id).then((a) => {
+      if (a) openEdit(a);
+    }).catch(() => {}).finally(() => {
+      const next = new URLSearchParams(params); next.delete('edit');
+      setParams(next, { replace: true });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
 
   async function handleSubmit(values: Omit<Appointment, 'id' | 'created_at'>) {
     try {

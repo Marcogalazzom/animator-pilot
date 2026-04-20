@@ -9,7 +9,7 @@ import PastTab from './activities/PastTab';
 import LibraryTab from './activities/LibraryTab';
 import ActivityFormModal from './activities/ActivityFormModal';
 import { useActivitiesData } from './activities/useActivitiesData';
-import { createActivity, updateActivity } from '@/db/activities';
+import { createActivity, updateActivity, getActivity } from '@/db/activities';
 import type { Activity } from '@/db/types';
 
 export default function Activities() {
@@ -57,6 +57,23 @@ export default function Activities() {
   function openEdit(a: Activity) {
     setEditing(a); setFormMode(a.is_template === 1 ? 'template' : 'scheduled'); setShowForm(true);
   }
+
+  // Auto-open the edit modal when the URL has ?edit={id} (deep-link from the
+  // Calendar click). We clear the param after opening so a page reload doesn't
+  // keep re-triggering the modal.
+  useEffect(() => {
+    const editId = params.get('edit');
+    if (!editId) return;
+    const id = Number(editId);
+    if (!Number.isFinite(id)) return;
+    getActivity(id).then((a) => {
+      if (a) openEdit(a);
+    }).catch(() => {}).finally(() => {
+      const next = new URLSearchParams(params); next.delete('edit');
+      setParams(next, { replace: true });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
 
   async function handleSubmit(values: Omit<Activity, 'id' | 'created_at'>) {
     try {
