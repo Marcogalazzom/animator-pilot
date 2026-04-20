@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Cake, ChevronRight, Download, Smile, Meh, Moon, Frown } from 'lucide-react';
+import { Cake, CalendarClock, ChevronRight, Download, Smile, Meh, Moon, Frown } from 'lucide-react';
 
 import { useDashboardData } from './dashboard/useDashboardData';
 import { byDay, useCalendarEvents } from './calendar/useCalendarEvents';
@@ -8,7 +8,8 @@ import { exportDashboardPdf } from '@/utils/pdfExport';
 import { todayIso } from '@/utils/dateUtils';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { getResidents } from '@/db/residents';
-import type { Resident, ResidentMood } from '@/db/types';
+import { getUpcomingPlanned } from '@/db/appointments';
+import type { Appointment, Resident, ResidentMood } from '@/db/types';
 
 const DAY_FR = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 const MONTH_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
@@ -133,6 +134,27 @@ export default function Dashboard() {
       .then(setResidents)
       .catch((err) => console.error('[dashboard] residents load failed:', err));
   }, []);
+
+  // Upcoming appointments (next 7 days) for the right-stack card.
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  useEffect(() => {
+    getUpcomingPlanned()
+      .then(setAppointments)
+      .catch((err) => console.error('[dashboard] appointments load failed:', err));
+  }, []);
+
+  const upcomingThisWeek = useMemo(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const limit = new Date(start);
+    limit.setDate(limit.getDate() + 7);
+    return appointments
+      .filter((a) => {
+        const d = new Date(a.date + 'T00:00:00');
+        return d >= start && d <= limit;
+      })
+      .slice(0, 4);
+  }, [appointments]);
 
   const upcomingBirthdays = useMemo(() => {
     return residents
@@ -406,6 +428,70 @@ export default function Dashboard() {
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>
                       {dayLabel}{age !== null && ` · ${age + 1} ans`}
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          {/* Prochains rendez-vous (7 jours) */}
+          <div className="card" style={{ padding: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <CalendarClock size={16} style={{ color: 'var(--cat-rdv)' }} />
+              <div className="eyebrow">Prochains rendez-vous</div>
+              <div style={{ flex: 1 }} />
+              <Link to="/appointments" style={{ fontSize: 12, color: 'var(--ink-3)', textDecoration: 'none' }}>
+                Tout voir →
+              </Link>
+            </div>
+            {upcomingThisWeek.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--ink-3)', fontStyle: 'italic' }}>
+                Aucun rendez-vous prévu cette semaine.
+              </div>
+            ) : (
+              upcomingThisWeek.map((a, i) => {
+                const d = new Date(a.date + 'T00:00:00');
+                const start = new Date(); start.setHours(0, 0, 0, 0);
+                const diff = Math.round((d.getTime() - start.getTime()) / 86400000);
+                const label = diff === 0 ? "Aujourd'hui" : diff === 1 ? 'Demain'
+                  : DAY_FR[d.getDay()].charAt(0).toUpperCase() + DAY_FR[d.getDay()].slice(1);
+                return (
+                  <button
+                    key={a.id}
+                    onClick={() => navigate('/appointments')}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      width: '100%', padding: '8px 0',
+                      borderTop: i > 0 ? '1px solid var(--line)' : 'none',
+                      background: 'transparent', border: 'none',
+                      textAlign: 'left', cursor: 'pointer',
+                    }}
+                  >
+                    <div className="num" style={{
+                      fontFamily: 'var(--font-mono)', fontSize: 11.5,
+                      color: 'var(--cat-rdv)', minWidth: 50, fontWeight: 600,
+                    }}>
+                      {a.time_start ?? '—'}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontWeight: 600, fontSize: 13.5, color: 'var(--ink)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {a.title}
+                      </div>
+                      {a.location && (
+                        <div style={{
+                          fontSize: 11.5, color: 'var(--ink-3)',
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>
+                          {a.location}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--ink-3)', flexShrink: 0 }}>
+                      {label}
                     </div>
                   </button>
                 );
