@@ -4,8 +4,9 @@ import { useCalendarEvents, type CalendarEvent } from './calendar/useCalendarEve
 import CalendarToolbar, { type CalendarView } from './calendar/CalendarToolbar';
 import DayView from './calendar/DayView';
 import WeekView from './calendar/WeekView';
-import LocationView from './calendar/LocationView';
+import MonthView from './calendar/MonthView';
 import ListView from './calendar/ListView';
+import HistoryView from './calendar/HistoryView';
 import { ensureCategoryColors, type CategoryColor } from '@/db/categoryColors';
 import { todayIso, mondayOf } from '@/utils/dateUtils';
 
@@ -23,12 +24,17 @@ function weekLabel(iso: string): string {
   return `Semaine du ${d.getDate()} ${MONTH_FR[d.getMonth()].toLowerCase()}`;
 }
 
+function monthLabel(iso: string): string {
+  const d = new Date(iso + 'T00:00:00');
+  return `${MONTH_FR[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 export default function Calendar() {
   const { events, loading } = useCalendarEvents();
   const [params, setParams] = useSearchParams();
   const [types, setTypes] = useState<CategoryColor[]>([]);
 
-  const view = (params.get('view') as CalendarView) || 'day';
+  const view = (params.get('view') as CalendarView) || 'month';
   const date = params.get('date') || todayIso();
   const typeFilter = params.get('type') || '';
   const locationFilter = params.get('location') || '';
@@ -61,7 +67,10 @@ export default function Calendar() {
     return Array.from(new Set(visibleEvents.map((e) => e.location).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'fr'));
   }, [visibleEvents]);
 
-  const label = view === 'week' ? weekLabel(date) : dayLabel(date);
+  const label =
+    view === 'month' ? monthLabel(date)
+    : view === 'week' ? weekLabel(date)
+    : dayLabel(date);
 
   if (loading) {
     return (
@@ -93,17 +102,27 @@ export default function Calendar() {
         onToday={() => update({ date: todayIso() })}
       />
 
-      {view === 'day' && (
-        <DayView events={visibleEvents} date={date} types={types} typeFilter={typeFilter} locationFilter={locationFilter} />
+      {view === 'month' && (
+        <MonthView
+          events={visibleEvents}
+          date={date}
+          types={types}
+          typeFilter={typeFilter}
+          locationFilter={locationFilter}
+          onPickDay={(iso) => update({ view: 'day', date: iso })}
+        />
       )}
       {view === 'week' && (
         <WeekView events={visibleEvents} mondayDate={mondayOf(date)} types={types} typeFilter={typeFilter} locationFilter={locationFilter} />
       )}
-      {view === 'location' && (
-        <LocationView events={visibleEvents} date={date} types={types} typeFilter={typeFilter} locationFilter={locationFilter} />
-      )}
-      {view === 'list' && (
+      {view === 'agenda' && (
         <ListView events={visibleEvents} types={types} typeFilter={typeFilter} locationFilter={locationFilter} />
+      )}
+      {view === 'day' && (
+        <DayView events={visibleEvents} date={date} types={types} typeFilter={typeFilter} locationFilter={locationFilter} />
+      )}
+      {view === 'history' && (
+        <HistoryView events={visibleEvents} types={types} typeFilter={typeFilter} locationFilter={locationFilter} />
       )}
     </div>
   );

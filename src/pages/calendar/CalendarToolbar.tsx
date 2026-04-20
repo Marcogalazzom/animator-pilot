@@ -1,14 +1,15 @@
-import { ChevronLeft, ChevronRight, Clock, CalendarDays, MapPin, List, Filter, CalendarClock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, CalendarDays, Calendar, MapPin, List, History, Filter, CalendarClock } from 'lucide-react';
 import { categoryLabel, type CategoryColor } from '@/db/categoryColors';
 import { addDays, todayIso } from '@/utils/dateUtils';
 
-export type CalendarView = 'day' | 'week' | 'location' | 'list';
+export type CalendarView = 'month' | 'week' | 'agenda' | 'day' | 'history';
 
 const VIEW_META: Record<CalendarView, { label: string; Icon: typeof Clock }> = {
-  day:      { label: 'Jour',    Icon: Clock },
-  week:     { label: 'Semaine', Icon: CalendarDays },
-  location: { label: 'Lieux',   Icon: MapPin },
-  list:     { label: 'Liste',   Icon: List },
+  month:   { label: 'Mois',       Icon: Calendar },
+  week:    { label: 'Semaine',    Icon: CalendarDays },
+  agenda:  { label: 'Agenda',     Icon: List },
+  day:     { label: 'Jour',       Icon: Clock },
+  history: { label: 'Historique', Icon: History },
 };
 
 interface Props {
@@ -30,8 +31,9 @@ interface Props {
 
 export default function CalendarToolbar(p: Props) {
   const shift = (days: number) => p.onDateChange(addDays(p.date, days));
-  const step = p.view === 'week' ? 7 : 1;
+  const step = p.view === 'month' ? 30 : p.view === 'week' ? 7 : 1;
   const isToday = p.date === todayIso();
+  const hasDateNav = p.view === 'month' || p.view === 'week' || p.view === 'day';
 
   return (
     <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
@@ -66,7 +68,7 @@ export default function CalendarToolbar(p: Props) {
       </div>
 
       {/* Date nav */}
-      {p.view !== 'list' && (
+      {hasDateNav && (
         <>
           <button onClick={() => shift(-step)} style={chevronBtn} aria-label="Précédent">
             <ChevronLeft size={15} />
@@ -75,7 +77,7 @@ export default function CalendarToolbar(p: Props) {
             minWidth: 180, textAlign: 'center', fontWeight: 600, fontSize: 13,
             padding: '6px 12px', borderRadius: 999,
             background: 'var(--surface-2)', color: 'var(--ink)',
-            textTransform: p.view === 'day' ? 'capitalize' : 'none',
+            textTransform: 'capitalize',
           }}>
             {p.dateLabel}
           </span>
