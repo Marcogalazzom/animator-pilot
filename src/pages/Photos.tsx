@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Camera, Plus } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
-import { createAlbum, updateAlbum, deleteAlbum } from '@/db/photos';
+import { createAlbum, updateAlbum, deleteAlbum, countPhotosByFilePath } from '@/db/photos';
 import { deletePhotoFiles } from '@/utils/photoStorage';
 import { getPhotos } from '@/db/photos';
 import type { PhotoAlbum } from '@/db/types';
@@ -61,7 +61,9 @@ export default function Photos() {
       const photos = await getPhotos(album.id).catch(() => []);
       await deleteAlbum(album.id);
       for (const p of photos) {
-        await deletePhotoFiles(p.file_path, p.thumbnail_path);
+        // Les fichiers partagés (copies Famileo, ...) restent intacts.
+        const stillUsed = await countPhotosByFilePath(p.file_path).catch(() => 1);
+        if (stillUsed === 0) await deletePhotoFiles(p.file_path, p.thumbnail_path);
       }
       addToast('Album supprimé', 'success');
       await data.refresh();

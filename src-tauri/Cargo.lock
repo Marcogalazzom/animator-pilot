@@ -2776,7 +2776,7 @@ dependencies = [
 
 [[package]]
 name = "pilot-animateur"
-version = "0.7.8"
+version = "0.7.9"
 dependencies = [
  "serde",
  "serde_json",

@@ -2,7 +2,7 @@ import { getDb } from './database';
 import type { PhotoAlbum, Photo } from './types';
 
 const UPDATABLE_ALBUM_FIELDS = new Set(['title', 'description', 'activity_date', 'cover_path', 'activity_id', 'activity_type']);
-const UPDATABLE_PHOTO_FIELDS = new Set(['caption', 'taken_at']);
+const UPDATABLE_PHOTO_FIELDS = new Set(['caption', 'taken_at', 'album_id']);
 
 // ─── Albums ──────────────────────────────────────────────────
 
@@ -102,6 +102,56 @@ export async function countPhotos(albumId: number): Promise<number> {
   const db = await getDb();
   const rows = await db.select<{ cnt: number }[]>('SELECT COUNT(*) as cnt FROM photos WHERE album_id = ?', [albumId]);
   return rows[0]?.cnt ?? 0;
+}
+
+/**
+ * Nombre de photos (DB) partageant le même chemin de fichier. Sert à éviter
+ * la suppression du fichier physique quand une copie l'utilise encore (ex.
+ * photo originale + copie Famileo du mois).
+ */
+export async function countPhotosByFilePath(filePath: string): Promise<number> {
+  if (!filePath) return 0;
+  const db = await getDb();
+  const rows = await db.select<{ cnt: number }[]>(
+    'SELECT COUNT(*) as cnt FROM photos WHERE file_path = ?',
+    [filePath],
+  );
+  return rows[0]?.cnt ?? 0;
+}
+
+/**
+ * Returns (or creates) the album backing "Famileo — {mois}". Used by
+ * AlbumDetail's «Ajouter au Famileo» action. Title format is stable so
+ * repeated calls in the same month return the same album.
+ */
+export async function ensureFamileoMonthAlbum(year: number, month: number): Promise<PhotoAlbum> {
+  const db = await getDb();
+  const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
+  const activityDate = `${monthPrefix}-01`;
+  const monthsFr = [
+    'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+    'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
+  ];
+  const title = `Famileo — ${monthsFr[month - 1]} ${year}`;
+
+  // Try exact title match first (idempotent)
+  const existing = await db.select<PhotoAlbum[]>(
+    "SELECT * FROM photo_albums WHERE title = ? LIMIT 1",
+    [title],
+  );
+  if (existing[0]) return existing[0];
+
+  const id = await createAlbum({
+    title,
+    description: 'Sélection du mois pour le journal Famileo.',
+    activity_date: activityDate,
+    cover_path: null,
+    activity_id: null,
+    activity_type: 'other',
+  });
+  const fresh = await getAlbum(id);
+  if (fresh) return fresh;
+  throw new Error('Famileo album creation failed');
 }
 
 export async function getAlbumStats(): Promise<{ totalAlbums: number; totalPhotos: number }> {
