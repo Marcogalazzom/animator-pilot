@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Plus, X, Trash2, Filter, Users as UsersIcon, Pin, Image, Sparkles,
+  Laugh, Smile, Meh, Frown, Angry,
 } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
 import {
@@ -17,12 +18,13 @@ import type {
 
 /* ─── Constants ─────────────────────────────────────────────── */
 
-const MOODS: Record<JournalMood, { label: string; emoji: string }> = {
-  great:     { label: 'Super',     emoji: '☀️' },
-  good:      { label: 'Bien',      emoji: '😊' },
-  neutral:   { label: 'Neutre',    emoji: '😐' },
-  difficult: { label: 'Difficile', emoji: '😕' },
-  bad:       { label: 'Mauvais',   emoji: '😞' },
+// Icônes lucide — 5 niveaux visuellement distincts, palette cohérente avec les chips.
+const MOODS: Record<JournalMood, { label: string; Icon: typeof Smile; color: string }> = {
+  great:     { label: 'Super',     Icon: Laugh, color: 'var(--sage-deep)' },
+  good:      { label: 'Bien',      Icon: Smile, color: 'var(--cat-body)' },
+  neutral:   { label: 'Neutre',    Icon: Meh,   color: 'var(--ink-3)' },
+  difficult: { label: 'Difficile', Icon: Frown, color: 'var(--warn)' },
+  bad:       { label: 'Mauvais',   Icon: Angry, color: 'var(--danger)' },
 };
 const MOOD_KEYS = Object.keys(MOODS) as JournalMood[];
 
@@ -486,23 +488,28 @@ export default function Journal() {
               </Field>
 
               <Field label="Humeur">
-                <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+                <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
                   {MOOD_KEYS.map((k) => {
                     const checked = mood === k;
+                    const { Icon, color, label } = MOODS[k];
                     return (
                       <button
                         key={k} type="button"
                         onClick={() => setMood(k)}
+                        title={label}
                         style={{
-                          fontSize: 22, background: 'none', border: 'none',
-                          cursor: 'pointer', padding: 4, borderRadius: 6,
-                          opacity: checked ? 1 : 0.45,
-                          transform: checked ? 'scale(1.12)' : 'scale(1)',
-                          filter: checked ? 'none' : 'grayscale(0.4)',
+                          display: 'inline-flex', alignItems: 'center', gap: 6,
+                          padding: '8px 10px', borderRadius: 999,
+                          border: `1.5px solid ${checked ? color : 'var(--line)'}`,
+                          background: checked ? `${color}1a` : 'var(--surface)',
+                          color: checked ? color : 'var(--ink-3)',
+                          fontSize: 12, fontWeight: checked ? 600 : 500,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
                         }}
-                        title={MOODS[k].label}
                       >
-                        {MOODS[k].emoji}
+                        <Icon size={16} strokeWidth={checked ? 2.2 : 1.6} />
+                        {label}
                       </button>
                     );
                   })}

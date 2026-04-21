@@ -10,7 +10,9 @@ import { todayIso } from '@/utils/dateUtils';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { getResidents } from '@/db/residents';
 import { getUpcomingPlanned } from '@/db/appointments';
-import type { Appointment, Resident, ResidentMood } from '@/db/types';
+import { getJournalEntries } from '@/db/journal';
+import { residentMoodFromNotes } from '@/utils/moodFromJournal';
+import type { Appointment, JournalEntry, Resident, ResidentMood } from '@/db/types';
 
 const DAY_FR = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 const MONTH_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
@@ -134,6 +136,15 @@ export default function Dashboard() {
     getResidents()
       .then(setResidents)
       .catch((err) => console.error('[dashboard] residents load failed:', err));
+  }, []);
+
+  // Journal entries — utilisé pour dériver l'humeur du jour des résidents
+  // à partir de la dernière note qui les mentionne.
+  const [journal, setJournal] = useState<JournalEntry[]>([]);
+  useEffect(() => {
+    getJournalEntries()
+      .then(setJournal)
+      .catch(() => {});
   }, []);
 
   // Upcoming appointments (next 7 days) for the right-stack card.
@@ -544,7 +555,8 @@ export default function Dashboard() {
             gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))',
           }}>
             {moodResidents.map((r) => {
-              const meta = MOOD_META[r.mood] ?? MOOD_META.calm;
+              const effectiveMood = residentMoodFromNotes(r.id, journal, r.mood);
+              const meta = MOOD_META[effectiveMood] ?? MOOD_META.calm;
               const { Icon, color } = meta;
               const firstName = r.display_name.split(/\s+/)[0];
               return (

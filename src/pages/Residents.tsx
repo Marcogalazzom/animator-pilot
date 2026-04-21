@@ -6,6 +6,7 @@ import { getResidents, createResident, updateResident, deleteResident } from '@/
 import { getJournalEntries } from '@/db/journal';
 import { getResidenceUnits } from '@/db/settings';
 import { tagChipClass } from '@/utils/tagColor';
+import { residentMoodFromNotes } from '@/utils/moodFromJournal';
 import type { Resident, ResidentMood, JournalEntry } from '@/db/types';
 
 type ParticipationLevel = Resident['participation_level'];
@@ -335,6 +336,7 @@ export default function Residents() {
           <ResidentDetail
             resident={selected}
             notes={selectedNotes}
+            allNotes={journal}
             onEdit={() => { setEditId(selected.id); setShowForm(true); }}
             onDelete={() => handleDelete(selected.id)}
           />
@@ -486,13 +488,17 @@ export default function Residents() {
 interface ResidentDetailProps {
   resident: Resident;
   notes: JournalEntry[];
+  allNotes: JournalEntry[];
   onEdit: () => void;
   onDelete: () => void;
 }
 
-function ResidentDetail({ resident: r, notes, onEdit, onDelete }: ResidentDetailProps) {
+function ResidentDetail({ resident: r, notes, allNotes, onEdit, onDelete }: ResidentDetailProps) {
   const navigate = useNavigate();
-  const moodMeta = MOOD_META[r.mood] ?? MOOD_META.calm;
+  // Humeur du jour : dérivée de la dernière note de journal qui mentionne
+  // le résident (fallback = champ `mood` de la fiche).
+  const effectiveMood = residentMoodFromNotes(r.id, allNotes, r.mood);
+  const moodMeta = MOOD_META[effectiveMood] ?? MOOD_META.calm;
   const age = ageFromBirthday(r.birthday);
   const days = daysUntilBirthday(r.birthday);
   const cakeChip = days !== null && days >= 0 && days <= 7;
