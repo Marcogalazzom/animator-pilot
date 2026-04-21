@@ -22,6 +22,7 @@ import { firestore, auth } from './firebase';
 import { getDb } from '@/db/database';
 import { createSyncLog, completeSyncLog, getLastSync } from '@/db/sync';
 import { getSetting } from '@/db/settings';
+import { syncCustomActivityTypesFromFirestore } from '@/db/activityTypesSync';
 import type { Activity, SyncModule } from '@/db/types';
 import { addDays, mondayOf, todayIso } from '@/utils/dateUtils';
 
@@ -132,6 +133,16 @@ export async function syncActivities(
     const db = await getDb();
     const now = new Date().toISOString();
     const baseMonday = mondayOf(todayIso());
+
+    // ── Mirror planning-ehpad's custom activity type catalogue (colors +
+    // labels) so ActivityCard renders the exact same chip as the web app.
+    // Silent on network errors — the DEFAULT_TYPES already seeded at startup
+    // cover the baseline.
+    try {
+      await syncCustomActivityTypesFromFirestore();
+    } catch (err) {
+      console.warn('[sync] customActivityTypes sync failed:', err);
+    }
 
     // ── PULL from Firestore (Animation + PASA, y compris les récurrentes) ──
     const activitiesRef = collection(firestore, 'activities');

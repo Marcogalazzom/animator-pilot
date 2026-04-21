@@ -1,4 +1,5 @@
 import Database from '@tauri-apps/plugin-sql';
+import { COLOR_PALETTE, DEFAULT_ACTIVITY_TYPES } from '@/data/activityTypeLibrary';
 
 let dbPromise: Promise<Database> | null = null;
 
@@ -12,6 +13,7 @@ export function getDb(): Promise<Database> {
         await ensureProjectsSchema(db);
         await ensureBudgetSchema(db);
         await ensureSettingsSeeded(db);
+        await seedActivityTypes(db);
         return db;
       })
       .catch((err) => {
@@ -130,6 +132,25 @@ async function ensureJournalSchema(db: Database): Promise<void> {
         [],
       );
     }
+    if (!names.has('title')) {
+      await db.execute("ALTER TABLE journal ADD COLUMN title TEXT NOT NULL DEFAULT ''", []);
+    }
+    if (!names.has('time')) {
+      await db.execute("ALTER TABLE journal ADD COLUMN time TEXT NOT NULL DEFAULT ''", []);
+    }
+    if (!names.has('author')) {
+      await db.execute("ALTER TABLE journal ADD COLUMN author TEXT NOT NULL DEFAULT ''", []);
+    }
+    if (!names.has('category')) {
+      await db.execute(
+        "ALTER TABLE journal ADD COLUMN category TEXT NOT NULL DEFAULT 'prep'",
+        [],
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_journal_category ON journal(category)',
+        [],
+      );
+    }
   } catch (err) {
     console.error('[schema-guard] ensureJournalSchema failed:', err);
   }
@@ -226,6 +247,27 @@ async function ensureBudgetSchema(db: Database): Promise<void> {
     );
   } catch (err) {
     console.error('[schema-guard] ensureBudgetSchema failed:', err);
+  }
+}
+
+async function seedActivityTypes(db: Database): Promise<void> {
+  // Mirror planning-ehpad's DEFAULT_TYPES into category_colors so activities
+  // display the same label + color as the web planner.
+  try {
+    for (const t of DEFAULT_ACTIVITY_TYPES) {
+      const swatch = COLOR_PALETTE[t.colorName] ?? COLOR_PALETTE.slate;
+      await db.execute(
+        `INSERT INTO category_colors (module, name, color, bg, label)
+         VALUES ('activities', ?, ?, ?, ?)
+         ON CONFLICT(module, name) DO UPDATE SET
+           color = excluded.color,
+           bg    = excluded.bg,
+           label = excluded.label`,
+        [t.key, swatch.hex, swatch.hexBg, t.label],
+      );
+    }
+  } catch (err) {
+    console.error('[schema-guard] seedActivityTypes failed:', err);
   }
 }
 

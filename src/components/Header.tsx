@@ -109,7 +109,7 @@ export default function Header() {
         )}
       </div>
 
-      {/* Search pill (placeholder — wired to ⌘K palette) */}
+      {/* Search pill (placeholder — wired to Ctrl+K palette) */}
       <button
         onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))}
         style={{
@@ -125,12 +125,12 @@ export default function Header() {
           fontSize: 13,
           textAlign: "left",
         }}
-        aria-label="Rechercher (⌘K)"
+        aria-label="Rechercher (Ctrl+K)"
       >
         <Search size={15} />
         <span>Rechercher…</span>
         <span style={{ flex: 1 }} />
-        <span className="kbd">⌘K</span>
+        <span className="kbd">Ctrl+K</span>
       </button>
 
       {/* Sync badge */}

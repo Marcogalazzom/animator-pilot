@@ -25,6 +25,14 @@ export async function uploadInvoice(file: File, fiscalYear: number, expenseId: s
   return getDownloadURL(storageRef);
 }
 
+export async function uploadJournalPhoto(file: File, dateISO: string): Promise<string> {
+  const ext = file.name.split('.').pop() ?? 'jpg';
+  const name = `${Date.now()}.${ext}`;
+  const storageRef = ref(storage, `journal/${dateISO}/${name}`);
+  await uploadBytes(storageRef, file);
+  return getDownloadURL(storageRef);
+}
+
 export {
   firestore,
   auth,

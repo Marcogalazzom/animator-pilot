@@ -123,6 +123,12 @@ pub fn run() {
             sql: include_str!("../migrations/020_upcoming_expenses.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 21,
+            description: "journal v2: title, time, author, category columns",
+            sql: include_str!("../migrations/021_journal_v2_fields.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

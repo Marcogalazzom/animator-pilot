@@ -1,7 +1,10 @@
 import { getDb } from './database';
 import type { JournalEntry } from './types';
 
-const UPDATABLE = new Set(['date', 'content', 'mood', 'tags', 'is_shared', 'linked_resident_ids']);
+const UPDATABLE = new Set([
+  'date', 'time', 'title', 'author', 'content', 'mood', 'category',
+  'tags', 'is_shared', 'linked_resident_ids',
+]);
 
 export async function getJournalEntries(limit = 50): Promise<JournalEntry[]> {
   const db = await getDb();
@@ -23,8 +26,14 @@ export async function getJournalByDate(date: string): Promise<JournalEntry | nul
 export async function createJournalEntry(entry: Omit<JournalEntry, 'id' | 'created_at'>): Promise<number> {
   const db = await getDb();
   const result = await db.execute(
-    'INSERT INTO journal (date, content, mood, tags, is_shared, linked_resident_ids) VALUES (?, ?, ?, ?, ?, ?)',
-    [entry.date, entry.content, entry.mood, entry.tags, entry.is_shared, entry.linked_resident_ids]
+    `INSERT INTO journal
+     (date, time, title, author, content, mood, category, tags, is_shared, linked_resident_ids)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      entry.date, entry.time ?? '', entry.title ?? '', entry.author ?? '',
+      entry.content, entry.mood, entry.category ?? 'prep',
+      entry.tags, entry.is_shared, entry.linked_resident_ids,
+    ],
   );
   return result.lastInsertId ?? 0;
 }

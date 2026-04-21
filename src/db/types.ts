@@ -133,12 +133,17 @@ export interface Expense {
 // ─── Carnet de bord (journal privé) ──────────────────────────
 
 export type JournalMood = 'great' | 'good' | 'neutral' | 'difficult' | 'bad';
+export type JournalCategory = 'memory' | 'creative' | 'body' | 'outing' | 'rdv' | 'prep';
 
 export interface JournalEntry {
   id: number;
   date: string;
+  time: string;
+  title: string;
+  author: string;
   content: string;
   mood: JournalMood;
+  category: JournalCategory;
   tags: string;
   is_shared: number;
   linked_resident_ids: string;

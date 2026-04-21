@@ -210,8 +210,12 @@ export async function seedDemoData(): Promise<SeedCounts> {
     const linkedIds = j.residents.map((n) => idOf(n)).filter((id) => id > 0).join(',');
     await createJournalEntry({
       date: offsetDays(j.dayOffset),
+      time: '',
+      title: '',
+      author: 'Marie',
       content: j.content,
       mood: j.mood,
+      category: 'prep',
       tags: j.tags,
       is_shared: j.shared ? 1 : 0,
       linked_resident_ids: linkedIds,
