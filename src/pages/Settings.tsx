@@ -2,9 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Database, Info, RefreshCw,
   Save, CheckCircle2, HardDrive, Globe, LogIn, LogOut, Download, Eye, User as UserIcon,
-  FlaskConical, Trash2, AlertTriangle, Layers, Plus, X,
+  FlaskConical, Trash2, AlertTriangle, Layers, Plus, X, Upload, Package,
 } from 'lucide-react';
 import { getResidenceUnits, setResidenceUnits } from '@/db/settings';
+import { buildExportBundle } from '@/utils/exportBundle';
+import { importBundle, type ImportSummary } from '@/utils/importBundle';
+import { save as saveDialog, open as openDialog } from '@tauri-apps/plugin-dialog';
+import { writeTextFile, readTextFile } from '@tauri-apps/plugin-fs';
 import { useUserSettings, setUserSettings } from '@/hooks/useUserSettings';
 import {
   seedDemoData, clearAllData,
@@ -202,6 +206,8 @@ export default function Settings() {
       <IdentitySection />
 
       <ResidenceUnitsSection />
+
+      <BackupSection />
 
       <DemoDataSection />
 
@@ -630,6 +636,118 @@ function IdentitySection() {
   );
 }
 
+function BackupSection() {
+  const addToast = useToastStore((s) => s.add);
+  const [busy, setBusy] = useState<'' | 'export' | 'import'>('');
+  const [lastSummary, setLastSummary] = useState<ImportSummary | null>(null);
+
+  async function handleExport() {
+    if (busy) return;
+    setBusy('export');
+    try {
+      const stamp = new Date().toISOString().slice(0, 10);
+      const targetPath = await saveDialog({
+        defaultPath: `animator-pilot-sauvegarde-${stamp}.json`,
+        filters: [{ name: 'Sauvegarde Animator Pilot', extensions: ['json'] }],
+      });
+      if (!targetPath) { setBusy(''); return; }
+      const json = await buildExportBundle();
+      await writeTextFile(targetPath, json);
+      addToast('Sauvegarde exportée', 'success');
+    } catch (err) {
+      console.error('[export] failed:', err);
+      addToast("Erreur lors de l'export", 'error');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function handleImport() {
+    if (busy) return;
+    setBusy('import');
+    try {
+      const picked = await openDialog({
+        multiple: false,
+        filters: [{ name: 'Sauvegarde Animator Pilot', extensions: ['json'] }],
+      });
+      if (!picked || typeof picked !== 'string') { setBusy(''); return; }
+      if (!confirm(
+        'Importer cette sauvegarde ? Les données existantes seront conservées, les données du fichier seront ajoutées.'
+      )) { setBusy(''); return; }
+      const json = await readTextFile(picked);
+      const summary = await importBundle(json);
+      setLastSummary(summary);
+      if (summary.errors.length > 0) {
+        addToast(summary.errors[0], 'error');
+      } else {
+        const total =
+          summary.residents + summary.activities + summary.albums + summary.photos +
+          summary.projects + summary.actions + summary.budgets + summary.expenses +
+          summary.upcomingExpenses + summary.journalEntries + summary.staff + summary.suppliers;
+        addToast(`${total} élément${total > 1 ? 's' : ''} ajouté${total > 1 ? 's' : ''}`, 'success');
+      }
+    } catch (err) {
+      console.error('[import] failed:', err);
+      addToast("Erreur lors de l'import", 'error');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  return (
+    <div className="card" style={{ padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <Package size={16} style={{ color: 'var(--terra-deep)' }} />
+        <h2 className="serif" style={{ margin: 0, fontSize: 18, fontWeight: 500, letterSpacing: -0.3 }}>
+          Export / Import
+        </h2>
+      </div>
+      <p style={{ margin: '0 0 14px', fontSize: 12.5, color: 'var(--ink-3)' }}>
+        Sauvegardez toutes les données (résidents, activités, photos, projets, budget, carnet de bord, annuaire, fournisseurs) dans un fichier unique transportable sur clé USB. L'import <strong>ajoute</strong> les données à l'existant sans rien écraser.
+      </p>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button
+          className="btn"
+          onClick={handleExport}
+          disabled={busy !== ''}
+          style={{ opacity: busy ? 0.6 : 1 }}
+        >
+          <Download size={13} /> {busy === 'export' ? 'Export…' : 'Exporter toutes les données'}
+        </button>
+        <button
+          className="btn primary"
+          onClick={handleImport}
+          disabled={busy !== ''}
+          style={{ opacity: busy ? 0.6 : 1 }}
+        >
+          <Upload size={13} /> {busy === 'import' ? 'Import…' : 'Importer depuis une sauvegarde'}
+        </button>
+      </div>
+
+      {lastSummary && (
+        <div style={{
+          marginTop: 14, padding: 12, borderRadius: 8,
+          background: 'var(--surface-2)', fontSize: 12.5, lineHeight: 1.7,
+          color: 'var(--ink-2)', fontFamily: 'var(--font-mono)',
+        }}>
+          <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--ink)' }}>
+            Dernier import
+          </div>
+          <div>résidents : {lastSummary.residents} · activités : {lastSummary.activities} · albums : {lastSummary.albums} · photos : {lastSummary.photos}</div>
+          <div>projets : {lastSummary.projects} · actions : {lastSummary.actions} · budgets : {lastSummary.budgets} · dépenses : {lastSummary.expenses}</div>
+          <div>prévisions : {lastSummary.upcomingExpenses} · notes : {lastSummary.journalEntries} · staff : {lastSummary.staff} · fournisseurs : {lastSummary.suppliers}</div>
+          {lastSummary.skipped > 0 && (
+            <div style={{ color: 'var(--ink-3)', marginTop: 4 }}>
+              {lastSummary.skipped} ligne{lastSummary.skipped > 1 ? 's' : ''} ignorée{lastSummary.skipped > 1 ? 's' : ''} (doublons FK ou année déjà présente)
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ResidenceUnitsSection() {
   const [units, setUnits] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -882,10 +1000,12 @@ function DemoDataSection() {
       <p style={{
         margin: '0 0 12px', fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.55,
       }}>
-        Charge un jeu de données réaliste pour tester toutes les fonctionnalités : 12 résidents
-        (avec anniversaires, humeurs, contacts famille), 25 activités (templates + planning),
-        12 entrées de carnet de bord, 6 projets, 15 dépenses, 5 RDV, inventaire, annuaire et
-        fournisseurs.
+        Charge un jeu de données complet pour tester toutes les fonctionnalités :
+        18 résidents répartis sur les 4 unités (étages + UPG), 25 activités,
+        20 notes de journal (avec titres, heures, auteurs, catégories), 6 projets
+        avec leurs étapes, budget annuel 15 000 € + limites par catégorie,
+        15 dépenses, 8 prévisions (récurrentes + ponctuelles), 6 albums photos
+        dont le Famileo du mois, 10 membres d'équipe, 12 fournisseurs.
       </p>
 
       <div style={{

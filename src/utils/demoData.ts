@@ -9,12 +9,16 @@ import { createResident } from '@/db/residents';
 import { createActivity } from '@/db/activities';
 import { createJournalEntry } from '@/db/journal';
 import { createProject, createAction } from '@/db/projects';
-import { createExpense } from '@/db/budget';
+import {
+  createExpense, createUpcomingExpense,
+  upsertBudget, upsertCategoryLimit,
+} from '@/db/budget';
 import { createAlbum } from '@/db/photos';
 import { createAppointment } from '@/db/appointments';
 import { createInventoryItem } from '@/db/inventory';
 import { createStaffMember } from '@/db/staff';
 import { createSupplier } from '@/db/suppliers';
+import type { JournalCategory } from '@/db/types';
 
 // ─── Date helpers ────────────────────────────────────────────
 
@@ -62,21 +66,35 @@ export async function seedDemoData(): Promise<SeedCounts> {
   const insertedActivityIds: number[] = [];
   const insertedExpenseIds: number[] = [];
 
-  // ─── Résidents (12) ───
-  // Two birthdays in the next 7 days so the "Anniversaires cette semaine" card lights up.
+  // ─── Résidents (18, répartis sur les 4 unités) ───
+  // Trois anniversaires dans les 7 prochains jours → card "Anniversaires
+  // cette semaine" bien remplie. Chaque unité a 4-5 résidents.
   const RESIDENTS = [
-    { name: 'Jeanne Morel',    room: '12', bdayYear: 1939, bdayOffset:   3, arrivalOffset: -1115, mood: 'happy', prefs: 'musique, lecture',          notes: 'Aime beaucoup la musique classique (Chopin surtout) et les romans policiers. A été professeure de français pendant 38 ans. Apprécie qu\'on l\'appelle par son prénom.', family: 'Claire (fille) · 06 12 34 56 78\nThomas (petit-fils) · visite mensuelle', participation: 'active' },
-    { name: 'Paul Lecomte',    room: '08', bdayYear: 1934, bdayOffset:   6, arrivalOffset: -1668, mood: 'sleep', prefs: 'jardin, cartes',             notes: 'Préfère les activités calmes en matinée. Fatigue importante l\'après-midi.', family: 'Martin (fils) · 06 88 77 66 55', participation: 'occasional' },
-    { name: 'Michèle Dubois',  room: '15', bdayYear: 1942, bdayOffset: 318, arrivalOffset: -1196, mood: 'calm',  prefs: 'peinture, broderie',         notes: 'Passionnée d\'art. A donné des cours de dessin pendant 20 ans.', family: 'Sophie (fille) · 07 11 22 33 44', participation: 'active' },
-    { name: 'André Petit',     room: '03', bdayYear: 1937, bdayOffset:  63, arrivalOffset: -1487, mood: 'happy', prefs: 'chant, marche',              notes: 'Très sociable. Aime entraîner les autres résidents.', family: 'Pierre (fils) · visite hebdomadaire', participation: 'active' },
-    { name: 'Odette Bernard',  room: '21', bdayYear: 1934, bdayOffset: 147, arrivalOffset: -1976, mood: 'happy', prefs: 'tricot, café',               notes: 'Tricote des layettes pour le foyer maternel local.', family: 'Anne (nièce)', participation: 'moderate' },
-    { name: 'Henri Martin',    room: '17', bdayYear: 1940, bdayOffset:  10, arrivalOffset: -1408, mood: 'quiet', prefs: 'jeux de société, mots fléchés', notes: 'Réservé mais très fidèle aux ateliers de jeux. À encourager.', family: 'Pas de contact direct enregistré.', participation: 'moderate' },
-    { name: 'Simone Garcia',   room: '05', bdayYear: 1941, bdayOffset: 236, arrivalOffset: -1157, mood: 'happy', prefs: 'cuisine, thé',               notes: 'Adore les ateliers cuisine. Recettes du Sud-Ouest.', family: 'José (fils) · 06 33 44 55 66', participation: 'active' },
-    { name: 'Louis Moreau',    room: '19', bdayYear: 1936, bdayOffset:  72, arrivalOffset: -1640, mood: 'calm',  prefs: 'histoire, lectures',         notes: 'Ancien professeur d\'histoire-géo. Apprécie les conférences.', family: 'Catherine (fille)', participation: 'moderate' },
-    { name: 'Alice Lefebvre',  room: '02', bdayYear: 1943, bdayOffset: 280, arrivalOffset:  -595, mood: 'happy', prefs: 'mots croisés, scrabble',     notes: 'Vive d\'esprit. Adore les défis intellectuels.', family: 'Daniel (frère) · visites bi-mensuelles', participation: 'active' },
-    { name: 'Robert Girard',   room: '07', bdayYear: 1938, bdayOffset: 110, arrivalOffset: -1326, mood: 'quiet', prefs: 'pétanque, télé',             notes: 'A du mal avec le bruit. Activités en petit groupe.', family: 'Émilie (petite-fille) · 07 22 33 44 55', participation: 'occasional' },
-    { name: 'Yvonne Roux',     room: '11', bdayYear: 1932, bdayOffset: 205, arrivalOffset: -2160, mood: 'calm',  prefs: 'poésie, broderie',           notes: 'Doyenne de l\'établissement. Mémoire vive jusqu\'à la guerre.', family: 'Hélène (fille) · 06 99 88 77 66', participation: 'observer' },
-    { name: 'Marcel Faure',    room: '16', bdayYear: 1939, bdayOffset:  33, arrivalOffset: -1235, mood: 'happy', prefs: 'accordéon, danse',           notes: 'Joue de l\'accordéon. Met l\'ambiance dans les fêtes !', family: 'Jacques (fils) · visite mensuelle', participation: 'active' },
+    // Étage 1
+    { name: 'Jeanne Morel',     unit: 'Étage 1', room: '12', bdayYear: 1939, bdayOffset:   3, arrivalOffset: -1115, mood: 'happy', prefs: 'musique, lecture, poésie',   notes: 'Ancienne professeure de français (38 ans d\'enseignement). Passionnée de Chopin et des romans policiers. Apprécie qu\'on l\'appelle par son prénom.', family: 'Claire (fille) · 06 12 34 56 78\nThomas (petit-fils) · visite mensuelle', participation: 'active' },
+    { name: 'Paul Lecomte',     unit: 'Étage 1', room: '08', bdayYear: 1934, bdayOffset:   6, arrivalOffset: -1668, mood: 'sleep', prefs: 'jardin, cartes, menuiserie', notes: 'Ancien menuisier. Préfère les activités calmes en matinée. Fatigue importante l\'après-midi — réunion ergothérapeute planifiée.', family: 'Martin (fils) · 06 88 77 66 55', participation: 'occasional' },
+    { name: 'Michèle Dubois',   unit: 'Étage 1', room: '15', bdayYear: 1942, bdayOffset: 318, arrivalOffset: -1196, mood: 'calm',  prefs: 'peinture, aquarelle, broderie', notes: 'A donné des cours de dessin pendant 20 ans. Guide souvent les autres résidents en atelier peinture.', family: 'Sophie (fille) · 07 11 22 33 44', participation: 'active' },
+    { name: 'André Petit',      unit: 'Étage 1', room: '03', bdayYear: 1937, bdayOffset:  63, arrivalOffset: -1487, mood: 'happy', prefs: 'chant, marche, sport',       notes: 'Très sociable. A entraîné l\'équipe de foot de son village. Aime entraîner les autres.', family: 'Pierre (fils) · visite hebdomadaire', participation: 'active' },
+    { name: 'Alice Lefebvre',   unit: 'Étage 1', room: '02', bdayYear: 1943, bdayOffset: 280, arrivalOffset:  -595, mood: 'happy', prefs: 'mots croisés, scrabble, tarot', notes: 'Ancienne bibliothécaire. Esprit vif, adore les défis intellectuels. Championne du scrabble de l\'étage.', family: 'Daniel (frère) · visites bi-mensuelles', participation: 'active' },
+
+    // Étage 2
+    { name: 'Odette Bernard',   unit: 'Étage 2', room: '21', bdayYear: 1934, bdayOffset: 147, arrivalOffset: -1976, mood: 'happy', prefs: 'tricot, café, couture',      notes: 'Tricote des layettes pour le foyer maternel local. Toujours un café pour les visiteurs.', family: 'Anne (nièce)', participation: 'moderate' },
+    { name: 'Henri Martin',     unit: 'Étage 2', room: '17', bdayYear: 1940, bdayOffset:  10, arrivalOffset: -1408, mood: 'quiet', prefs: 'jeux de société, mots fléchés', notes: 'Réservé mais très fidèle aux ateliers de jeux. À encourager — a besoin d\'un format duo plutôt que grand groupe.', family: 'Pas de contact direct enregistré.', participation: 'moderate' },
+    { name: 'Simone Garcia',    unit: 'Étage 2', room: '05', bdayYear: 1941, bdayOffset: 236, arrivalOffset: -1157, mood: 'happy', prefs: 'cuisine, thé, recettes',     notes: 'Adore les ateliers cuisine. Spécialiste des recettes du Sud-Ouest, a tenu un restaurant à Bordeaux.', family: 'José (fils) · 06 33 44 55 66', participation: 'active' },
+    { name: 'Louis Moreau',     unit: 'Étage 2', room: '19', bdayYear: 1936, bdayOffset:  72, arrivalOffset: -1640, mood: 'calm',  prefs: 'histoire, lectures, cinéma', notes: 'Ancien professeur d\'histoire-géo. Apprécie les conférences et les documentaires. Mémoire vive.', family: 'Catherine (fille)', participation: 'moderate' },
+    { name: 'Marcel Faure',     unit: 'Étage 2', room: '16', bdayYear: 1939, bdayOffset:  33, arrivalOffset: -1235, mood: 'happy', prefs: 'accordéon, danse, musique',  notes: 'Joue de l\'accordéon — instrument réparé récemment. Met l\'ambiance dans les fêtes !', family: 'Jacques (fils) · visite mensuelle', participation: 'active' },
+
+    // UPG Bastille
+    { name: 'Yvonne Roux',      unit: 'UPG Bastille', room: '11', bdayYear: 1932, bdayOffset: 205, arrivalOffset: -2160, mood: 'calm',  prefs: 'poésie, broderie, photos', notes: 'Doyenne de l\'établissement (93 ans). Mémoire vive jusqu\'à la guerre. Activités en petit groupe.', family: 'Hélène (fille) · 06 99 88 77 66', participation: 'observer' },
+    { name: 'Robert Girard',    unit: 'UPG Bastille', room: '07', bdayYear: 1938, bdayOffset: 110, arrivalOffset: -1326, mood: 'quiet', prefs: 'pétanque, télé, jardinage', notes: 'A du mal avec le bruit. Activités en petit groupe. Ancien cheminot — photos de trains l\'apaisent.', family: 'Émilie (petite-fille) · 07 22 33 44 55', participation: 'occasional' },
+    { name: 'Madeleine Fournier', unit: 'UPG Bastille', room: '04', bdayYear: 1940, bdayOffset:  42, arrivalOffset:  -850, mood: 'calm', prefs: 'poupées, chant doux',     notes: 'Sensible aux stimulations sensorielles. Atelier boîte à souvenirs efficace.', family: 'Brigitte (fille)', participation: 'moderate' },
+    { name: 'Gérard Lambert',   unit: 'UPG Bastille', room: '06', bdayYear: 1935, bdayOffset: 155, arrivalOffset: -1420, mood: 'quiet', prefs: 'musique classique, oiseaux', notes: 'Ancien organiste. Atelier écoute musicale avec casque bien accueilli.', family: 'Sylvie (belle-fille)', participation: 'observer' },
+
+    // UPG Saint-Hilaire
+    { name: 'Thérèse Blanchet', unit: 'UPG Saint-Hilaire', room: '23', bdayYear: 1933, bdayOffset:  89, arrivalOffset: -1790, mood: 'calm',  prefs: 'photos familiales, chant', notes: 'Aime revoir les photos de famille. Déclenche beaucoup de souvenirs.', family: 'Dominique (fille) · 06 77 88 99 00', participation: 'moderate' },
+    { name: 'Raymond Chevalier',unit: 'UPG Saint-Hilaire', room: '25', bdayYear: 1936, bdayOffset: 178, arrivalOffset: -1550, mood: 'quiet', prefs: 'mécanique, bricolage',   notes: 'Ancien garagiste. Atelier objets à manipuler (boulons, vis) apprécié.', family: 'Philippe (fils)', participation: 'occasional' },
+    { name: 'Jacqueline Leroy', unit: 'UPG Saint-Hilaire', room: '27', bdayYear: 1941, bdayOffset: 212, arrivalOffset:  -990, mood: 'happy', prefs: 'jardin, fleurs, oiseaux', notes: 'Ancienne horticultrice. Atelier jardinière très bénéfique — elle reprend des mots.', family: 'Marc (fils) · 06 55 44 33 22', participation: 'active' },
+    { name: 'Lucien Perrin',    unit: 'UPG Saint-Hilaire', room: '29', bdayYear: 1934, bdayOffset: 301, arrivalOffset: -1180, mood: 'calm',  prefs: 'marche, animaux',        notes: 'Médiation animale (chien) très efficace. À programmer chaque mardi matin.', family: 'Nicole (nièce)', participation: 'moderate' },
   ] as const;
 
   const residentIdsByName = new Map<string, number>();
@@ -84,7 +102,7 @@ export async function seedDemoData(): Promise<SeedCounts> {
     const id = await createResident({
       display_name: r.name,
       room_number: r.room,
-      unit: '',
+      unit: r.unit,
       interests: r.prefs,
       animation_notes: r.notes,
       participation_level: r.participation,
@@ -188,35 +206,51 @@ export async function seedDemoData(): Promise<SeedCounts> {
     counts.activities++;
   }
 
-  // ─── Journal (12 entrées, mix shared/private + résidents tagués) ───
+  // ─── Journal (20 entrées, titres + heures + catégories + auteurs) ───
   const JOURNAL: Array<{
-    dayOffset: number; mood: 'great' | 'good' | 'neutral' | 'difficult' | 'bad';
-    content: string; tags: string; shared: boolean; residents: string[];
+    dayOffset: number; time: string; author: string;
+    title: string; content: string;
+    mood: 'great' | 'good' | 'neutral' | 'difficult' | 'bad';
+    category: JournalCategory;
+    tags: string; shared: boolean; residents: string[];
   }> = [
-    { dayOffset:   0, mood: 'good',      content: "Atelier mémoire bien rempli ce matin (11/12). Jeanne a raconté un souvenir d'école qui a fait beaucoup parler le groupe. À refaire avec plus d'objets.", tags: 'mémoire, jeanne, succès',         shared: true,  residents: ['Jeanne Morel'] },
-    { dayOffset:   0, mood: 'neutral',   content: "Henri très réservé pendant l'atelier. À revoir : peut-être lui proposer un format duo plutôt que groupe ?",                                                tags: 'henri, observation',              shared: false, residents: ['Henri Martin'] },
-    { dayOffset:  -1, mood: 'great',     content: "Loto musical : 16 résidents, ambiance excellente. Marcel a sorti son accordéon, on a fini sur trois chansons à reprendre. Note pour Famileo.",            tags: 'loto, marcel, famileo',           shared: true,  residents: ['Marcel Faure'] },
-    { dayOffset:  -2, mood: 'good',      content: "Visite de la fille de Mme Morel hier — elle nous a apporté des photos de la communion de 1948. Idée d'atelier souvenirs personnalisé pour Jeanne.",       tags: 'jeanne, famille, idée',          shared: true,  residents: ['Jeanne Morel'] },
-    { dayOffset:  -3, mood: 'good',      content: "Atelier peinture — Michèle est dans son élément, a guidé deux autres résidentes. Toiles à exposer dans le couloir.",                                       tags: 'peinture, michèle',               shared: true,  residents: ['Michèle Dubois'] },
-    { dayOffset:  -3, mood: 'difficult', content: "Discussion compliquée avec la famille de Paul — fatigue importante les après-midi. Reprendre rendez-vous avec le médecin coordonnateur.",                  tags: 'paul, famille, médical',          shared: false, residents: ['Paul Lecomte'] },
-    { dayOffset:  -5, mood: 'good',      content: "Réunion équipe : on planifie une sortie au Louvre pour septembre. Demander devis bus adapté.",                                                              tags: 'sortie, louvre, équipe',          shared: true,  residents: [] },
-    { dayOffset:  -6, mood: 'great',     content: "Goûter intergénérationnel un succès — les enfants de la crèche ont chanté. André très ému. À refaire à Pâques.",                                          tags: 'goûter, intergénérationnel',      shared: true,  residents: ['André Petit'] },
-    { dayOffset:  -7, mood: 'good',      content: "Café littéraire : extrait de Camus lu par Jeanne. Beau silence après. Idée de monter un cycle Camus ?",                                                     tags: 'lecture, camus, idée',            shared: true,  residents: ['Jeanne Morel', 'Louis Moreau'] },
-    { dayOffset: -10, mood: 'neutral',   content: "Inventaire matériel : il manque des pinceaux et la boîte de peinture commence à être bien usée. Voir budget.",                                              tags: 'matériel, budget, inventaire',    shared: true,  residents: [] },
-    { dayOffset: -14, mood: 'difficult', content: "Yvonne semble plus fatiguée. À surveiller. Note perso : ne pas la solliciter sur les ateliers en grand groupe ce mois-ci.",                                  tags: 'yvonne, surveillance',            shared: false, residents: ['Yvonne Roux'] },
-    { dayOffset: -21, mood: 'good',      content: "Premier atelier accordéon mené par Marcel — il a été parfait. Les autres résidents l'ont applaudi. Photos à mettre dans le Famileo de mai.",               tags: 'marcel, accordéon, famileo',      shared: true,  residents: ['Marcel Faure'] },
+    // Aujourd'hui
+    { dayOffset:  0, time: '10:45', author: 'Marie',   category: 'memory',   mood: 'great',     title: 'Atelier mémoire — belle séance',       content: 'Très bonne dynamique (11/12). Jeanne a raconté un souvenir de classe (CE2 avec Mme Berger) qui a fait rire tout le monde. Photos prises, 12 clichés pour le Famileo.', tags: 'atelier mémoire, jeanne',        shared: true,  residents: ['Jeanne Morel'] },
+    { dayOffset:  0, time: '11:20', author: 'Marie',   category: 'rdv',      mood: 'neutral',   title: 'Note privée — Henri',                    content: 'Très réservé pendant l\'atelier. À revoir : peut-être lui proposer un format duo plutôt que groupe ? En parler à Claire.',                                          tags: 'henri, à surveiller',            shared: false, residents: ['Henri Martin'] },
+    { dayOffset:  0, time: '14:10', author: 'Marie',   category: 'outing',   mood: 'good',      title: 'Visite Mme Morel — famille',             content: 'La fille de Mme Morel (Claire) est passée. Échange chaleureux, Jeanne rayonnante. Elle a demandé si on pouvait lui apporter le livre de Camus qu\'elle a vu en bibliothèque.', tags: 'jeanne, famille',                shared: true,  residents: ['Jeanne Morel'] },
+    // Hier
+    { dayOffset: -1, time: '16:30', author: 'Marie',   category: 'creative', mood: 'great',     title: 'Loto musical — ambiance du tonnerre',    content: '16 résidents, ambiance excellente. Marcel a sorti son accordéon, on a fini sur trois chansons à reprendre. À mettre en photo dans le Famileo.',                 tags: 'loto, marcel, famileo',           shared: true,  residents: ['Marcel Faure', 'Odette Bernard'] },
+    { dayOffset: -1, time: '17:15', author: 'Sophie',  category: 'body',     mood: 'good',      title: 'Gym douce — 8 présents',                  content: 'Séance tonique. M. Petit a fait l\'exercice d\'équilibre sans support pour la première fois — à remarquer !',                                                         tags: 'gym, andré',                     shared: true,  residents: ['André Petit'] },
+    // 2-3 jours
+    { dayOffset: -2, time: '15:00', author: 'Marie',   category: 'memory',   mood: 'good',      title: 'Photos de 1948 — idée atelier',          content: 'La fille de Mme Morel nous a apporté des photos de sa communion (1948). Idée d\'atelier souvenirs personnalisé pour Jeanne, autour de ses photos.',             tags: 'jeanne, idée',                   shared: true,  residents: ['Jeanne Morel'] },
+    { dayOffset: -3, time: '15:30', author: 'Marie',   category: 'creative', mood: 'good',      title: 'Atelier peinture',                        content: 'Michèle est dans son élément, a guidé deux autres résidentes. Toiles à exposer dans le couloir de l\'étage 1.',                                                     tags: 'peinture, michèle',              shared: true,  residents: ['Michèle Dubois'] },
+    { dayOffset: -3, time: '17:30', author: 'Marie',   category: 'rdv',      mood: 'difficult', title: 'RDV médecin — Paul',                      content: 'Discussion compliquée avec la famille de Paul — fatigue importante les après-midi. Reprendre rendez-vous avec le médecin coordonnateur pour ajuster le traitement.',  tags: 'paul, médical',                  shared: false, residents: ['Paul Lecomte'] },
+    { dayOffset: -4, time: '10:30', author: 'Marie',   category: 'prep',     mood: 'good',      title: 'Sélection photos Famileo',                content: 'Tri des 54 clichés d\'avril, 28 retenus. Reste l\'édito et le choix des anniversaires à rédiger.',                                                                   tags: 'famileo, préparation',           shared: false, residents: [] },
+    // Semaine passée
+    { dayOffset: -5, time: '09:30', author: 'Marie',   category: 'prep',     mood: 'good',      title: 'Réunion équipe — sortie Louvre',          content: 'Point hebdo équipe. On planifie une sortie au Louvre pour septembre. Demander 3 devis bus adapté avant fin du mois.',                                                tags: 'équipe, sortie louvre',          shared: true,  residents: [] },
+    { dayOffset: -6, time: '16:00', author: 'Marie',   category: 'outing',   mood: 'great',     title: 'Goûter intergénérationnel',               content: 'Les enfants de la crèche ont chanté "Frère Jacques". André très ému — il a raconté ses propres enfants. À refaire à Pâques.',                                      tags: 'goûter, intergénérationnel',      shared: true,  residents: ['André Petit'] },
+    { dayOffset: -7, time: '15:00', author: 'Marie',   category: 'creative', mood: 'good',      title: 'Café littéraire',                          content: 'Extrait de "La Peste" lu par Jeanne à voix haute. Beau silence suspendu après. Idée de monter un cycle Camus sur l\'année ?',                                            tags: 'lecture, camus, idée',           shared: true,  residents: ['Jeanne Morel', 'Louis Moreau'] },
+    { dayOffset: -8, time: '11:00', author: 'Claire',  category: 'rdv',      mood: 'neutral',   title: 'Bilan Mme Bernard',                        content: 'Odette se plaint d\'une gêne à l\'épaule gauche lors des ateliers tricot prolongés. Conseil : pauses plus fréquentes, alterner avec d\'autres activités.',               tags: 'odette, soins',                  shared: false, residents: ['Odette Bernard'] },
+    { dayOffset: -9, time: '14:00', author: 'Marie',   category: 'body',     mood: 'good',      title: 'Marche au jardin — 6 résidents',          content: 'Belle lumière d\'après-midi. Jacqueline a reconnu plusieurs fleurs — elle a retrouvé leurs noms spontanément.',                                                     tags: 'jardin, marche, jacqueline',     shared: true,  residents: ['Jacqueline Leroy', 'André Petit'] },
+    // 10-14 jours
+    { dayOffset: -10, time: '16:45', author: 'Marie',  category: 'prep',     mood: 'neutral',   title: 'Inventaire matériel avril',               content: 'Il manque des pinceaux, boîte de peinture acryl. à remplacer (3 séchées). À budgéter sur matériel du trimestre.',                                                      tags: 'matériel, budget',               shared: true,  residents: [] },
+    { dayOffset: -12, time: '10:00', author: 'Sophie', category: 'memory',   mood: 'good',      title: 'Atelier Proust — odeurs',                 content: 'Séance autour des odeurs d\'enfance (lavande, savon de Marseille, cire). Madeleine très touchée par le parfum de violette — souvenirs de sa mère.',                      tags: 'proust, madeleine',              shared: true,  residents: ['Madeleine Fournier'] },
+    { dayOffset: -14, time: '15:20', author: 'Marie',  category: 'rdv',      mood: 'difficult', title: 'Yvonne à surveiller',                     content: 'Yvonne semble plus fatiguée ces derniers jours. Ne pas la solliciter sur les ateliers en grand groupe ce mois-ci. En parler à l\'équipe soignante.',                      tags: 'yvonne, surveillance',           shared: false, residents: ['Yvonne Roux'] },
+    { dayOffset: -18, time: '14:30', author: 'Marie',  category: 'outing',   mood: 'great',     title: 'Sortie marché — excellent moment',        content: 'Marché du samedi avec 4 résidents. Simone a retrouvé son boucher d\'il y a 15 ans. Discussions longues, retour avec plein de sourires.',                                 tags: 'marché, simone, sortie',         shared: true,  residents: ['Simone Garcia'] },
+    { dayOffset: -21, time: '16:00', author: 'Marie',  category: 'creative', mood: 'good',      title: 'Premier atelier accordéon — Marcel',       content: 'Premier atelier accordéon mené par Marcel — il a été parfait. Les autres résidents l\'ont applaudi. Photos à mettre dans le Famileo de mai.',                               tags: 'marcel, accordéon, famileo',     shared: true,  residents: ['Marcel Faure'] },
+    { dayOffset: -28, time: '11:30', author: 'Marie',  category: 'prep',     mood: 'good',      title: 'Validation projet poulailler',             content: 'Validation direction pour le poulailler. Budget OK, emplacement validé par la commission hygiène. Relancer le bénévole pour la construction.',                             tags: 'poulailler, projet',             shared: true,  residents: [] },
   ];
 
   for (const j of JOURNAL) {
     const linkedIds = j.residents.map((n) => idOf(n)).filter((id) => id > 0).join(',');
     await createJournalEntry({
       date: offsetDays(j.dayOffset),
-      time: '',
-      title: '',
-      author: 'Marie',
+      time: j.time,
+      title: j.title,
+      author: j.author,
       content: j.content,
       mood: j.mood,
-      category: 'prep',
+      category: j.category,
       tags: j.tags,
       is_shared: j.shared ? 1 : 0,
       linked_resident_ids: linkedIds,
@@ -317,10 +351,17 @@ export async function seedDemoData(): Promise<SeedCounts> {
     counts.projects++;
   }
 
-  // ─── Dépenses ───
-  // NOTE: on n'appelle plus `upsertBudget` ici — il pourrait écraser un budget réel
-  // déjà saisi par l'utilisateur. Le budget total se règle manuellement dans la page Budget.
+  // ─── Budget — total annuel + limites par catégorie ───
   const fiscalYear = new Date().getFullYear();
+  await upsertBudget(fiscalYear, 15000).catch(() => {});
+  // Limites réalistes par catégorie (somme = 15 000 €)
+  await upsertCategoryLimit(fiscalYear, 'intervenants', 4500).catch(() => {});
+  await upsertCategoryLimit(fiscalYear, 'materiel',     3000).catch(() => {});
+  await upsertCategoryLimit(fiscalYear, 'sorties',      2500).catch(() => {});
+  await upsertCategoryLimit(fiscalYear, 'fetes',        3500).catch(() => {});
+  await upsertCategoryLimit(fiscalYear, 'other',        1500).catch(() => {});
+
+  // ─── Dépenses ───
 
   const EXPENSES: Array<{
     title: string; category: 'intervenants' | 'materiel' | 'sorties' | 'fetes' | 'other';
@@ -360,12 +401,47 @@ export async function seedDemoData(): Promise<SeedCounts> {
     counts.expenses++;
   }
 
-  // ─── Albums (vides — les vraies photos demanderaient des fichiers) ───
+  // ─── Prévisions / À l'arrivée (récurrents + ponctuels) ───
+  const UPCOMING: Array<{
+    title: string; amount: number; dueOffset: number;
+    recurring: number; frequency: 'weekly' | 'monthly' | 'yearly' | ''; note: string;
+  }> = [
+    { title: 'Abonnement Famileo',             amount: 42.00,  dueOffset:  12, recurring: 1, frequency: 'monthly', note: 'Prélèvement automatique' },
+    { title: 'Intervenante chant (Lucie R.)',  amount: 140.00, dueOffset:   7, recurring: 1, frequency: 'monthly', note: '2 mardis/mois' },
+    { title: 'Kiné — Thomas Martin',           amount: 160.00, dueOffset:  14, recurring: 1, frequency: 'monthly', note: '2 séances × 80€' },
+    { title: 'Bouquets fleurs salle commune',  amount: 38.50,  dueOffset:  21, recurring: 1, frequency: 'monthly', note: 'La Rose' },
+    { title: 'Goûter anniv. Mme Morel',        amount: 28.00,  dueOffset:   3, recurring: 0, frequency: '',        note: 'Boulangerie Renaud — commande 48h' },
+    { title: 'Sortie Louvre (bus adapté)',     amount: 480.00, dueOffset: 150, recurring: 0, frequency: '',        note: 'Devis à confirmer' },
+    { title: 'Spectacle de Noël (chorale)',    amount: 260.00, dueOffset: 220, recurring: 0, frequency: '',        note: 'Versement contact' },
+    { title: 'Assurance matériel animation',   amount: 180.00, dueOffset: 330, recurring: 1, frequency: 'yearly',  note: 'Reconduction tacite' },
+  ];
+  for (const u of UPCOMING) {
+    await createUpcomingExpense({
+      title: u.title,
+      amount: u.amount,
+      due_date: offsetDays(u.dueOffset),
+      recurring: u.recurring,
+      frequency: u.frequency,
+      note: u.note,
+    });
+  }
+
+  // ─── Albums photos + Famileo du mois ───
   const monthIso = `${new Date().toISOString().slice(0, 7)}-01`;
+  const monthsFr = [
+    'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+    'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
+  ];
+  const thisMonthLabel = monthsFr[new Date().getMonth()];
+  const thisYear = new Date().getFullYear();
+
   const ALBUMS = [
-    { title: 'Atelier mémoire — avril',     description: 'Photos des séances mémoire du mois.',           type: 'memoire' },
-    { title: 'Goûters & anniversaires — avril', description: 'Souvenirs des anniversaires d\'avril.',       type: 'fetes' },
-    { title: 'Sorties — avril',             description: 'Marché, balades au jardin, intergénérationnel.', type: 'sortie' },
+    { title: `Atelier mémoire — ${thisMonthLabel}`,     description: 'Photos des séances mémoire du mois.',           type: 'memoire' },
+    { title: `Goûters & anniversaires — ${thisMonthLabel}`, description: 'Anniversaires et goûters intergénérationnels.', type: 'fetes' },
+    { title: `Sorties — ${thisMonthLabel}`,             description: 'Marché, balades au jardin, visite musée.',       type: 'sortie' },
+    { title: `Atelier peinture — ${thisMonthLabel}`,    description: 'Aquarelle avec Michèle, 4 séances.',             type: 'arts' },
+    { title: `Chant & accordéon — ${thisMonthLabel}`,   description: 'Ateliers musique avec Marcel à l\'accordéon.',   type: 'arts' },
+    { title: `Famileo — ${thisMonthLabel} ${thisYear}`, description: 'Sélection du mois pour le journal envoyé aux familles.', type: 'other' },
   ];
   for (const a of ALBUMS) {
     await createAlbum({
@@ -436,17 +512,22 @@ export async function seedDemoData(): Promise<SeedCounts> {
     counts.inventory++;
   }
 
-  // ─── Annuaire personnel ───
+  // ─── Annuaire personnel (équipe + intervenants + bénévoles) ───
   const STAFF: Array<{
     first: string; last: string; role: string; phone: string; email: string;
     service: string; available: number; notes: string;
     hourlyRate: number | null; sessionRate: number | null;
   }> = [
-    { first: 'Marie',   last: 'Coste',    role: 'Animatrice principale',    phone: '06 11 22 33 44', email: 'marie.coste@glycines.fr',  service: 'animation', available: 1, notes: 'Référente projet famileo + résidents.',                hourlyRate: null, sessionRate: null },
-    { first: 'Claire',  last: 'Dubois',   role: 'Aide-soignante référente', phone: '06 22 33 44 55', email: 'claire.d@glycines.fr',     service: 'soins',     available: 1, notes: 'Référente animation côté soins. Disponible mardi/jeudi.', hourlyRate: null, sessionRate: null },
-    { first: 'Lucie',   last: 'Robert',   role: 'Intervenante musique',     phone: '06 78 99 00 11', email: 'lucie.robert@artmuse.fr',  service: 'externe',   available: 1, notes: 'Vient 2 mardis/mois pour atelier chant.',                hourlyRate: 35, sessionRate: null },
-    { first: 'Thomas',  last: 'Martin',   role: 'Kinésithérapeute',         phone: '06 44 55 66 77', email: 'tmartin@kine-libre.fr',    service: 'externe',   available: 1, notes: 'Intervention bi-mensuelle.',                              hourlyRate: null, sessionRate: 80 },
-    { first: 'Sophie',  last: 'Petit',    role: 'Bénévole',                 phone: '07 33 22 11 00', email: '',                          service: 'bénévolat', available: 1, notes: 'Atelier lecture à voix haute, samedis.',                  hourlyRate: null, sessionRate: null },
+    { first: 'Marie',      last: 'Coste',     role: 'Animatrice principale',    phone: '06 11 22 33 44', email: 'marie.coste@glycines.fr',    service: 'animation', available: 1, notes: 'Référente projet Famileo et résidents.',                    hourlyRate: null, sessionRate: null },
+    { first: 'Claire',     last: 'Dubois',    role: 'Aide-soignante référente', phone: '06 22 33 44 55', email: 'claire.d@glycines.fr',       service: 'soins',     available: 1, notes: 'Référente animation côté soins. Disponible mardi/jeudi.',   hourlyRate: null, sessionRate: null },
+    { first: 'Sophie',     last: 'Vasseur',   role: 'Animatrice adjointe',      phone: '06 33 44 55 66', email: 'sophie.v@glycines.fr',       service: 'animation', available: 1, notes: 'Mi-temps, spécialité gym douce + médiation animale.',       hourlyRate: null, sessionRate: null },
+    { first: 'Nicolas',    last: 'Albert',    role: 'Ergothérapeute',           phone: '06 44 55 66 78', email: 'n.albert@ergo-libre.fr',     service: 'externe',   available: 1, notes: 'Une fois/semaine (jeudi matin). Atelier objets et mémoire.', hourlyRate: null, sessionRate: 90 },
+    { first: 'Lucie',      last: 'Robert',    role: 'Intervenante musique',     phone: '06 78 99 00 11', email: 'lucie.robert@artmuse.fr',    service: 'externe',   available: 1, notes: 'Atelier chant 2 mardis/mois. Répertoire français classique.', hourlyRate: 35, sessionRate: null },
+    { first: 'Thomas',     last: 'Martin',    role: 'Kinésithérapeute',         phone: '06 44 55 66 77', email: 'tmartin@kine-libre.fr',      service: 'externe',   available: 1, notes: 'Intervention bi-mensuelle, séances individuelles.',          hourlyRate: null, sessionRate: 80 },
+    { first: 'Mathilde',   last: 'Berthier',  role: 'Conteuse',                 phone: '06 55 11 22 33', email: 'mathilde.contes@gmail.com',  service: 'externe',   available: 1, notes: 'Atelier contes 1 fois/mois le vendredi après-midi.',         hourlyRate: 45, sessionRate: null },
+    { first: 'Paul',       last: 'Bénévole',  role: 'Bénévole lecture',         phone: '07 33 22 11 00', email: '',                            service: 'bénévolat', available: 1, notes: 'Atelier lecture à voix haute, samedis matin.',               hourlyRate: null, sessionRate: null },
+    { first: 'Isabelle',   last: 'Durand',    role: 'Bénévole jardinage',       phone: '07 44 33 22 11', email: 'isadurand@hotmail.com',     service: 'bénévolat', available: 1, notes: 'Coordonne les plantations printanières avec 3 résidents.',   hourlyRate: null, sessionRate: null },
+    { first: 'Dr. Hélène', last: 'Rolland',   role: 'Médecin coordonnateur',    phone: '04 76 00 11 22', email: 'dr.rolland@glycines.fr',     service: 'soins',     available: 1, notes: 'Présente mercredi + urgences. Participe à la commission ASV.', hourlyRate: null, sessionRate: null },
   ];
 
   for (const s of STAFF) {
@@ -472,11 +553,18 @@ export async function seedDemoData(): Promise<SeedCounts> {
     address: string; website: string; notes: string;
     hourlyRate: number | null; sessionRate: number | null; favorite: number;
   }> = [
-    { name: 'Boulangerie Renaud',  category: 'pâtisserie', contact: 'M. Renaud',     phone: '04 76 12 34 56', email: 'contact@boulangerie-renaud.fr', address: '12 rue des Lilas',           website: '', notes: 'Gâteaux d\'anniversaire sur commande 48h.',  hourlyRate: null, sessionRate: null, favorite: 1 },
-    { name: 'Conservatoire local', category: 'musique',    contact: 'Mme Lhuillier', phone: '04 76 22 33 44', email: 'animation@conservatoire.fr',     address: 'Place Centrale',             website: 'conservatoire-grenoble.fr', notes: 'Élèves disponibles pour interventions occasionnelles.', hourlyRate: 0, sessionRate: 50, favorite: 0 },
-    { name: 'Cultura',             category: 'matériel',   contact: 'Pôle pro',      phone: '04 76 88 99 00', email: 'pro@cultura.com',                address: 'ZA des Glières',             website: 'cultura.com', notes: '10 % pro sur présentation carte.',                  hourlyRate: null, sessionRate: null, favorite: 1 },
-    { name: 'Fleuriste La Rose',   category: 'fleurs',     contact: 'Mme Beaumont',  phone: '04 76 55 44 33', email: '',                                address: '4 rue Mistral',              website: '', notes: 'Bouquets mensuels salle commune.',                          hourlyRate: null, sessionRate: null, favorite: 0 },
-    { name: 'Pharmacie de la Place', category: 'santé',    contact: 'Dr. Lefèvre',    phone: '04 76 11 22 33', email: 'pharma.place@gmail.com',         address: 'Place de la Mairie',         website: '', notes: 'Pharmacie référente. Livraisons à domicile.',              hourlyRate: null, sessionRate: null, favorite: 1 },
+    { name: 'Boulangerie Renaud',     category: 'pâtisserie',  contact: 'M. Renaud',     phone: '04 76 12 34 56', email: 'contact@boulangerie-renaud.fr', address: '12 rue des Lilas',   website: '',                         notes: 'Gâteaux d\'anniversaire sur commande 48h.',            hourlyRate: null, sessionRate: null, favorite: 1 },
+    { name: 'Cultura',                category: 'matériel',     contact: 'Pôle pro',      phone: '04 76 88 99 00', email: 'pro@cultura.com',                address: 'ZA des Glières',      website: 'cultura.com',              notes: '10 % pro sur présentation carte.',                      hourlyRate: null, sessionRate: null, favorite: 1 },
+    { name: 'Bureau Vallée',          category: 'fournitures',  contact: 'Accueil',        phone: '04 76 77 88 99', email: 'contact@bureauvallee-38.fr',    address: 'Centre commercial',   website: 'bureauvallee.fr',          notes: 'Encre, papier, toner Famileo.',                          hourlyRate: null, sessionRate: null, favorite: 0 },
+    { name: 'Botanic',                category: 'jardin',       contact: 'Service pro',    phone: '04 76 55 66 77', email: 'pro-grenoble@botanic.fr',       address: 'Meylan',              website: 'botanic.fr',               notes: 'Plants, graines, jardinières pour projet poulailler.',   hourlyRate: null, sessionRate: null, favorite: 1 },
+    { name: 'TransAdapt',             category: 'transport',    contact: 'M. Julien',      phone: '04 76 11 33 55', email: 'contact@transadapt.fr',         address: 'Échirolles',          website: 'transadapt.fr',            notes: 'Bus adapté PMR. 95€ A/R agglo, 380€ journée.',            hourlyRate: null, sessionRate: null, favorite: 1 },
+    { name: 'Fleuriste La Rose',      category: 'fleurs',       contact: 'Mme Beaumont',   phone: '04 76 55 44 33', email: '',                               address: '4 rue Mistral',       website: '',                         notes: 'Bouquets mensuels salle commune — abonnement.',          hourlyRate: null, sessionRate: null, favorite: 0 },
+    { name: 'Conservatoire Grenoble', category: 'musique',      contact: 'Mme Lhuillier',  phone: '04 76 22 33 44', email: 'animation@conservatoire.fr',    address: 'Place Centrale',      website: 'conservatoire-grenoble.fr', notes: 'Élèves disponibles pour interventions occasionnelles.',   hourlyRate: 0,    sessionRate: 50,   favorite: 0 },
+    { name: 'Boucherie Savoyarde',    category: 'alimentaire',  contact: 'M. Rey',         phone: '04 76 33 77 44', email: '',                               address: 'Place du marché',     website: '',                         notes: 'Fournisseur principal des ateliers cuisine.',            hourlyRate: null, sessionRate: null, favorite: 0 },
+    { name: 'Pâtisserie Dupré',       category: 'pâtisserie',   contact: 'Mme Dupré',      phone: '04 76 99 11 22', email: 'patisserie.dupre@gmail.com',    address: '8 av. Victor Hugo',   website: '',                         notes: 'Sortie pâtisserie mensuelle (petits groupes).',          hourlyRate: null, sessionRate: null, favorite: 0 },
+    { name: 'Action',                 category: 'décoration',   contact: 'Accueil',        phone: '04 76 44 55 66', email: '',                               address: 'Centre commercial',   website: 'action.com',               notes: 'Déco saisonnière salle commune — petit budget.',         hourlyRate: null, sessionRate: null, favorite: 0 },
+    { name: 'Pharmacie de la Place',  category: 'santé',        contact: 'Dr. Lefèvre',    phone: '04 76 11 22 33', email: 'pharma.place@gmail.com',        address: 'Place de la Mairie',   website: '',                         notes: 'Pharmacie référente. Livraisons à domicile.',            hourlyRate: null, sessionRate: null, favorite: 1 },
+    { name: 'Carrefour Market',       category: 'alimentaire',  contact: 'Rayon pro',      phone: '04 76 77 22 11', email: '',                               address: 'ZA des Glières',       website: 'carrefour.fr',             notes: 'Courses hebdomadaires. Carte pro EHPAD.',                hourlyRate: null, sessionRate: null, favorite: 0 },
   ];
 
   for (const s of SUPPLIERS) {

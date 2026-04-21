@@ -99,6 +99,44 @@ export async function storePhoto(sourcePath: string): Promise<StoredPhoto> {
   return { filePath, thumbnailPath: thumbPath };
 }
 
+/**
+ * Écrit une photo déjà décodée (bytes) dans le dossier local et génère
+ * un thumbnail. Utilisé par l'import de sauvegarde (les bytes viennent
+ * du bundle JSON décodé depuis base64).
+ */
+export async function storePhotoFromBytes(bytes: Uint8Array, extHint: string): Promise<StoredPhoto> {
+  const dir = await ensurePhotosDir();
+  const id = uuid();
+  const ext = (extHint || 'jpg').toLowerCase().replace(/^\./, '');
+  const fileName = `${id}.${ext}`;
+  const thumbName = `thumb_${id}.jpg`;
+  const filePath = await join(dir, fileName);
+  const thumbPath = await join(dir, thumbName);
+
+  await writeFile(filePath, bytes);
+
+  // Génère la miniature à partir du blob
+  const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+  const blob = new Blob([bytes as BlobPart], { type: mime });
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error('Image load failed'));
+      i.src = url;
+    });
+    const thumbBytes = await buildThumbnail(img, 300);
+    await writeFile(thumbPath, thumbBytes);
+  } catch {
+    // Pas de miniature : on continue, le fichier principal est OK.
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+
+  return { filePath, thumbnailPath: thumbPath };
+}
+
 export async function deletePhotoFiles(filePath: string | null, thumbnailPath: string | null): Promise<void> {
   for (const p of [filePath, thumbnailPath]) {
     if (!p) continue;
