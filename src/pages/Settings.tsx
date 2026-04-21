@@ -2,9 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Database, Info, RefreshCw,
   Save, CheckCircle2, HardDrive, Globe, LogIn, LogOut, Download, Eye, User as UserIcon,
-  FlaskConical, Trash2, AlertTriangle, Layers, Plus, X, Upload, Package,
+  FlaskConical, Trash2, AlertTriangle, Layers, Plus, X, Upload, Package, Palette, Check,
 } from 'lucide-react';
 import { getResidenceUnits, setResidenceUnits } from '@/db/settings';
+import { THEME_PRESETS, type ThemePreset } from '@/utils/themeColors';
+import { useThemeColor, setThemeColor } from '@/hooks/useThemeColor';
 import { buildExportBundle } from '@/utils/exportBundle';
 import { importBundle, type ImportSummary } from '@/utils/importBundle';
 import { save as saveDialog, open as openDialog } from '@tauri-apps/plugin-dialog';
@@ -204,6 +206,8 @@ export default function Settings() {
       </div>
 
       <IdentitySection />
+
+      <ThemeColorSection />
 
       <ResidenceUnitsSection />
 
@@ -647,6 +651,85 @@ function IdentitySectionForm() {
           {saving ? <CheckCircle2 size={14} /> : <Save size={14} />}
           {saving ? 'Enregistrement…' : 'Enregistrer'}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function ThemeColorSection() {
+  const current = useThemeColor();
+  const addToast = useToastStore((s) => s.add);
+
+  function pick(preset: ThemePreset) {
+    if (preset.key === current) return;
+    setThemeColor(preset.key).then(() => {
+      addToast(`Couleur « ${preset.label} » appliquée`, 'success');
+    });
+  }
+
+  return (
+    <div className="card" style={{ padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <Palette size={16} style={{ color: 'var(--terra-deep)' }} />
+        <h2 className="serif" style={{ margin: 0, fontSize: 18, fontWeight: 500, letterSpacing: -0.3 }}>
+          Couleur de l'application
+        </h2>
+      </div>
+      <p style={{ margin: '0 0 14px', fontSize: 12.5, color: 'var(--ink-3)' }}>
+        Choisissez la teinte principale de l'interface. Le reste du thème reste identique.
+      </p>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+        gap: 10,
+      }}>
+        {THEME_PRESETS.map((preset) => {
+          const active = preset.key === current;
+          return (
+            <button
+              key={preset.key}
+              onClick={() => pick(preset)}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                padding: '14px 10px', borderRadius: 12,
+                background: active ? preset.soft : 'var(--surface)',
+                border: `1.5px solid ${active ? preset.deep : 'var(--line)'}`,
+                cursor: 'pointer',
+                transition: 'background 0.15s, border-color 0.15s',
+              }}
+              onMouseEnter={(ev) => { if (!active) ev.currentTarget.style.background = 'var(--surface-2)'; }}
+              onMouseLeave={(ev) => { if (!active) ev.currentTarget.style.background = 'var(--surface)'; }}
+            >
+              <div style={{
+                position: 'relative',
+                width: 44, height: 44, borderRadius: '50%',
+                background: preset.base,
+                border: `3px solid ${preset.deep}`,
+                boxShadow: `inset 0 0 0 4px ${preset.soft}`,
+              }}>
+                {active && (
+                  <div style={{
+                    position: 'absolute', top: -6, right: -6,
+                    width: 20, height: 20, borderRadius: '50%',
+                    background: preset.deep, color: '#fff',
+                    display: 'grid', placeItems: 'center',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  }}>
+                    <Check size={12} strokeWidth={3} />
+                  </div>
+                )}
+              </div>
+              <div style={{
+                fontSize: 12.5,
+                fontWeight: active ? 600 : 500,
+                color: active ? preset.deep : 'var(--ink-2)',
+              }}>
+                {preset.label}
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

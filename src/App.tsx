@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Layout from "@/components/Layout";
+import { useThemeColor } from "@/hooks/useThemeColor";
 
 const Dashboard   = lazy(() => import("@/pages/Dashboard"));
 const Budget      = lazy(() => import("@/pages/Budget"));
@@ -20,6 +21,10 @@ const Import      = lazy(() => import("@/pages/Import"));
 const Settings    = lazy(() => import("@/pages/Settings"));
 
 export default function App() {
+  // Charge + applique la préférence de couleur dominante (effet de bord
+  // sur :root). Aucun impact visuel avant chargement : terra-par-défaut
+  // via les valeurs dans index.css.
+  useThemeColor();
   return (
     <BrowserRouter>
       <Layout>
