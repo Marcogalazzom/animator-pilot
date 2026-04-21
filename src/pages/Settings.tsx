@@ -9,7 +9,7 @@ import { buildExportBundle } from '@/utils/exportBundle';
 import { importBundle, type ImportSummary } from '@/utils/importBundle';
 import { save as saveDialog, open as openDialog } from '@tauri-apps/plugin-dialog';
 import { writeTextFile, readTextFile } from '@tauri-apps/plugin-fs';
-import { useUserSettings, setUserSettings } from '@/hooks/useUserSettings';
+import { useUserSettings, setUserSettings, useUserSettingsLoaded } from '@/hooks/useUserSettings';
 import {
   seedDemoData, clearAllData,
   countRemoteDemoRows, cleanupDemoFromFirestore, sweepRemoteDemoFirestore,
@@ -545,22 +545,38 @@ export default function Settings() {
 }
 
 function IdentitySection() {
+  const loaded = useUserSettingsLoaded();
+
+  // Ne monte le formulaire qu'une fois la base chargée, sinon la race
+  // entre l'initialisation locale et l'arrivée async du load écrase ce
+  // que l'utilisateur tape.
+  if (!loaded) {
+    return (
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <UserIcon size={16} style={{ color: 'var(--terra-deep)' }} />
+          <h2 className="serif" style={{ margin: 0, fontSize: 18, fontWeight: 500, letterSpacing: -0.3 }}>
+            Identité
+          </h2>
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--ink-3)' }}>Chargement…</div>
+      </div>
+    );
+  }
+  return <IdentitySectionForm />;
+}
+
+function IdentitySectionForm() {
   const settings = useUserSettings();
   const addToast = useToastStore((s) => s.add);
+  // Initialisation **une seule fois** à partir des valeurs chargées —
+  // plus de useEffect([settings]) qui pourrait écraser les saisies.
   const [first, setFirst]   = useState(settings.user_first_name);
   const [last, setLast]     = useState(settings.user_last_name);
   const [role, setRole]     = useState(settings.user_role);
   const [resName, setResName] = useState(settings.residence_name);
   const [resKind, setResKind] = useState(settings.residence_kind);
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    setFirst(settings.user_first_name);
-    setLast(settings.user_last_name);
-    setRole(settings.user_role);
-    setResName(settings.residence_name);
-    setResKind(settings.residence_kind);
-  }, [settings]);
 
   async function save() {
     setSaving(true);

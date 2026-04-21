@@ -32,13 +32,16 @@ export const useUserSettingsStore = create<UserSettingsStore>((set, get) => ({
     if (get().loaded) return;
     try {
       const all = await getAllSettings();
+      // `??` (pas `||`) pour ne pas retomber sur le FALLBACK si l'utilisateur
+      // a explicitement saisi une chaîne vide (sinon impossible de vider un
+      // champ).
       set({
         settings: {
-          user_first_name: all.user_first_name || FALLBACK.user_first_name,
-          user_last_name:  all.user_last_name  || FALLBACK.user_last_name,
-          user_role:       all.user_role       || FALLBACK.user_role,
-          residence_name:  all.residence_name  || FALLBACK.residence_name,
-          residence_kind:  all.residence_kind  || FALLBACK.residence_kind,
+          user_first_name: all.user_first_name ?? FALLBACK.user_first_name,
+          user_last_name:  all.user_last_name  ?? FALLBACK.user_last_name,
+          user_role:       all.user_role       ?? FALLBACK.user_role,
+          residence_name:  all.residence_name  ?? FALLBACK.residence_name,
+          residence_kind:  all.residence_kind  ?? FALLBACK.residence_kind,
         },
         loaded: true,
       });
@@ -48,15 +51,19 @@ export const useUserSettingsStore = create<UserSettingsStore>((set, get) => ({
     }
   },
   save: async (patch) => {
-    const next = { ...get().settings, ...patch };
-    set({ settings: next });
+    // Persiste AVANT de toucher le store, pour qu'une panne disk rende la
+    // save observable dès le toast et qu'on n'affiche pas un état non
+    // persisté.
     try {
       for (const [key, value] of Object.entries(patch)) {
         if (value !== undefined) await setSetting(key, value);
       }
     } catch (err) {
       console.error('[user-settings] save failed:', err);
+      throw err;
     }
+    const next = { ...get().settings, ...patch };
+    set({ settings: next });
   },
 }));
 
@@ -70,6 +77,20 @@ export function useUserSettings(): UserSettings {
   }, [loaded, load]);
 
   return settings;
+}
+
+/**
+ * Exposé séparément pour permettre aux écrans de ne monter leur formulaire
+ * qu'une fois la lecture DB terminée (évite la race où l'utilisateur tape
+ * sur les valeurs FALLBACK puis voit son input écrasé par le load async).
+ */
+export function useUserSettingsLoaded(): boolean {
+  const loaded = useUserSettingsStore((s) => s.loaded);
+  const load = useUserSettingsStore((s) => s.load);
+  useEffect(() => {
+    if (!loaded) load();
+  }, [loaded, load]);
+  return loaded;
 }
 
 export function setUserSettings(patch: Partial<UserSettings>): Promise<void> {
