@@ -10,6 +10,7 @@ export function getDb(): Promise<Database> {
         await ensureJournalSchema(db);
         await ensureResidentsSchema(db);
         await ensureProjectsSchema(db);
+        await ensureBudgetSchema(db);
         await ensureSettingsSeeded(db);
         return db;
       })
@@ -183,6 +184,48 @@ async function ensureProjectsSchema(db: Database): Promise<void> {
     }
   } catch (err) {
     console.error('[schema-guard] ensureProjectsSchema failed:', err);
+  }
+}
+
+async function ensureBudgetSchema(db: Database): Promise<void> {
+  try {
+    const names = await tableColumns(db, 'animation_budget');
+    const limits: Array<[string, string]> = [
+      ['limit_intervenants', 'limit_intervenants'],
+      ['limit_materiel',     'limit_materiel'],
+      ['limit_sorties',      'limit_sorties'],
+      ['limit_fetes',        'limit_fetes'],
+      ['limit_other',        'limit_other'],
+    ];
+    for (const [col] of limits) {
+      if (!names.has(col)) {
+        await db.execute(
+          `ALTER TABLE animation_budget ADD COLUMN ${col} REAL NOT NULL DEFAULT 3000`,
+          [],
+        );
+      }
+    }
+
+    // Upcoming expenses table may be missing if migration 020 was skipped.
+    await db.execute(
+      `CREATE TABLE IF NOT EXISTS upcoming_expenses (
+         id         INTEGER PRIMARY KEY AUTOINCREMENT,
+         title      TEXT    NOT NULL,
+         amount     REAL    NOT NULL DEFAULT 0,
+         due_date   TEXT    NOT NULL,
+         recurring  INTEGER NOT NULL DEFAULT 0,
+         frequency  TEXT    NOT NULL DEFAULT '',
+         note       TEXT    NOT NULL DEFAULT '',
+         created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+       )`,
+      [],
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_upcoming_due ON upcoming_expenses(due_date)',
+      [],
+    );
+  } catch (err) {
+    console.error('[schema-guard] ensureBudgetSchema failed:', err);
   }
 }
 

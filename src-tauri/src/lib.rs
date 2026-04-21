@@ -111,6 +111,18 @@ pub fn run() {
             sql: include_str!("../migrations/018_design_v2_fields.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 19,
+            description: "animation_budget: per-category limits (default 3000 each)",
+            sql: include_str!("../migrations/019_budget_category_limits.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 20,
+            description: "upcoming_expenses: planned & recurring future expenses",
+            sql: include_str!("../migrations/020_upcoming_expenses.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

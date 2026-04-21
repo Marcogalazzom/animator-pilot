@@ -89,9 +89,27 @@ export interface AnimationBudget {
   id: number;
   fiscal_year: number;
   total_allocated: number;
+  limit_intervenants: number;
+  limit_materiel: number;
+  limit_sorties: number;
+  limit_fetes: number;
+  limit_other: number;
   synced_from: string;
   last_sync_at: string | null;
   external_id: string | null;
+  created_at: string;
+}
+
+export type UpcomingFrequency = 'weekly' | 'monthly' | 'yearly' | '';
+
+export interface UpcomingExpense {
+  id: number;
+  title: string;
+  amount: number;
+  due_date: string;      // YYYY-MM-DD
+  recurring: number;     // 0 | 1
+  frequency: UpcomingFrequency;
+  note: string;
   created_at: string;
 }
 
