@@ -1,1911 +1,767 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
-import { useToastStore } from '@/stores/toastStore';
+import { useState, useRef, useMemo } from 'react';
 import {
-  Plus, LayoutGrid, List, Columns, X, ChevronRight, Trash2,
-  Calendar, User, AlertCircle, CheckCircle2, Clock,
-  ArrowUpDown, ChevronUp, ChevronDown, Pencil, Check, Users,
+  Plus, Search, Trash2, X, Pencil, Check, Clock, CheckCircle2,
 } from 'lucide-react';
+import { useToastStore } from '@/stores/toastStore';
 import { useProjectsData } from './projects/useProjectsData';
 import type { Project, Action, ProjectStatus, ActionStatus } from './projects/useProjectsData';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+/* ─── Category palette (maps DB string → chip class) ─────────── */
 
-type ViewMode = 'kanban' | 'list' | 'detail';
-type SortField = 'title' | 'owner_role' | 'status' | 'due_date' | 'progress';
-type SortDir = 'asc' | 'desc';
+const CATEGORY_CLASSES = ['memory', 'creative', 'body', 'outing', 'rdv', 'prep'] as const;
+type CategoryClass = typeof CATEGORY_CLASSES[number];
 
-const STATUS_COLUMNS: { key: ProjectStatus; label: string; color: string; bg: string; light: string }[] = [
-  { key: 'todo',        label: 'À faire',   color: 'var(--ink-3)',     bg: 'var(--surface-2)',     light: 'rgba(120,105,92,0.08)' },
-  { key: 'in_progress', label: 'En cours',  color: 'var(--cat-outing)', bg: 'var(--cat-outing-bg)', light: 'rgba(107,139,176,0.08)' },
-  { key: 'done',        label: 'Terminé',   color: 'var(--sage-deep)', bg: 'var(--sage-soft)',     light: 'rgba(85,103,68,0.08)' },
-  { key: 'overdue',     label: 'En retard', color: 'var(--danger)',    bg: 'var(--danger-soft)',   light: 'rgba(176,74,63,0.08)' },
-];
+const CATEGORY_LABELS: Record<CategoryClass, string> = {
+  memory:   'Thérapeutique',
+  creative: 'Événement',
+  body:     'Jardin & vie',
+  outing:   'Sortie',
+  rdv:      'Accompagnement',
+  prep:     'Général',
+};
 
+function normalizeCategory(raw: string): CategoryClass {
+  if (!raw) return 'prep';
+  const k = raw.toLowerCase().trim();
+  if ((CATEGORY_CLASSES as readonly string[]).includes(k)) return k as CategoryClass;
+  // Loose aliases
+  if (k.includes('mémoire') || k.includes('memoire')) return 'memory';
+  if (k.includes('événement') || k.includes('event') || k.includes('fête') || k.includes('fete')) return 'creative';
+  if (k.includes('jardin') || k.includes('vie')) return 'body';
+  if (k.includes('sortie')) return 'outing';
+  if (k.includes('accompagnement') || k.includes('rdv') || k.includes('rendez')) return 'rdv';
+  // Hash fallback for stable coloring on arbitrary custom categories
+  let h = 0;
+  for (let i = 0; i < k.length; i++) h = ((h << 5) - h + k.charCodeAt(i)) | 0;
+  return CATEGORY_CLASSES[Math.abs(h) % CATEGORY_CLASSES.length];
+}
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+function categoryLabel(raw: string): string {
+  if (!raw.trim()) return CATEGORY_LABELS.prep;
+  // If the DB stored a human-readable label already, keep it. Otherwise use our
+  // canonical label for the normalized class.
+  const cls = normalizeCategory(raw);
+  // If the raw value contains spaces or diacritics, assume it's already a label.
+  if (/[ éèêàâùîôç/]/.test(raw)) return raw;
+  return CATEGORY_LABELS[cls];
+}
 
-function formatDate(d: string | null): string {
+/* ─── Status meta ────────────────────────────────────────────── */
+
+const STATUS_CHIP: Record<ProjectStatus, { label: string; cls: string; icon?: typeof Clock }> = {
+  todo:        { label: 'à démarrer', cls: 'ghost' },
+  in_progress: { label: 'en cours',   cls: 'info',   icon: Clock },
+  done:        { label: 'terminé',    cls: 'done',   icon: CheckCircle2 },
+  overdue:     { label: 'en retard',  cls: 'warn' },
+};
+
+type StatusFilter = 'all' | 'in_progress' | 'todo' | 'done';
+
+/* ─── Helpers ────────────────────────────────────────────────── */
+
+const MONTHS_SHORT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+
+function formatDeadline(d: string | null): string {
   if (!d) return '—';
-  return new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return d;
+  return `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]} ${date.getFullYear()}`;
 }
 
-function progressColor(pct: number): string {
-  if (pct >= 70) return 'var(--sage-deep)';
-  if (pct >= 30) return 'var(--warn)';
-  return 'var(--danger)';
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return (parts[0]?.[0] ?? '?').toUpperCase() + (parts[1]?.[0] ?? '').toUpperCase();
 }
 
-function computeProgress(actions: Action[]): number {
+function projectProgress(actions: Action[]): number {
   if (actions.length === 0) return 0;
   return Math.round(actions.reduce((sum, a) => sum + a.progress, 0) / actions.length);
 }
 
-function statusMeta(status: ProjectStatus) {
-  return STATUS_COLUMNS.find(c => c.key === status) ?? STATUS_COLUMNS[0];
-}
+/* ─── Page ───────────────────────────────────────────────────── */
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+export default function Projects() {
+  const {
+    projects, loading,
+    selectedProject, selectedActions,
+    selectProject,
+    createProject, updateProject, deleteProject,
+    createAction, updateAction, deleteAction,
+  } = useProjectsData();
 
-function StatusBadge({ status }: { status: ProjectStatus }) {
-  const meta = statusMeta(status);
-  return (
-    <span style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: '4px',
-      padding: '2px 8px',
-      borderRadius: '10px',
-      fontSize: '11px',
-      fontWeight: 600,
-      letterSpacing: '0.02em',
-      background: meta.bg,
-      color: meta.color,
-      fontFamily: 'var(--font-sans)',
-      whiteSpace: 'nowrap',
-    }}>
-      {status === 'done' && <CheckCircle2 size={10} />}
-      {status === 'overdue' && <AlertCircle size={10} />}
-      {status === 'in_progress' && <Clock size={10} />}
-      {meta.label}
-    </span>
-  );
-}
+  const addToast = useToastStore((s) => s.add);
 
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<StatusFilter>('all');
+  const [showForm, setShowForm] = useState(false);
+  const [editProjectId, setEditProjectId] = useState<number | null>(null);
 
-function ProgressBar({ value, height = 4 }: { value: number; height?: number }) {
-  const color = progressColor(value);
+  // Auto-select first project on load (and whenever list changes if no sel)
+  if (!loading && !selectedProject && projects[0]) selectProject(projects[0]);
+
+  const filtered = useMemo(() => {
+    return projects.filter((p) => {
+      if (filter !== 'all' && p.status !== filter) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        return p.title.toLowerCase().includes(q)
+          || p.description.toLowerCase().includes(q)
+          || p.category.toLowerCase().includes(q);
+      }
+      return true;
+    });
+  }, [projects, filter, search]);
+
+  // Inline action progress per project (use selected's actions; list shows static pct from status)
+  const progressByProjectId = useMemo(() => {
+    const map = new Map<number, number>();
+    if (selectedProject) map.set(selectedProject.id, projectProgress(selectedActions));
+    return map;
+  }, [selectedProject, selectedActions]);
+
+  const editingProject = editProjectId
+    ? projects.find((p) => p.id === editProjectId) ?? null
+    : null;
+
+  async function handleDelete(id: number) {
+    if (!confirm('Supprimer ce projet ? Les étapes associées seront perdues.')) return;
+    try {
+      await deleteProject(id);
+      addToast('Projet supprimé', 'success');
+    } catch {
+      addToast('Erreur lors de la suppression', 'error');
+    }
+  }
+
   return (
     <div style={{
-      height: `${height}px`,
-      borderRadius: `${height}px`,
-      background: '#E2E8F0',
-      overflow: 'hidden',
-      flex: 1,
+      display: 'grid', gridTemplateColumns: 'minmax(300px, 340px) 1fr', gap: 20,
+      maxWidth: 1400, height: 'calc(100vh - 130px)',
+      animation: 'slide-in 0.22s ease-out',
     }}>
-      <div style={{
-        height: '100%',
-        width: `${Math.min(100, Math.max(0, value))}%`,
-        borderRadius: `${height}px`,
-        background: color,
-        transition: 'width 0.3s ease',
-      }} />
-    </div>
-  );
-}
-
-// ─── Project Card (Kanban) ────────────────────────────────────────────────────
-
-interface ProjectCardProps {
-  project: Project;
-  actionsCount: number;
-  progress: number;
-  onSelect: () => void;
-  onDragStart: (e: React.DragEvent) => void;
-}
-
-function ProjectCard({ project, actionsCount, progress, onSelect, onDragStart }: ProjectCardProps) {
-  const [hovered, setHovered] = useState(false);
-  const meta = statusMeta(project.status);
-
-  return (
-    <div
-      draggable
-      onDragStart={onDragStart}
-      onClick={onSelect}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        background: 'var(--color-surface)',
-        borderRadius: '8px',
-        boxShadow: hovered
-          ? '0 4px 16px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06)'
-          : '0 1px 3px rgba(0,0,0,0.06)',
-        borderLeft: `3px solid ${meta.color}`,
-        padding: '12px 14px',
-        cursor: 'pointer',
-        transition: 'box-shadow 0.15s ease, transform 0.15s ease',
-        transform: hovered ? 'translateY(-1px)' : 'none',
-        userSelect: 'none',
-      }}
-    >
-      {/* Title */}
-      <p style={{
-        margin: '0 0 8px',
-        fontSize: '13px',
-        fontWeight: 600,
-        color: 'var(--color-text-primary)',
-        fontFamily: 'var(--font-sans)',
-        lineHeight: 1.35,
-      }}>
-        {project.title}
-      </p>
-
-      {/* Owner */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '5px',
-        marginBottom: '10px',
-      }}>
-        <User size={11} style={{ color: 'var(--color-text-secondary)', flexShrink: 0 }} />
-        <span style={{
-          fontSize: '11px',
-          color: 'var(--color-text-secondary)',
-          fontFamily: 'var(--font-sans)',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}>
-          {project.owner_role}
-        </span>
-      </div>
-
-      {/* Progress bar */}
-      {actionsCount > 0 && (
-        <div style={{ marginBottom: '10px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-            <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
-              {actionsCount} action{actionsCount > 1 ? 's' : ''}
-            </span>
-            <span style={{ fontSize: '10px', fontWeight: 600, color: progressColor(progress), fontFamily: 'var(--font-sans)' }}>
-              {progress}%
-            </span>
-          </div>
-          <ProgressBar value={progress} />
-        </div>
-      )}
-
-      {/* Due date */}
-      {project.due_date && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '4px',
-        }}>
-          <Calendar size={10} style={{ color: 'var(--color-text-secondary)', flexShrink: 0 }} />
-          <span style={{
-            fontSize: '11px',
-            color: project.status === 'overdue' ? 'var(--color-danger)' : 'var(--color-text-secondary)',
-            fontFamily: 'var(--font-sans)',
+      {/* ─── List (master) ─── */}
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: 'var(--surface-2)', borderRadius: 8, padding: '6px 10px',
           }}>
-            {formatDate(project.due_date)}
-          </span>
+            <Search size={14} style={{ color: 'var(--ink-3)' }} />
+            <input
+              type="text" placeholder="Chercher un projet…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                flex: 1, border: 'none', outline: 'none', background: 'transparent',
+                fontSize: 13, color: 'var(--ink)',
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: 4, marginTop: 10, flexWrap: 'wrap' }}>
+            {([
+              ['all', 'tous'],
+              ['in_progress', 'en cours'],
+              ['todo', 'à démarrer'],
+              ['done', 'terminés'],
+            ] as Array<[StatusFilter, string]>).map(([k, l]) => (
+              <button
+                key={k}
+                onClick={() => setFilter(k)}
+                className={`chip ${filter === k ? 'creative' : 'ghost'}`}
+                style={{ border: 'none', cursor: 'pointer' }}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
         </div>
+
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          {loading ? (
+            <div style={{ padding: 20, color: 'var(--ink-3)', fontSize: 13 }}>Chargement…</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ padding: 28, color: 'var(--ink-3)', fontSize: 13, textAlign: 'center' }}>
+              Aucun projet
+            </div>
+          ) : (
+            filtered.map((p) => {
+              const active = p.id === selectedProject?.id;
+              const cls = normalizeCategory(p.category);
+              const pct = progressByProjectId.get(p.id) ?? (p.status === 'done' ? 100 : 0);
+              const statusMeta = STATUS_CHIP[p.status];
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => selectProject(p)}
+                  style={{
+                    display: 'block', width: '100%', textAlign: 'left',
+                    padding: '14px 16px',
+                    background: active ? 'var(--cat-creative-bg)' : 'transparent',
+                    borderBottom: '1px solid var(--line)',
+                    borderLeft: `3px solid ${active ? 'var(--cat-creative)' : 'transparent'}`,
+                    border: `none`, borderBottomColor: 'var(--line)',
+                    borderLeftWidth: 3,
+                    borderLeftStyle: 'solid',
+                    borderLeftColor: active ? 'var(--cat-creative)' : 'transparent',
+                    borderBottomStyle: 'solid',
+                    borderBottomWidth: 1,
+                    cursor: 'pointer',
+                    transition: 'background 0.12s',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span className={`chip ${cls}`} style={{ fontSize: 10.5 }}>
+                      {categoryLabel(p.category)}
+                    </span>
+                    <div style={{ flex: 1 }} />
+                    {p.status === 'done' && (
+                      <span className="chip done no-dot" style={{ fontSize: 10 }}>
+                        <Check size={10} strokeWidth={2.5} /> terminé
+                      </span>
+                    )}
+                    {p.status === 'todo' && (
+                      <span className="chip ghost" style={{ fontSize: 10.5 }}>à démarrer</span>
+                    )}
+                    {p.status === 'overdue' && (
+                      <span className="chip warn no-dot" style={{ fontSize: 10 }}>en retard</span>
+                    )}
+                  </div>
+                  <div style={{ fontWeight: 600, fontSize: 14.5, letterSpacing: -0.1, color: 'var(--ink)' }}>
+                    {p.title}
+                  </div>
+                  <div className="num" style={{
+                    fontSize: 11.5, color: 'var(--ink-3)', marginTop: 3,
+                    fontFamily: 'var(--font-mono)',
+                  }}>
+                    {formatDeadline(p.due_date)}
+                  </div>
+                  {p.status === 'in_progress' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                      <div style={{
+                        flex: 1, height: 4, background: 'var(--surface-2)',
+                        borderRadius: 2, overflow: 'hidden',
+                      }}>
+                        <div style={{
+                          width: `${pct}%`, height: '100%',
+                          background: `var(--cat-${cls})`,
+                        }} />
+                      </div>
+                      <div className="num" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+                        {pct}%
+                      </div>
+                    </div>
+                  )}
+                  {/* Suppress the line above when statusMeta could be useful */}
+                  {statusMeta && null}
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        <div style={{ padding: 12, borderTop: '1px solid var(--line)' }}>
+          <button
+            className="btn primary"
+            style={{ width: '100%', justifyContent: 'center' }}
+            onClick={() => { setEditProjectId(null); setShowForm(true); }}
+          >
+            <Plus size={14} /> Nouveau projet
+          </button>
+        </div>
+      </div>
+
+      {/* ─── Detail ─── */}
+      {selectedProject ? (
+        <ProjectDetail
+          project={selectedProject}
+          actions={selectedActions}
+          onEdit={() => { setEditProjectId(selectedProject.id); setShowForm(true); }}
+          onDelete={() => handleDelete(selectedProject.id)}
+          onUpdateProject={updateProject}
+          onCreateAction={createAction}
+          onUpdateAction={updateAction}
+          onDeleteAction={deleteAction}
+        />
+      ) : (
+        <div className="card" style={{
+          padding: 60, display: 'grid', placeItems: 'center',
+          color: 'var(--ink-3)', fontSize: 14,
+        }}>
+          {projects.length === 0
+            ? 'Aucun projet — créez le premier avec « Nouveau projet ».'
+            : 'Sélectionnez un projet dans la liste.'}
+        </div>
+      )}
+
+      {/* ─── Project form modal ─── */}
+      {showForm && (
+        <ProjectFormModal
+          initial={editingProject}
+          onCancel={() => { setShowForm(false); setEditProjectId(null); }}
+          onSubmit={async (data) => {
+            try {
+              if (editingProject) {
+                await updateProject(editingProject.id, data);
+                addToast('Projet mis à jour', 'success');
+              } else {
+                await createProject(data);
+                addToast('Projet créé', 'success');
+              }
+              setShowForm(false);
+              setEditProjectId(null);
+            } catch {
+              addToast("Erreur lors de l'enregistrement", 'error');
+            }
+          }}
+        />
       )}
     </div>
   );
 }
 
-// ─── Kanban Column ────────────────────────────────────────────────────────────
+/* ─── Detail panel ───────────────────────────────────────────── */
 
-interface KanbanColumnProps {
-  column: typeof STATUS_COLUMNS[number];
-  projects: Project[];
-  progressMap: Record<number, number>;
-  actionsCountMap: Record<number, number>;
-  onSelectProject: (p: Project) => void;
-  onDragStart: (e: React.DragEvent, projectId: number) => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent, targetStatus: ProjectStatus) => void;
-  isDragOver: boolean;
+interface ProjectDetailProps {
+  project: Project;
+  actions: Action[];
+  onEdit: () => void;
+  onDelete: () => void;
+  onUpdateProject: (id: number, updates: Partial<Project>) => Promise<void>;
+  onCreateAction: (data: Omit<Action, 'id' | 'created_at'>) => Promise<void>;
+  onUpdateAction: (id: number, updates: Partial<Action>) => Promise<void>;
+  onDeleteAction: (id: number) => Promise<void>;
 }
 
-function KanbanColumn({
-  column, projects, progressMap, actionsCountMap,
-  onSelectProject, onDragStart, onDragOver, onDrop, isDragOver,
-}: KanbanColumnProps) {
+function ProjectDetail({
+  project: p, actions, onEdit, onDelete,
+  onUpdateProject, onCreateAction, onUpdateAction, onDeleteAction,
+}: ProjectDetailProps) {
+  const cls = normalizeCategory(p.category);
+  const status = STATUS_CHIP[p.status];
+  const pct = projectProgress(actions);
+  const doneCount = actions.filter((a) => a.status === 'done').length;
+
+  const [newStep, setNewStep] = useState('');
+
+  async function toggleAction(a: Action) {
+    const nextStatus: ActionStatus = a.status === 'done' ? 'todo' : 'done';
+    await onUpdateAction(a.id, {
+      status: nextStatus,
+      progress: nextStatus === 'done' ? 100 : 0,
+    });
+  }
+
+  async function handleAddStep(e: React.FormEvent) {
+    e.preventDefault();
+    const title = newStep.trim();
+    if (!title) return;
+    await onCreateAction({
+      project_id: p.id,
+      title,
+      progress: 0,
+      status: 'todo',
+      due_date: null,
+    });
+    setNewStep('');
+  }
+
+  const team = (p.owner_role || '').split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+
   return (
-    <div
-      onDragOver={onDragOver}
-      onDrop={(e) => onDrop(e, column.key)}
-      style={{
-        flex: '1 1 0',
-        minWidth: '220px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '8px',
-        transition: 'background 0.15s ease',
-        background: isDragOver ? column.light : 'transparent',
-        borderRadius: '10px',
-        padding: '4px',
-      }}
-    >
-      {/* Column header */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '8px 4px 4px',
+    <div className="card" style={{ padding: 32, overflow: 'auto' }}>
+      {/* Top chips row */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10, alignItems: 'center' }}>
+        <span className={`chip ${cls}`}>{categoryLabel(p.category)}</span>
+        <span className={`chip ${status.cls}${status.icon ? ' no-dot' : ''}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          {status.icon && <status.icon size={10} />}
+          {status.label}
+        </span>
+        <div style={{ flex: 1 }} />
+        <button className="btn sm" onClick={onEdit}>
+          <Pencil size={12} /> Modifier
+        </button>
+        <button className="btn sm" onClick={onDelete} style={{ color: 'var(--danger)' }} title="Supprimer">
+          <Trash2 size={12} />
+        </button>
+      </div>
+
+      {/* Title + description */}
+      <h2 className="serif" style={{
+        fontSize: 36, fontWeight: 500, letterSpacing: -1,
+        margin: '0 0 6px', lineHeight: 1.05,
       }}>
+        {p.title}
+      </h2>
+      {p.description && (
         <div style={{
-          width: '10px',
-          height: '10px',
-          borderRadius: '50%',
-          background: column.color,
-          flexShrink: 0,
-        }} />
-        <span style={{
-          fontSize: '12px',
-          fontWeight: 700,
-          color: column.color,
-          fontFamily: 'var(--font-sans)',
-          letterSpacing: '0.04em',
-          textTransform: 'uppercase',
-          flex: 1,
+          fontSize: 14.5, color: 'var(--ink-3)', marginBottom: 22,
+          lineHeight: 1.6, maxWidth: 640,
         }}>
-          {column.label}
-        </span>
-        <span style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minWidth: '20px',
-          height: '20px',
-          borderRadius: '10px',
-          background: column.bg,
-          color: column.color,
-          fontSize: '11px',
-          fontWeight: 700,
-          fontFamily: 'var(--font-sans)',
-          padding: '0 5px',
-        }}>
-          {projects.length}
-        </span>
-      </div>
+          {p.description}
+        </div>
+      )}
 
-      {/* Drop zone visual cue */}
+      {/* 3 stat cards */}
       <div style={{
-        border: isDragOver ? `2px dashed ${column.color}` : '2px dashed transparent',
-        borderRadius: '8px',
-        minHeight: isDragOver && projects.length === 0 ? '80px' : 0,
-        transition: 'all 0.15s ease',
-      }} />
-
-      {/* Cards */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {projects.map(project => (
-          <ProjectCard
-            key={project.id}
-            project={project}
-            actionsCount={actionsCountMap[project.id] ?? 0}
-            progress={progressMap[project.id] ?? 0}
-            onSelect={() => onSelectProject(project)}
-            onDragStart={(e) => onDragStart(e, project.id)}
-          />
-        ))}
+        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 28,
+      }}>
+        <div className="card-soft" style={{ padding: 14 }}>
+          <div className="eyebrow">Échéance</div>
+          <div className="serif num" style={{ fontSize: 17, fontWeight: 500, marginTop: 2 }}>
+            {formatDeadline(p.due_date)}
+          </div>
+        </div>
+        <div className="card-soft" style={{ padding: 14 }}>
+          <div className="eyebrow">Avancement</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
+            <div className="serif num" style={{ fontSize: 22, fontWeight: 500 }}>
+              {pct}<span style={{ fontSize: 13, color: 'var(--ink-3)' }}>%</span>
+            </div>
+            <div style={{
+              flex: 1, height: 5, background: 'var(--surface)',
+              borderRadius: 3, overflow: 'hidden', marginLeft: 8,
+            }}>
+              <div style={{
+                width: `${pct}%`, height: '100%', background: `var(--cat-${cls})`,
+                transition: 'width 0.3s ease',
+              }} />
+            </div>
+          </div>
+        </div>
+        <div className="card-soft" style={{ padding: 14 }}>
+          <div className="eyebrow">Équipe</div>
+          {team.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: 'var(--ink-3)', fontStyle: 'italic', marginTop: 4 }}>
+              Non renseignée
+            </div>
+          ) : (
+            <div style={{ display: 'flex', marginTop: 6 }}>
+              {team.map((t, i) => (
+                <div
+                  key={i}
+                  title={t}
+                  style={{
+                    width: 28, height: 28, borderRadius: '50%',
+                    background: i % 2 === 0 ? 'var(--sage-soft)' : 'var(--cat-memory-bg)',
+                    color: i % 2 === 0 ? 'var(--sage-deep)' : 'var(--cat-memory)',
+                    display: 'grid', placeItems: 'center',
+                    fontSize: 11, fontWeight: 600,
+                    border: '2px solid var(--surface)',
+                    marginLeft: i > 0 ? -6 : 0,
+                  }}
+                >
+                  {initials(t)}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {projects.length === 0 && !isDragOver && (
+      {/* Étapes */}
+      {actions.length > 0 ? (
+        <>
+          <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 10 }}>
+            <div className="serif" style={{ fontSize: 18, fontWeight: 500, letterSpacing: -0.3 }}>
+              Étapes
+            </div>
+            <div className="num" style={{ marginLeft: 10, fontSize: 12, color: 'var(--ink-3)' }}>
+              {doneCount} / {actions.length}
+            </div>
+            <div style={{ flex: 1 }} />
+          </div>
+          <div className="card-soft" style={{ padding: '4px 16px' }}>
+            {actions.map((a, i) => {
+              const done = a.status === 'done';
+              return (
+                <div
+                  key={a.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '12px 0',
+                    borderTop: i > 0 ? '1px solid var(--line)' : 'none',
+                  }}
+                >
+                  <button
+                    onClick={() => toggleAction(a)}
+                    title={done ? 'Marquer à faire' : 'Marquer comme fait'}
+                    style={{
+                      width: 20, height: 20, borderRadius: 5,
+                      background: done ? `var(--cat-${cls})` : 'var(--surface)',
+                      border: `1.5px solid ${done ? `var(--cat-${cls})` : 'var(--line-strong)'}`,
+                      display: 'grid', placeItems: 'center',
+                      cursor: 'pointer', padding: 0, flexShrink: 0,
+                    }}
+                  >
+                    {done && <Check size={12} strokeWidth={3} style={{ color: '#fff' }} />}
+                  </button>
+                  <div style={{
+                    flex: 1, fontSize: 14,
+                    color: done ? 'var(--ink-3)' : 'var(--ink)',
+                    textDecoration: done ? 'line-through' : 'none',
+                  }}>
+                    {a.title}
+                  </div>
+                  <button
+                    onClick={() => onDeleteAction(a.id)}
+                    title="Supprimer l'étape"
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: 'var(--ink-4)', padding: 4, display: 'flex',
+                    }}
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              );
+            })}
+            <form onSubmit={handleAddStep} style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '12px 0', borderTop: '1px solid var(--line)',
+            }}>
+              <div style={{
+                width: 20, height: 20, borderRadius: 5,
+                border: '1.5px dashed var(--line-strong)', flexShrink: 0,
+              }} />
+              <input
+                type="text" placeholder="Nouvelle étape…"
+                value={newStep}
+                onChange={(e) => setNewStep(e.target.value)}
+                style={{
+                  flex: 1, fontSize: 14, border: 'none', outline: 'none',
+                  background: 'transparent', color: 'var(--ink)',
+                }}
+              />
+              {newStep.trim() && (
+                <button type="submit" className="btn sm primary">
+                  <Plus size={11} /> Ajouter
+                </button>
+              )}
+            </form>
+          </div>
+        </>
+      ) : (
         <div style={{
-          padding: '20px 12px',
-          textAlign: 'center',
-          color: 'var(--color-text-secondary)',
-          fontSize: '12px',
-          fontFamily: 'var(--font-sans)',
-          fontStyle: 'italic',
-          opacity: 0.6,
+          padding: '28px 24px', textAlign: 'center',
+          background: 'var(--surface-2)', border: '1px dashed var(--line-strong)',
+          borderRadius: 12, color: 'var(--ink-3)', fontSize: 13,
         }}>
-          Aucun projet
+          <div style={{ fontWeight: 500, color: 'var(--ink-2)', fontSize: 14 }}>
+            {p.status === 'done' ? 'Projet terminé' : 'Aucune étape'}
+          </div>
+          <div style={{ marginTop: 4 }}>
+            {p.status === 'done'
+              ? 'Entretien courant — plus d\'étapes à venir.'
+              : 'Ajoutez une première étape ci-dessous.'}
+          </div>
+          {p.status !== 'done' && (
+            <form onSubmit={handleAddStep} style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              marginTop: 14, maxWidth: 320, marginInline: 'auto',
+            }}>
+              <input
+                type="text" placeholder="Première étape…"
+                value={newStep}
+                onChange={(e) => setNewStep(e.target.value)}
+                style={{
+                  flex: 1, padding: '6px 10px',
+                  border: '1px solid var(--line)', borderRadius: 6,
+                  fontSize: 13, background: 'var(--surface)',
+                }}
+              />
+              <button type="submit" className="btn sm primary" disabled={!newStep.trim()}>
+                <Plus size={11} /> Ajouter
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+
+      {/* Prochaine action callout */}
+      {p.next_action && p.status !== 'done' && (
+        <div style={{
+          marginTop: 20, padding: '14px 18px',
+          background: 'var(--cat-creative-bg)', borderRadius: 10,
+          borderLeft: '3px solid var(--cat-creative)',
+        }}>
+          <div className="eyebrow" style={{ color: 'var(--cat-creative)' }}>
+            Prochaine action
+          </div>
+          <div style={{
+            fontSize: 14, color: 'var(--ink)', marginTop: 2, fontWeight: 500,
+          }}>
+            {p.next_action}
+          </div>
+          <button
+            onClick={() => onUpdateProject(p.id, { next_action: '' })}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--ink-3)', fontSize: 11, marginTop: 6, padding: 0,
+            }}
+          >
+            Effacer
+          </button>
         </div>
       )}
     </div>
   );
 }
 
-// ─── Create Project Modal ─────────────────────────────────────────────────────
+/* ─── Project form modal ─────────────────────────────────────── */
 
-interface CreateProjectModalProps {
-  onClose: () => void;
-  onCreate: (data: Omit<Project, 'id' | 'created_at'>) => Promise<void>;
+interface ProjectFormModalProps {
+  initial: Project | null;
+  onCancel: () => void;
+  onSubmit: (data: Omit<Project, 'id' | 'created_at'>) => Promise<void>;
 }
 
-function CreateProjectModal({ onClose, onCreate }: CreateProjectModalProps) {
-  const [title, setTitle]         = useState('');
-  const [description, setDesc]    = useState('');
-  const [ownerRole, setOwner]     = useState('');
-  const [startDate, setStart]     = useState('');
-  const [dueDate, setDue]         = useState('');
-  const [saving, setSaving]       = useState(false);
-  const [error, setError]         = useState('');
+function ProjectFormModal({ initial, onCancel, onSubmit }: ProjectFormModalProps) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const [category, setCategory] = useState<CategoryClass>(
+    initial ? normalizeCategory(initial.category) : 'prep',
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim()) { setError('Le titre est requis.'); return; }
-    setSaving(true);
-    try {
-      await onCreate({
-        title: title.trim(),
-        description: description.trim(),
-        owner_role: ownerRole.trim(),
-        status: 'todo',
-        start_date: startDate || null,
-        due_date: dueDate || null,
-        category: '',
-        next_action: '',
-      });
-      onClose();
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setSaving(false);
-    }
+    const form = formRef.current;
+    if (!form) return;
+    const fd = new FormData(form);
+    const data: Omit<Project, 'id' | 'created_at'> = {
+      title: (fd.get('title') as string).trim(),
+      description: (fd.get('description') as string) ?? '',
+      owner_role: (fd.get('owner_role') as string) ?? '',
+      status: (fd.get('status') as ProjectStatus) ?? 'todo',
+      start_date: (fd.get('start_date') as string) || null,
+      due_date: (fd.get('due_date') as string) || null,
+      category,
+      next_action: (fd.get('next_action') as string) ?? '',
+    };
+    if (!data.title) return;
+    await onSubmit(data);
   }
 
   return (
     <div
       style={{
-        position: 'fixed', inset: 0, zIndex: 50,
-        background: 'rgba(15,23,42,0.45)',
-        backdropFilter: 'blur(4px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '24px',
+        position: 'fixed', inset: 0, background: 'rgba(35, 29, 24, 0.4)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50,
       }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={onCancel}
     >
-      <div style={{
-        background: 'var(--color-surface)',
-        borderRadius: '12px',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.18)',
-        width: '100%',
-        maxWidth: '500px',
-        overflow: 'hidden',
-      }}>
-        {/* Header */}
-        <div style={{
-          padding: '20px 24px',
-          borderBottom: '1px solid var(--color-border)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}>
-          <h2 style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: '18px',
-            fontWeight: 700,
-            color: 'var(--color-text-primary)',
-            margin: 0,
-          }}>
-            Nouveau projet
+      <div
+        className="card"
+        style={{
+          padding: 24, width: 580, maxHeight: '85vh', overflowY: 'auto',
+          boxShadow: 'var(--shadow-lg)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 18 }}>
+          <h2 className="serif" style={{ margin: 0, fontSize: 22, fontWeight: 500, letterSpacing: -0.4 }}>
+            {initial ? 'Modifier le projet' : 'Nouveau projet'}
           </h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: 'var(--color-text-secondary)',
-              padding: '4px', borderRadius: '4px',
-              display: 'flex', alignItems: 'center',
-            }}
-          >
-            <X size={18} />
+          <div style={{ flex: 1 }} />
+          <button className="btn ghost" onClick={onCancel} style={{ padding: 6 }} aria-label="Fermer">
+            <X size={16} />
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {error && (
-            <div style={{
-              padding: '10px 14px',
-              background: 'rgba(220,38,38,0.06)',
-              border: '1px solid #DC2626',
-              borderRadius: '6px',
-              fontSize: '13px',
-              color: '#DC2626',
-            }}>
-              {error}
-            </div>
-          )}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={labelStyle}>Titre *</label>
+        <form ref={formRef} onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Field label="Titre" required>
             <input
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder="Nom du projet"
-              autoFocus
+              name="title" defaultValue={initial?.title ?? ''} required
+              placeholder="Spectacle de Noël"
               style={inputStyle}
             />
-          </div>
+          </Field>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={labelStyle}>Description</label>
+          <Field label="Description">
             <textarea
-              value={description}
-              onChange={e => setDesc(e.target.value)}
-              placeholder="Description du projet..."
-              rows={3}
+              name="description" rows={3} defaultValue={initial?.description ?? ''}
+              placeholder="Un après-midi de chorale, saynètes et goûter…"
               style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
             />
+          </Field>
+
+          <Field label="Catégorie">
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
+              {CATEGORY_CLASSES.map((k) => {
+                const active = category === k;
+                return (
+                  <button
+                    key={k} type="button"
+                    onClick={() => setCategory(k)}
+                    className={active ? `chip ${k}` : 'chip ghost'}
+                    style={{ cursor: 'pointer', border: 'none' }}
+                  >
+                    {CATEGORY_LABELS[k]}
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="Statut">
+              <select name="status" defaultValue={initial?.status ?? 'todo'} style={inputStyle}>
+                <option value="todo">À démarrer</option>
+                <option value="in_progress">En cours</option>
+                <option value="done">Terminé</option>
+                <option value="overdue">En retard</option>
+              </select>
+            </Field>
+            <Field label="Échéance">
+              <input
+                name="due_date" type="date"
+                defaultValue={initial?.due_date ?? ''} style={inputStyle}
+              />
+            </Field>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={labelStyle}>Responsable</label>
+          <Field label="Équipe (noms séparés par une virgule)">
             <input
-              value={ownerRole}
-              onChange={e => setOwner(e.target.value)}
-              placeholder="Rôle du responsable"
+              name="owner_role" defaultValue={initial?.owner_role ?? ''}
+              placeholder="Marie Coste, Sophie G."
               style={inputStyle}
             />
-          </div>
+          </Field>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={labelStyle}>Date de début</label>
-              <input type="date" value={startDate} onChange={e => setStart(e.target.value)} style={inputStyle} />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={labelStyle}>Date d'échéance</label>
-              <input type="date" value={dueDate} onChange={e => setDue(e.target.value)} style={inputStyle} />
-            </div>
-          </div>
+          <Field label="Prochaine action">
+            <input
+              name="next_action" defaultValue={initial?.next_action ?? ''}
+              placeholder="Lundi : présenter le devis en réunion"
+              style={inputStyle}
+            />
+          </Field>
 
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', paddingTop: '8px' }}>
-            <button type="button" onClick={onClose} style={secondaryBtnStyle}>
-              Annuler
-            </button>
-            <button type="submit" disabled={saving} style={primaryBtnStyle}>
-              {saving ? 'Création...' : 'Créer le projet'}
-            </button>
-          </div>
+          <button type="submit" className="btn primary" style={{ justifyContent: 'center', marginTop: 4 }}>
+            {initial ? 'Mettre à jour' : 'Créer le projet'}
+          </button>
         </form>
       </div>
     </div>
   );
 }
 
-// ─── Project Detail Panel ─────────────────────────────────────────────────────
-
-interface DetailPanelProps {
-  project: Project;
-  actions: Action[];
-  actionsLoading: boolean;
-  onClose: () => void;
-  onUpdateProject: (id: number, updates: Partial<Project>) => Promise<void>;
-  onDeleteProject: (id: number) => Promise<void>;
-  onCreateAction: (data: Omit<Action, 'id' | 'created_at'>) => Promise<void>;
-  onUpdateAction: (id: number, updates: Partial<Action>) => Promise<void>;
-  onDeleteAction: (id: number) => Promise<void>;
-}
-
-function DetailPanel({
-  project, actions, actionsLoading,
-  onClose, onUpdateProject, onDeleteProject,
-  onCreateAction, onUpdateAction, onDeleteAction,
-}: DetailPanelProps) {
-  // Editable fields
-  const [editTitle, setEditTitle]       = useState(project.title);
-  const [editDesc, setEditDesc]         = useState(project.description);
-  const [editOwner, setEditOwner]       = useState(project.owner_role);
-  const [editStatus, setEditStatus]     = useState<ProjectStatus>(project.status);
-  const [editDue, setEditDue]           = useState(project.due_date ?? '');
-  const [editStart, setEditStart]       = useState(project.start_date ?? '');
-  const [saving, setSaving]             = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deletingProject, setDeletingProject] = useState(false);
-
-  // New action
-  const [newActionTitle, setNewActionTitle] = useState('');
-  const [addingAction, setAddingAction]     = useState(false);
-  const [newActionDue, setNewActionDue]     = useState('');
-
-  // Inline editing action
-  const [editingActionId, setEditingActionId] = useState<number | null>(null);
-  const [editActionTitle, setEditActionTitle] = useState('');
-
-  const overallProgress = computeProgress(actions);
-  const meta = statusMeta(editStatus);
-
-  async function saveProject() {
-    setSaving(true);
-    try {
-      await onUpdateProject(project.id, {
-        title: editTitle.trim() || project.title,
-        description: editDesc.trim(),
-        owner_role: editOwner.trim(),
-        status: editStatus,
-        start_date: editStart || null,
-        due_date: editDue || null,
-      });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDeleteProject() {
-    setDeletingProject(true);
-    try {
-      await onDeleteProject(project.id);
-    } finally {
-      setDeletingProject(false);
-    }
-  }
-
-  async function handleAddAction() {
-    if (!newActionTitle.trim()) return;
-    setAddingAction(true);
-    try {
-      await onCreateAction({
-        project_id: project.id,
-        title: newActionTitle.trim(),
-        progress: 0,
-        due_date: newActionDue || null,
-        status: 'todo',
-      });
-      setNewActionTitle('');
-      setNewActionDue('');
-    } finally {
-      setAddingAction(false);
-    }
-  }
-
-  function startEditAction(action: Action) {
-    setEditingActionId(action.id);
-    setEditActionTitle(action.title);
-  }
-
-  async function saveActionTitle(id: number) {
-    if (editActionTitle.trim()) {
-      await onUpdateAction(id, { title: editActionTitle.trim() });
-    }
-    setEditingActionId(null);
-  }
-
-  return (
-    <div style={{
-      position: 'fixed',
-      top: 0, right: 0, bottom: 0,
-      width: '480px',
-      maxWidth: '100vw',
-      background: 'var(--color-surface)',
-      boxShadow: '-8px 0 40px rgba(0,0,0,0.12)',
-      zIndex: 40,
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '20px 24px',
-        borderBottom: '1px solid var(--color-border)',
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: '12px',
-        flexShrink: 0,
-      }}>
-        <div style={{
-          width: '4px',
-          height: '40px',
-          borderRadius: '2px',
-          background: meta.color,
-          flexShrink: 0,
-          marginTop: '2px',
-        }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <input
-            value={editTitle}
-            onChange={e => setEditTitle(e.target.value)}
-            onBlur={saveProject}
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: '17px',
-              fontWeight: 700,
-              color: 'var(--color-text-primary)',
-              border: 'none',
-              outline: 'none',
-              background: 'transparent',
-              width: '100%',
-              padding: 0,
-              lineHeight: 1.3,
-            }}
-          />
-          <div style={{ marginTop: '6px' }}>
-            <StatusBadge status={editStatus} />
-          </div>
-        </div>
-        <button onClick={onClose} style={{
-          background: 'none', border: 'none', cursor: 'pointer',
-          color: 'var(--color-text-secondary)', padding: '4px',
-          borderRadius: '4px', display: 'flex', alignItems: 'center',
-          flexShrink: 0,
-        }}>
-          <X size={18} />
-        </button>
-      </div>
-
-      {/* Scrollable body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-        {/* Overall progress */}
-        {actions.length > 0 && (
-          <div style={{
-            padding: '14px 16px',
-            background: 'var(--color-bg)',
-            borderRadius: '8px',
-            border: '1px solid var(--color-border)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)' }}>
-                Progression globale
-              </span>
-              <span style={{ fontSize: '14px', fontWeight: 700, color: progressColor(overallProgress), fontFamily: 'var(--font-sans)' }}>
-                {overallProgress}%
-              </span>
-            </div>
-            <ProgressBar value={overallProgress} height={6} />
-          </div>
-        )}
-
-        {/* Fields */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {/* Status select */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            <label style={labelStyle}>Statut</label>
-            <select
-              value={editStatus}
-              onChange={e => { setEditStatus(e.target.value as ProjectStatus); }}
-              onBlur={saveProject}
-              style={{ ...inputStyle, cursor: 'pointer' }}
-            >
-              {STATUS_COLUMNS.map(s => (
-                <option key={s.key} value={s.key}>{s.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Description */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            <label style={labelStyle}>Description</label>
-            <textarea
-              value={editDesc}
-              onChange={e => setEditDesc(e.target.value)}
-              onBlur={saveProject}
-              placeholder="Description du projet..."
-              rows={3}
-              style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
-            />
-          </div>
-
-          {/* Owner */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            <label style={labelStyle}>Responsable</label>
-            <input
-              value={editOwner}
-              onChange={e => setEditOwner(e.target.value)}
-              onBlur={saveProject}
-              placeholder="Rôle du responsable"
-              style={inputStyle}
-            />
-          </div>
-
-          {/* Dates */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-              <label style={labelStyle}>Date de début</label>
-              <input
-                type="date"
-                value={editStart}
-                onChange={e => setEditStart(e.target.value)}
-                onBlur={saveProject}
-                style={inputStyle}
-              />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-              <label style={labelStyle}>Échéance</label>
-              <input
-                type="date"
-                value={editDue}
-                onChange={e => setEditDue(e.target.value)}
-                onBlur={saveProject}
-                style={inputStyle}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Save notice */}
-        {saving && (
-          <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)', margin: 0, fontStyle: 'italic' }}>
-            Enregistrement...
-          </p>
-        )}
-
-        {/* ── Actions section ── */}
-        <div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '12px',
-          }}>
-            <h3 style={{
-              fontFamily: 'var(--font-sans)',
-              fontSize: '13px',
-              fontWeight: 700,
-              color: 'var(--color-text-primary)',
-              margin: 0,
-              letterSpacing: '0.03em',
-              textTransform: 'uppercase',
-            }}>
-              Actions ({actions.length})
-            </h3>
-          </div>
-
-          {actionsLoading ? (
-            <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-sans)', fontStyle: 'italic' }}>
-              Chargement...
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {actions.map(action => (
-                <ActionRow
-                  key={action.id}
-                  action={action}
-                  isEditing={editingActionId === action.id}
-                  editTitle={editActionTitle}
-                  onEditTitleChange={setEditActionTitle}
-                  onStartEdit={() => startEditAction(action)}
-                  onSaveTitle={() => saveActionTitle(action.id)}
-                  onUpdateProgress={(v) => onUpdateAction(action.id, { progress: v, status: v === 100 ? 'done' : v > 0 ? 'in_progress' : 'todo' })}
-                  onUpdateStatus={(s) => onUpdateAction(action.id, { status: s })}
-                  onUpdateDueDate={(d) => onUpdateAction(action.id, { due_date: d })}
-                  onDelete={() => onDeleteAction(action.id)}
-                />
-              ))}
-
-              {/* Add action form */}
-              <div style={{
-                background: 'var(--color-bg)',
-                borderRadius: '8px',
-                border: '1px dashed var(--color-border)',
-                padding: '12px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-              }}>
-                <input
-                  value={newActionTitle}
-                  onChange={e => setNewActionTitle(e.target.value)}
-                  placeholder="Titre de la nouvelle action..."
-                  onKeyDown={e => e.key === 'Enter' && handleAddAction()}
-                  style={{ ...inputStyle, fontSize: '13px' }}
-                />
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <input
-                    type="date"
-                    value={newActionDue}
-                    onChange={e => setNewActionDue(e.target.value)}
-                    style={{ ...inputStyle, fontSize: '12px', flex: 1 }}
-                  />
-                  <button
-                    onClick={handleAddAction}
-                    disabled={addingAction || !newActionTitle.trim()}
-                    style={{
-                      ...primaryBtnStyle,
-                      padding: '6px 12px',
-                      fontSize: '12px',
-                      flexShrink: 0,
-                      opacity: !newActionTitle.trim() ? 0.5 : 1,
-                    }}
-                  >
-                    <Plus size={13} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
-                    {addingAction ? 'Ajout...' : 'Ajouter'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── Delete project ── */}
-        <div style={{
-          paddingTop: '16px',
-          borderTop: '1px solid var(--color-border)',
-          marginTop: '8px',
-        }}>
-          {!confirmDelete ? (
-            <button
-              onClick={() => setConfirmDelete(true)}
-              style={{
-                width: '100%',
-                padding: '10px',
-                background: 'rgba(220,38,38,0.04)',
-                border: '1px solid rgba(220,38,38,0.2)',
-                borderRadius: '8px',
-                color: '#DC2626',
-                fontSize: '13px',
-                fontWeight: 600,
-                fontFamily: 'var(--font-sans)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-                transition: 'background 0.15s',
-              }}
-            >
-              <Trash2 size={14} />
-              Supprimer le projet
-            </button>
-          ) : (
-            <div style={{
-              padding: '14px',
-              background: 'rgba(220,38,38,0.05)',
-              border: '1px solid rgba(220,38,38,0.25)',
-              borderRadius: '8px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '10px',
-            }}>
-              <p style={{ margin: 0, fontSize: '13px', color: '#DC2626', fontFamily: 'var(--font-sans)', fontWeight: 500 }}>
-                Confirmer la suppression ? Cette action est irréversible.
-              </p>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={() => setConfirmDelete(false)} style={{ ...secondaryBtnStyle, flex: 1, justifyContent: 'center' }}>
-                  Annuler
-                </button>
-                <button
-                  onClick={handleDeleteProject}
-                  disabled={deletingProject}
-                  style={{
-                    flex: 1,
-                    padding: '8px 14px',
-                    background: '#DC2626',
-                    border: 'none',
-                    borderRadius: '6px',
-                    color: '#fff',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    fontFamily: 'var(--font-sans)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '5px',
-                  }}
-                >
-                  {deletingProject ? 'Suppression...' : 'Supprimer'}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Action Row ───────────────────────────────────────────────────────────────
-
-interface ActionRowProps {
-  action: Action;
-  isEditing: boolean;
-  editTitle: string;
-  onEditTitleChange: (v: string) => void;
-  onStartEdit: () => void;
-  onSaveTitle: () => void;
-  onUpdateProgress: (v: number) => Promise<void>;
-  onUpdateStatus: (s: ActionStatus) => Promise<void>;
-  onUpdateDueDate: (d: string | null) => Promise<void>;
-  onDelete: () => Promise<void>;
-}
-
-function ActionRow({
-  action, isEditing, editTitle, onEditTitleChange,
-  onStartEdit, onSaveTitle,
-  onUpdateProgress, onUpdateStatus, onUpdateDueDate, onDelete,
-}: ActionRowProps) {
-  const [hovered, setHovered] = useState(false);
-  const [localProgress, setLocalProgress] = useState(action.progress);
-  const progressSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function handleProgressChange(v: number) {
-    setLocalProgress(v);
-    if (progressSaveTimer.current) clearTimeout(progressSaveTimer.current);
-    progressSaveTimer.current = setTimeout(() => {
-      onUpdateProgress(v);
-    }, 400);
-  }
-
-  const pColor = progressColor(localProgress);
-
-  return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        background: hovered ? 'var(--color-bg)' : 'transparent',
-        border: '1px solid',
-        borderColor: hovered ? 'var(--color-border)' : 'transparent',
-        borderRadius: '8px',
-        padding: '10px 12px',
-        transition: 'all 0.15s ease',
-      }}
-    >
-      {/* Title row */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '8px' }}>
-        <div style={{
-          width: '14px',
-          height: '14px',
-          borderRadius: '50%',
-          border: `2px solid ${pColor}`,
-          background: localProgress === 100 ? pColor : 'transparent',
-          flexShrink: 0,
-          marginTop: '2px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-          {localProgress === 100 && <Check size={8} color="#fff" strokeWidth={3} />}
-        </div>
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {isEditing ? (
-            <input
-              value={editTitle}
-              onChange={e => onEditTitleChange(e.target.value)}
-              onBlur={onSaveTitle}
-              onKeyDown={e => { if (e.key === 'Enter') onSaveTitle(); }}
-              autoFocus
-              style={{
-                ...inputStyle,
-                fontSize: '13px',
-                padding: '2px 6px',
-                fontWeight: 500,
-              }}
-            />
-          ) : (
-            <span
-              onClick={onStartEdit}
-              style={{
-                fontSize: '13px',
-                fontWeight: 500,
-                color: localProgress === 100 ? 'var(--color-text-secondary)' : 'var(--color-text-primary)',
-                fontFamily: 'var(--font-sans)',
-                textDecoration: localProgress === 100 ? 'line-through' : 'none',
-                cursor: 'text',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              {action.title}
-              {hovered && <Pencil size={10} style={{ color: 'var(--color-text-secondary)', opacity: 0.6 }} />}
-            </span>
-          )}
-          <div style={{ marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <input
-              type="date"
-              value={action.due_date ?? ''}
-              onChange={e => onUpdateDueDate(e.target.value || null)}
-              style={{
-                fontSize: '11px',
-                fontFamily: 'var(--font-sans)',
-                color: 'var(--color-text-secondary)',
-                background: 'transparent',
-                border: '1px solid transparent',
-                borderRadius: '4px',
-                padding: '1px 4px',
-                cursor: 'pointer',
-                outline: 'none',
-                colorScheme: 'light',
-              }}
-              onFocus={e => { e.currentTarget.style.borderColor = 'var(--color-border)'; }}
-              onBlur={e => { e.currentTarget.style.borderColor = 'transparent'; }}
-            />
-            {action.due_date && hovered && (
-              <button
-                onClick={() => onUpdateDueDate(null)}
-                title="Retirer la date"
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: 'var(--color-text-secondary)', opacity: 0.6,
-                  padding: '0', display: 'flex', alignItems: 'center',
-                }}
-              >
-                <X size={10} />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Status + delete */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-          <select
-            value={action.status}
-            onChange={e => onUpdateStatus(e.target.value as ActionStatus)}
-            style={{
-              fontSize: '11px',
-              fontFamily: 'var(--font-sans)',
-              border: '1px solid var(--color-border)',
-              borderRadius: '6px',
-              background: 'var(--color-surface)',
-              color: 'var(--color-text-primary)',
-              padding: '2px 4px',
-              cursor: 'pointer',
-              outline: 'none',
-            }}
-          >
-            <option value="todo">À faire</option>
-            <option value="in_progress">En cours</option>
-            <option value="done">Terminé</option>
-          </select>
-          {hovered && (
-            <button
-              onClick={onDelete}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: '#DC2626', opacity: 0.7, padding: '2px',
-                display: 'flex', alignItems: 'center', borderRadius: '3px',
-              }}
-            >
-              <X size={13} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Progress slider */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          step={5}
-          value={localProgress}
-          onChange={e => handleProgressChange(Number(e.target.value))}
-          style={{
-            flex: 1,
-            height: '4px',
-            accentColor: pColor,
-            cursor: 'pointer',
-          }}
-        />
-        <span style={{
-          fontSize: '11px',
-          fontWeight: 700,
-          color: pColor,
-          fontFamily: 'var(--font-sans)',
-          minWidth: '30px',
-          textAlign: 'right',
-        }}>
-          {localProgress}%
-        </span>
-      </div>
-    </div>
-  );
-}
-
-// ─── List View ────────────────────────────────────────────────────────────────
-
-interface ListViewProps {
-  projects: Project[];
-  progressMap: Record<number, number>;
-  actionsCountMap: Record<number, number>;
-  onSelectProject: (p: Project) => void;
-}
-
-function ListView({ projects, progressMap, actionsCountMap, onSelectProject }: ListViewProps) {
-  const [sortField, setSortField] = useState<SortField>('title');
-  const [sortDir, setSortDir]     = useState<SortDir>('asc');
-
-  function handleSort(field: SortField) {
-    if (sortField === field) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDir('asc');
-    }
-  }
-
-  const sorted = [...projects].sort((a, b) => {
-    let av: string | number = '';
-    let bv: string | number = '';
-    switch (sortField) {
-      case 'title':      av = a.title;      bv = b.title;      break;
-      case 'owner_role': av = a.owner_role; bv = b.owner_role; break;
-      case 'status':     av = a.status;     bv = b.status;     break;
-      case 'due_date':   av = a.due_date ?? '9999'; bv = b.due_date ?? '9999'; break;
-      case 'progress':   av = progressMap[a.id] ?? 0; bv = progressMap[b.id] ?? 0; break;
-    }
-    if (av < bv) return sortDir === 'asc' ? -1 : 1;
-    if (av > bv) return sortDir === 'asc' ? 1 : -1;
-    return 0;
-  });
-
-  function SortIcon({ field }: { field: SortField }) {
-    if (sortField !== field) return <ArrowUpDown size={12} style={{ opacity: 0.35, marginLeft: '4px' }} />;
-    return sortDir === 'asc'
-      ? <ChevronUp size={12} style={{ marginLeft: '4px', color: 'var(--color-primary)' }} />
-      : <ChevronDown size={12} style={{ marginLeft: '4px', color: 'var(--color-primary)' }} />;
-  }
-
-  const thStyle: React.CSSProperties = {
-    padding: '10px 14px',
-    textAlign: 'left',
-    fontSize: '11px',
-    fontWeight: 700,
-    color: 'var(--color-text-secondary)',
-    fontFamily: 'var(--font-sans)',
-    letterSpacing: '0.04em',
-    textTransform: 'uppercase',
-    background: 'var(--color-bg)',
-    borderBottom: '1px solid var(--color-border)',
-    cursor: 'pointer',
-    userSelect: 'none',
-    whiteSpace: 'nowrap',
-  };
-
-  return (
-    <div style={{
-      background: 'var(--color-surface)',
-      borderRadius: '10px',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-      overflow: 'hidden',
-      border: '1px solid var(--color-border)',
-    }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th style={thStyle} onClick={() => handleSort('title')}>
-              <span style={{ display: 'inline-flex', alignItems: 'center' }}>Titre <SortIcon field="title" /></span>
-            </th>
-            <th style={thStyle} onClick={() => handleSort('owner_role')}>
-              <span style={{ display: 'inline-flex', alignItems: 'center' }}>Responsable <SortIcon field="owner_role" /></span>
-            </th>
-            <th style={thStyle} onClick={() => handleSort('status')}>
-              <span style={{ display: 'inline-flex', alignItems: 'center' }}>Statut <SortIcon field="status" /></span>
-            </th>
-            <th style={thStyle} onClick={() => handleSort('due_date')}>
-              <span style={{ display: 'inline-flex', alignItems: 'center' }}>Échéance <SortIcon field="due_date" /></span>
-            </th>
-            <th style={thStyle} onClick={() => handleSort('progress')}>
-              <span style={{ display: 'inline-flex', alignItems: 'center' }}>Actions / Progression <SortIcon field="progress" /></span>
-            </th>
-            <th style={{ ...thStyle, cursor: 'default' }} />
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((project, i) => {
-            const progress = progressMap[project.id] ?? 0;
-            const count    = actionsCountMap[project.id] ?? 0;
-            return (
-              <ListRow
-                key={project.id}
-                project={project}
-                progress={progress}
-                actionsCount={count}
-                isEven={i % 2 === 0}
-                onSelect={() => onSelectProject(project)}
-              />
-            );
-          })}
-        </tbody>
-      </table>
-
-      {projects.length === 0 && (
-        <div style={{
-          padding: '40px',
-          textAlign: 'center',
-          color: 'var(--color-text-secondary)',
-          fontSize: '13px',
-          fontFamily: 'var(--font-sans)',
-        }}>
-          Aucun projet pour le moment.
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ListRow({ project, progress, actionsCount, isEven, onSelect }: {
-  project: Project; progress: number; actionsCount: number;
-  isEven: boolean; onSelect: () => void;
-}) {
-  const [hovered, setHovered] = useState(false);
-
-  const tdStyle: React.CSSProperties = {
-    padding: '12px 14px',
-    borderBottom: '1px solid var(--color-border)',
-    fontSize: '13px',
-    fontFamily: 'var(--font-sans)',
-    color: 'var(--color-text-primary)',
-    verticalAlign: 'middle',
-    background: hovered ? 'rgba(30,64,175,0.03)' : isEven ? 'transparent' : 'rgba(248,247,244,0.5)',
-    cursor: 'pointer',
-    transition: 'background 0.1s ease',
-  };
-
-  return (
-    <tr
-      onClick={onSelect}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <td style={{ ...tdStyle, fontWeight: 600, maxWidth: '220px' }}>
-        <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {project.title}
-        </span>
-      </td>
-      <td style={{ ...tdStyle, color: 'var(--color-text-secondary)', maxWidth: '160px' }}>
-        <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {project.owner_role || '—'}
-        </span>
-      </td>
-      <td style={tdStyle}>
-        <StatusBadge status={project.status} />
-      </td>
-      <td style={{ ...tdStyle, color: project.status === 'overdue' ? '#DC2626' : 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
-        {formatDate(project.due_date)}
-      </td>
-      <td style={{ ...tdStyle, minWidth: '160px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
-              {actionsCount} action{actionsCount > 1 ? 's' : ''}
-            </span>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: progressColor(progress) }}>
-              {progress}%
-            </span>
-          </div>
-          <ProgressBar value={progress} />
-        </div>
-      </td>
-      <td style={{ ...tdStyle, width: '32px', paddingLeft: '4px' }}>
-        <ChevronRight size={14} style={{ color: 'var(--color-border)' }} />
-      </td>
-    </tr>
-  );
-}
-
-// ─── Shared style constants ───────────────────────────────────────────────────
-
-const labelStyle: React.CSSProperties = {
-  fontSize: '12px',
-  fontWeight: 600,
-  color: 'var(--color-text-secondary)',
-  fontFamily: 'var(--font-sans)',
-  letterSpacing: '0.03em',
-};
+/* ─── Form bits ──────────────────────────────────────────────── */
 
 const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '8px 10px',
-  border: '1px solid var(--color-border)',
-  borderRadius: '6px',
-  fontSize: '14px',
-  fontFamily: 'var(--font-sans)',
-  color: 'var(--color-text-primary)',
-  background: 'var(--color-surface)',
-  outline: 'none',
-  boxSizing: 'border-box',
+  width: '100%', padding: '8px 12px',
+  border: '1px solid var(--line)', borderRadius: 8,
+  fontSize: 13, fontFamily: 'inherit', background: 'var(--surface)',
+  color: 'var(--ink)', outline: 'none',
 };
 
-const primaryBtnStyle: React.CSSProperties = {
-  padding: '8px 14px',
-  background: 'var(--terra)',
-  border: '1px solid var(--terra-deep)',
-  borderRadius: 999,
-  color: '#fff',
-  fontSize: 13,
-  fontWeight: 500,
-  fontFamily: 'var(--font-sans)',
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 6,
-  whiteSpace: 'nowrap',
-};
-
-const secondaryBtnStyle: React.CSSProperties = {
-  padding: '8px 14px',
-  background: 'var(--surface)',
-  border: '1px solid var(--line-strong)',
-  borderRadius: 999,
-  color: 'var(--ink)',
-  fontSize: 13,
-  fontWeight: 500,
-  fontFamily: 'var(--font-sans)',
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 6,
-};
-
-// ─── Detail View (3rd mode: list 340px + detail right) ───────────────────────
-
-interface DetailViewProps {
-  projects: Project[];
-  progressMap: Record<number, number>;
-  actionsCountMap: Record<number, number>;
-  selectedProject: Project | null;
-  selectedActions: Action[];
-  onSelectProject: (p: Project) => void;
-  onUpdateProject: (id: number, updates: Partial<Project>) => Promise<void>;
-  onUpdateAction: (id: number, updates: Partial<Action>) => Promise<void>;
-}
-
-function DetailView({
-  projects, progressMap, actionsCountMap,
-  selectedProject, selectedActions,
-  onSelectProject, onUpdateProject, onUpdateAction,
-}: DetailViewProps) {
-  const [statusFilter, setStatusFilter] = useState<ProjectStatus | ''>('');
-  const filtered: Project[] = useMemo(
-    () => statusFilter ? projects.filter((p: Project) => p.status === statusFilter) : projects,
-    [projects, statusFilter],
-  );
-  // Auto-select first project when entering detail mode if none is selected.
-  useEffect(() => {
-    if (!selectedProject && filtered[0]) onSelectProject(filtered[0]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered.length]);
-
-  return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'minmax(280px, 340px) 1fr',
-      gap: 20,
-      maxHeight: 'calc(100vh - 220px)',
-    }}>
-      {/* List */}
-      <div className="card" style={{
-        display: 'flex', flexDirection: 'column', overflow: 'hidden',
-      }}>
-        <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-            <button
-              onClick={() => setStatusFilter('')}
-              className={statusFilter === '' ? 'chip creative' : 'chip ghost'}
-              style={{ border: 'none', cursor: 'pointer' }}
-            >
-              Tous · {projects.length}
-            </button>
-            {STATUS_COLUMNS.map((s) => (
-              <button
-                key={s.key}
-                onClick={() => setStatusFilter(s.key === statusFilter ? '' : s.key)}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                  padding: '3px 9px', borderRadius: 4,
-                  fontSize: 11.5, fontWeight: 500,
-                  background: statusFilter === s.key ? s.bg : 'transparent',
-                  color: statusFilter === s.key ? s.color : 'var(--ink-3)',
-                  border: statusFilter === s.key ? 'none' : '1px solid var(--line)',
-                  cursor: 'pointer',
-                }}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div style={{ flex: 1, overflow: 'auto' }}>
-          {filtered.length === 0 ? (
-            <div style={{ padding: 28, color: 'var(--ink-3)', fontSize: 13, textAlign: 'center' }}>
-              Aucun projet
-            </div>
-          ) : filtered.map((p) => {
-            const active = selectedProject?.id === p.id;
-            const progress = progressMap[p.id] ?? 0;
-            const count = actionsCountMap[p.id] ?? 0;
-            const meta = statusMeta(p.status);
-            return (
-              <button
-                key={p.id}
-                onClick={() => onSelectProject(p)}
-                style={{
-                  display: 'flex', flexDirection: 'column', gap: 6,
-                  width: '100%', padding: '12px 14px', textAlign: 'left',
-                  background: active ? 'var(--terra-soft)' : 'transparent',
-                  borderBottom: '1px solid var(--line)',
-                  border: 'none', cursor: 'pointer',
-                }}
-                onMouseEnter={(ev) => !active && (ev.currentTarget.style.background = 'var(--surface-2)')}
-                onMouseLeave={(ev) => !active && (ev.currentTarget.style.background = 'transparent')}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {p.category && (
-                    <span className="chip" style={{
-                      background: meta.bg, color: meta.color,
-                    }}>
-                      {p.category}
-                    </span>
-                  )}
-                  <div style={{ flex: 1 }} />
-                  <span className="num" style={{
-                    fontSize: 11.5, color: progressColor(progress),
-                    fontFamily: 'var(--font-mono)', fontWeight: 600,
-                  }}>
-                    {progress}%
-                  </span>
-                </div>
-                <div className="serif" style={{
-                  fontSize: 15, fontWeight: 500, letterSpacing: -0.2,
-                  color: active ? 'var(--terra-deep)' : 'var(--ink)',
-                  overflow: 'hidden', textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}>
-                  {p.title}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <ProgressBar value={progress} />
-                  <span style={{ fontSize: 11, color: 'var(--ink-3)', minWidth: 66, textAlign: 'right' }}>
-                    {count} action{count > 1 ? 's' : ''}
-                  </span>
-                </div>
-                {p.due_date && (
-                  <div style={{ fontSize: 11, color: p.status === 'overdue' ? 'var(--danger)' : 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Calendar size={10} /> {formatDate(p.due_date)}
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Detail */}
-      {selectedProject ? (
-        <div className="card" style={{ padding: 28, overflow: 'auto' }}>
-          <ProjectDetailPanel
-            project={selectedProject}
-            actions={selectedActions}
-            onUpdateProject={onUpdateProject}
-            onUpdateAction={onUpdateAction}
-          />
-        </div>
-      ) : (
-        <div className="card" style={{
-          padding: 60, display: 'grid', placeItems: 'center',
-          color: 'var(--ink-3)', fontSize: 14,
-        }}>
-          Sélectionnez un projet pour voir le détail.
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ProjectDetailPanel({ project, actions, onUpdateProject, onUpdateAction }: {
-  project: Project;
-  actions: Action[];
-  onUpdateProject: (id: number, updates: Partial<Project>) => Promise<void>;
-  onUpdateAction: (id: number, updates: Partial<Action>) => Promise<void>;
+function Field({ label, required, children }: {
+  label: string; required?: boolean; children: React.ReactNode;
 }) {
-  const meta = statusMeta(project.status);
-  const progress = computeProgress(actions);
-  const [nextAction, setNextAction] = useState(project.next_action);
-  useEffect(() => setNextAction(project.next_action), [project]);
-
-  async function commitNextAction() {
-    if (nextAction !== project.next_action) {
-      await onUpdateProject(project.id, { next_action: nextAction });
-    }
-  }
-
   return (
-    <>
-      <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        Projet{project.category && ` · ${project.category}`}
-        <StatusBadge status={project.status} />
+    <label style={{ display: 'block' }}>
+      <div className="eyebrow" style={{ marginBottom: 6 }}>
+        {label}{required && <span style={{ color: 'var(--danger)', marginLeft: 3 }}>*</span>}
       </div>
-      <h1 className="serif" style={{
-        fontSize: 36, fontWeight: 500, margin: '6px 0 0',
-        letterSpacing: -1, lineHeight: 1.05,
-      }}>
-        {project.title}
-      </h1>
-      {project.description && (
-        <p style={{
-          fontSize: 14, color: 'var(--ink-2)', margin: '14px 0 0',
-          lineHeight: 1.6, maxWidth: 640,
-        }}>
-          {project.description}
-        </p>
-      )}
-
-      {/* 3 soft cards */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14,
-        marginTop: 24,
-      }}>
-        <div className="card-soft" style={{ padding: 16 }}>
-          <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-            <Calendar size={11} /> Échéance
-          </div>
-          <div className="serif" style={{
-            fontSize: 18, fontWeight: 500,
-            color: project.status === 'overdue' ? 'var(--danger)' : 'var(--ink)',
-          }}>
-            {formatDate(project.due_date)}
-          </div>
-        </div>
-        <div className="card-soft" style={{ padding: 16 }}>
-          <div className="eyebrow" style={{ marginBottom: 6 }}>Avancement</div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-            <span className="serif num" style={{
-              fontSize: 28, fontWeight: 500, letterSpacing: -0.6,
-              color: progressColor(progress),
-            }}>
-              {progress}
-            </span>
-            <span style={{ fontSize: 14, color: 'var(--ink-3)' }}>%</span>
-          </div>
-          <div style={{ marginTop: 6 }}>
-            <ProgressBar value={progress} height={5} />
-          </div>
-        </div>
-        <div className="card-soft" style={{ padding: 16 }}>
-          <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-            <Users size={11} /> Équipe
-          </div>
-          <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink)' }}>
-            {project.owner_role || '—'}
-          </div>
-        </div>
-      </div>
-
-      {/* Next action */}
-      <div className="card-soft" style={{
-        padding: 16, marginTop: 14,
-        borderLeft: '3px solid var(--terra)',
-      }}>
-        <div className="eyebrow" style={{ marginBottom: 6, color: 'var(--terra-deep)' }}>
-          Prochaine action
-        </div>
-        <textarea
-          value={nextAction}
-          onChange={(e) => setNextAction(e.target.value)}
-          onBlur={commitNextAction}
-          placeholder="Quelle est la prochaine étape ?"
-          rows={2}
-          style={{
-            width: '100%', padding: '6px 0',
-            border: 'none', background: 'transparent',
-            fontSize: 14, fontFamily: 'inherit', color: 'var(--ink)',
-            outline: 'none', resize: 'vertical', lineHeight: 1.5,
-          }}
-        />
-      </div>
-
-      {/* Steps */}
-      <div style={{ marginTop: 24 }}>
-        <div className="eyebrow" style={{ marginBottom: 12 }}>
-          Étapes ({actions.length})
-        </div>
-        {actions.length === 0 ? (
-          <div style={{ fontSize: 13, color: 'var(--ink-3)', fontStyle: 'italic' }}>
-            Aucune étape pour ce projet — ajoutez-en depuis le panneau Kanban ou Liste.
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {actions.map((a) => {
-              const done = a.status === 'done' || a.progress === 100;
-              return (
-                <button
-                  key={a.id}
-                  onClick={() => onUpdateAction(a.id, {
-                    status: done ? 'todo' : 'done',
-                    progress: done ? 0 : 100,
-                  })}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '10px 14px', borderRadius: 10,
-                    background: 'var(--surface-2)',
-                    border: '1px solid var(--line)',
-                    cursor: 'pointer', textAlign: 'left',
-                    transition: 'background 0.15s ease',
-                  }}
-                >
-                  <div style={{
-                    width: 20, height: 20, borderRadius: 4,
-                    border: `2px solid ${done ? meta.color : 'var(--line-strong)'}`,
-                    background: done ? meta.color : 'transparent',
-                    display: 'grid', placeItems: 'center', flexShrink: 0,
-                    transition: 'all 0.15s ease',
-                  }}>
-                    {done && <Check size={12} color="#fff" strokeWidth={3} />}
-                  </div>
-                  <div style={{
-                    flex: 1, fontSize: 13.5, fontWeight: 500,
-                    color: done ? 'var(--ink-3)' : 'var(--ink)',
-                    textDecoration: done ? 'line-through' : 'none',
-                  }}>
-                    {a.title}
-                  </div>
-                  {a.due_date && (
-                    <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>
-                      {formatDate(a.due_date)}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </>
-  );
-}
-
-// ─── Main component ───────────────────────────────────────────────────────────
-
-export default function Projects() {
-  const {
-    projects, loading, error, usingMock,
-    selectedProject, selectedActions, actionsLoading,
-    selectProject, refreshProjects,
-    createProject, updateProject, deleteProject,
-    createAction, updateAction, deleteAction,
-  } = useProjectsData();
-
-  const addToast = useToastStore((s) => s.add);
-  const [viewMode, setViewMode]     = useState<ViewMode>('kanban');
-  const [showCreate, setShowCreate] = useState(false);
-
-  // Drag & drop state
-  const dragProjectId = useRef<number | null>(null);
-  const [dragOverStatus, setDragOverStatus] = useState<ProjectStatus | null>(null);
-
-  // Persist action counts & progress per project as they are loaded,
-  // so cards show data even after the detail panel closes.
-  const [actionMeta, setActionMeta] = useState<Record<number, { count: number; progress: number }>>({});
-
-  useEffect(() => {
-    if (selectedProject && selectedActions.length > 0) {
-      const progress = computeProgress(selectedActions);
-      setActionMeta(prev => ({
-        ...prev,
-        [selectedProject.id]: { count: selectedActions.length, progress },
-      }));
-    }
-  }, [selectedProject, selectedActions]);
-
-  const progressMap: Record<number, number>    = {};
-  const actionsCountMap: Record<number, number> = {};
-  for (const [idStr, meta] of Object.entries(actionMeta)) {
-    const id = Number(idStr);
-    progressMap[id]     = meta.progress;
-    actionsCountMap[id] = meta.count;
-  }
-
-  function handleSelectProject(project: Project) {
-    selectProject(project);
-  }
-
-  function handleCloseDetail() {
-    selectProject(null);
-  }
-
-  // Drag & drop handlers
-  function handleDragStart(e: React.DragEvent, projectId: number) {
-    dragProjectId.current = projectId;
-    e.dataTransfer.effectAllowed = 'move';
-  }
-
-  function handleDragOver(e: React.DragEvent, status: ProjectStatus) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDragOverStatus(status);
-  }
-
-  function handleDrop(e: React.DragEvent, targetStatus: ProjectStatus) {
-    e.preventDefault();
-    setDragOverStatus(null);
-    const id = dragProjectId.current;
-    if (id === null) return;
-    const project = projects.find(p => p.id === id);
-    if (!project || project.status === targetStatus) return;
-    updateProject(id, { status: targetStatus });
-    dragProjectId.current = null;
-  }
-
-  function handleDragEnd() {
-    setDragOverStatus(null);
-    dragProjectId.current = null;
-  }
-
-  // Group projects by status for kanban
-  const byStatus: Record<ProjectStatus, Project[]> = {
-    todo: [], in_progress: [], done: [], overdue: [],
-  };
-  for (const p of projects) {
-    byStatus[p.status].push(p);
-  }
-
-  // ── Skeleton loader ──
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '1400px' }}>
-        <div>
-          <div style={{ width: '160px', height: '28px', borderRadius: '6px', background: 'var(--color-border)', marginBottom: '8px' }} className="shimmer" />
-          <div style={{ width: '260px', height: '16px', borderRadius: '4px', background: 'var(--color-border)' }} className="shimmer" />
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-          {[0,1,2,3].map(i => (
-            <div key={i} style={{ height: '200px', borderRadius: '8px', background: 'var(--color-surface)', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }} className="shimmer" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      {/* Backdrop overlay for detail panel */}
-      {selectedProject && (
-        <div
-          onClick={handleCloseDetail}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 30,
-            background: 'rgba(15,23,42,0.2)',
-            backdropFilter: 'blur(1px)',
-          }}
-        />
-      )}
-
-      {/* Create project modal */}
-      {showCreate && (
-        <CreateProjectModal
-          onClose={() => setShowCreate(false)}
-          onCreate={async (data) => {
-            await createProject(data);
-            await refreshProjects();
-            addToast('Projet créé', 'success');
-          }}
-        />
-      )}
-
-      {/* Detail panel */}
-      {selectedProject && (
-        <DetailPanel
-          project={selectedProject}
-          actions={selectedActions}
-          actionsLoading={actionsLoading}
-          onClose={handleCloseDetail}
-          onUpdateProject={updateProject}
-          onDeleteProject={async (id: number) => {
-            await deleteProject(id);
-            addToast('Projet supprimé', 'success');
-          }}
-          onCreateAction={createAction}
-          onUpdateAction={updateAction}
-          onDeleteAction={deleteAction}
-        />
-      )}
-
-      <div
-        onDragEnd={handleDragEnd}
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '24px',
-          maxWidth: '1400px',
-        }}
-      >
-        {/* ── A. Page header ── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <div className="eyebrow">Gestion des projets d'établissement</div>
-          <div style={{ flex: 1 }} />
-          {/* View toggle (3 modes) */}
-          <div style={{
-            display: 'inline-flex',
-            border: '1px solid var(--line)',
-            borderRadius: 999,
-            overflow: 'hidden',
-            background: 'var(--surface)',
-          }}>
-            {([
-              { id: 'kanban' as const, Icon: LayoutGrid, title: 'Vue Kanban' },
-              { id: 'list' as const,   Icon: List,       title: 'Vue Liste' },
-              { id: 'detail' as const, Icon: Columns,    title: 'Vue Liste + Détail' },
-            ]).map(({ id, Icon, title }) => {
-              const active = viewMode === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => setViewMode(id)}
-                  title={title}
-                  style={{
-                    padding: '7px 12px',
-                    background: active ? 'var(--terra-soft)' : 'transparent',
-                    border: 'none', cursor: 'pointer',
-                    color: active ? 'var(--terra-deep)' : 'var(--ink-3)',
-                    display: 'flex', alignItems: 'center',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  <Icon size={15} />
-                </button>
-              );
-            })}
-          </div>
-
-          {/* New project button */}
-          <button onClick={() => setShowCreate(true)} className="btn primary">
-            <Plus size={13} strokeWidth={2.5} />
-            Nouveau projet
-          </button>
-        </div>
-
-        {/* Error / mock notice */}
-        {(error || usingMock) && (
-          <div style={{
-            padding: '10px 16px',
-            background: 'rgba(217,119,6,0.06)',
-            border: '1px solid var(--color-warning)',
-            borderRadius: '8px',
-            fontSize: '13px',
-            color: 'var(--color-warning)',
-            fontFamily: 'var(--font-sans)',
-          }}>
-            Données de démonstration — la base de données n'est pas accessible.
-          </div>
-        )}
-
-        {/* ── B/C. Kanban / List / Detail view ── */}
-        {viewMode === 'kanban' ? (
-          <div style={{
-            display: 'flex',
-            gap: '16px',
-            alignItems: 'flex-start',
-            overflowX: 'auto',
-            paddingBottom: '8px',
-          }}>
-            {STATUS_COLUMNS.map(column => (
-              <KanbanColumn
-                key={column.key}
-                column={column}
-                projects={byStatus[column.key]}
-                progressMap={progressMap}
-                actionsCountMap={actionsCountMap}
-                onSelectProject={handleSelectProject}
-                onDragStart={handleDragStart}
-                onDragOver={(e) => handleDragOver(e, column.key)}
-                onDrop={handleDrop}
-                isDragOver={dragOverStatus === column.key}
-              />
-            ))}
-          </div>
-        ) : viewMode === 'list' ? (
-          <ListView
-            projects={projects}
-            progressMap={progressMap}
-            actionsCountMap={actionsCountMap}
-            onSelectProject={handleSelectProject}
-          />
-        ) : (
-          <DetailView
-            projects={projects}
-            progressMap={progressMap}
-            actionsCountMap={actionsCountMap}
-            selectedProject={selectedProject}
-            selectedActions={selectedActions}
-            onSelectProject={handleSelectProject}
-            onUpdateProject={updateProject}
-            onUpdateAction={updateAction}
-          />
-        )}
-      </div>
-    </>
+      {children}
+    </label>
   );
 }

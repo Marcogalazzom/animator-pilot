@@ -10,6 +10,7 @@ import {
 import { getResidents } from '@/db/residents';
 import { getSetting } from '@/db/settings';
 import { uploadJournalPhoto } from '@/services/firebase';
+import { tagChipClass } from '@/utils/tagColor';
 import type {
   JournalEntry, JournalMood, JournalCategory, Resident,
 } from '@/db/types';
@@ -910,7 +911,6 @@ interface EntryCardProps {
 
 function EntryCard({ entry, onEdit, onToggleShare }: EntryCardProps) {
   const shared = entry.is_shared === 1;
-  const cat: JournalCategory = entry.category ?? 'prep';
   const tags = entry.tags.split(',').map((t) => t.trim()).filter(Boolean);
   const titleDisplay = entry.title || entry.content.slice(0, 60);
   const bodyDisplay = entry.title ? entry.content : '';
@@ -962,7 +962,7 @@ function EntryCard({ entry, onEdit, onToggleShare }: EntryCardProps) {
       {tags.length > 0 && (
         <div style={{ display: 'flex', gap: 4, marginTop: 10, flexWrap: 'wrap' }}>
           {tags.map((t, k) => (
-            <span key={k} className={`chip ${cat}`} style={{ fontSize: 10.5 }}>{t}</span>
+            <span key={k} className={`chip ${tagChipClass(t)}`} style={{ fontSize: 10.5 }}>{t}</span>
           ))}
         </div>
       )}

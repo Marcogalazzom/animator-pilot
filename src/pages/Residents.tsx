@@ -5,6 +5,7 @@ import { useToastStore } from '@/stores/toastStore';
 import { getResidents, createResident, updateResident, deleteResident } from '@/db/residents';
 import { getJournalEntries } from '@/db/journal';
 import { getResidenceUnits } from '@/db/settings';
+import { tagChipClass } from '@/utils/tagColor';
 import type { Resident, ResidentMood, JournalEntry } from '@/db/types';
 
 type ParticipationLevel = Resident['participation_level'];
@@ -33,16 +34,6 @@ const MONTH_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juille
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
   return (parts[0]?.[0] ?? '?').toUpperCase() + (parts[1]?.[0] ?? '').toUpperCase();
-}
-
-// Palette pastel pour les centres d'intérêt : hash du nom → classe chip stable.
-// On exclut 'prep' (gris) pour éviter le rendu fade qu'avait la version précédente.
-const INTEREST_CHIP_CLASSES = ['memory', 'creative', 'body', 'outing', 'rdv'] as const;
-
-function interestChipClass(name: string): string {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
-  return INTEREST_CHIP_CLASSES[Math.abs(h) % INTEREST_CHIP_CLASSES.length];
 }
 
 function ageFromBirthday(birthday: string | null): number | null {
@@ -548,7 +539,7 @@ function ResidentDetail({ resident: r, notes, onEdit, onDelete }: ResidentDetail
               {PARTICIPATION[r.participation_level].label}
             </span>
             {topInterests.map((it, i) => (
-              <span key={i} className={`chip ${interestChipClass(it)}`}>{it}</span>
+              <span key={i} className={`chip ${tagChipClass(it)}`}>{it}</span>
             ))}
             {cakeChip && (
               <span className="chip creative" style={{ alignItems: 'center' }}>
@@ -576,7 +567,7 @@ function ResidentDetail({ resident: r, notes, onEdit, onDelete }: ResidentDetail
           {interests.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
               {interests.map((it, idx) => (
-                <span key={idx} className={`chip ${interestChipClass(it)}`}>{it}</span>
+                <span key={idx} className={`chip ${tagChipClass(it)}`}>{it}</span>
               ))}
             </div>
           )}
