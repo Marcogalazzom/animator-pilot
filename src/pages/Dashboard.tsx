@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Cake, CalendarClock, ChevronRight, Download, Smile, Meh, Moon, Frown } from 'lucide-react';
+import { Cake, CalendarClock, ChevronRight, Download, MapPin, Smile, Meh, Moon, Frown } from 'lucide-react';
 
 import { useDashboardData } from './dashboard/useDashboardData';
-import { byDay, useCalendarEvents } from './calendar/useCalendarEvents';
+import { byDay, resolveEventColor, useCalendarEvents } from './calendar/useCalendarEvents';
+import { listCategoryColors, categoryLabel, type CategoryColor } from '@/db/categoryColors';
 import { exportDashboardPdf } from '@/utils/pdfExport';
 import { todayIso } from '@/utils/dateUtils';
 import { useUserSettings } from '@/hooks/useUserSettings';
@@ -143,6 +144,14 @@ export default function Dashboard() {
       .catch((err) => console.error('[dashboard] appointments load failed:', err));
   }, []);
 
+  // Palette activités (clé = activity_type) pour colorer les chips de la timeline.
+  const [typeMap, setTypeMap] = useState<Map<string, CategoryColor>>(new Map());
+  useEffect(() => {
+    listCategoryColors('activities')
+      .then((rows) => setTypeMap(new Map(rows.map((r) => [r.name, r]))))
+      .catch((err) => console.error('[dashboard] category_colors load failed:', err));
+  }, []);
+
   const upcomingThisWeek = useMemo(() => {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
@@ -258,10 +267,11 @@ export default function Dashboard() {
               }} />
               {dayEvents.map((e) => {
                 const active = e.id === currentId;
+                const cat = resolveEventColor(e, typeMap);
                 return (
                   <div key={e.id} style={{
                     display: 'grid', gap: 12, padding: '10px 0',
-                    gridTemplateColumns: '54px 14px 1fr',
+                    gridTemplateColumns: '54px 14px 1fr auto',
                     alignItems: 'center', position: 'relative',
                   }}>
                     <div className="num" style={{
@@ -291,7 +301,7 @@ export default function Dashboard() {
                       onMouseEnter={(ev) => (ev.currentTarget.style.boxShadow = 'var(--shadow-sm)')}
                       onMouseLeave={(ev) => (ev.currentTarget.style.boxShadow = 'none')}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <div style={{
                           fontWeight: 600, fontSize: 14.5,
                           color: active ? 'var(--terra-deep)' : 'var(--ink)',
@@ -310,14 +320,26 @@ export default function Dashboard() {
                       </div>
                       {e.location && (
                         <div style={{
-                          fontSize: 12.5, marginTop: 2,
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          fontSize: 12.5, marginTop: 4,
                           color: active ? 'var(--terra-deep)' : 'var(--ink-3)',
                           opacity: active ? 0.85 : 1,
                         }}>
-                          {e.location}
+                          <MapPin size={11} /> {e.location}
                         </div>
                       )}
                     </button>
+                    {/* Category chip — à côté de la carte, pas dessus (prototype v2) */}
+                    <span
+                      className="chip no-dot"
+                      style={{
+                        fontSize: 11, padding: '3px 10px',
+                        color: cat.color, backgroundColor: cat.bg,
+                        fontWeight: 500, flexShrink: 0,
+                      }}
+                    >
+                      {categoryLabel(cat)}
+                    </span>
                   </div>
                 );
               })}
