@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Plus, X, Trash2, Filter, Users as UsersIcon, Pin, Image, Sparkles,
 } from 'lucide-react';
@@ -129,6 +130,7 @@ export default function Journal() {
   const [currentUser, setCurrentUser] = useState('');
   const addToast = useToastStore((s) => s.add);
   const formRef = useRef<HTMLFormElement>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     Promise.all([
@@ -146,6 +148,21 @@ export default function Journal() {
       if (firstName) setCurrentUser(firstName);
     }).finally(() => setLoading(false));
   }, [addToast]);
+
+  // Deep-link: /journal?note={id} ouvre directement le modal d'édition.
+  useEffect(() => {
+    const noteIdRaw = searchParams.get('note');
+    if (!noteIdRaw || entries.length === 0) return;
+    const noteId = Number(noteIdRaw);
+    if (!Number.isFinite(noteId)) return;
+    if (entries.some((e) => e.id === noteId)) {
+      setEditId(noteId);
+      setShowForm(true);
+    }
+    // Clean the URL once consumed so back-navigation doesn't re-open.
+    searchParams.delete('note');
+    setSearchParams(searchParams, { replace: true });
+  }, [entries, searchParams, setSearchParams]);
 
   const filtered = useMemo(() => {
     let list = entries;

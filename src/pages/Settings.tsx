@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Building2, Database, Info, RefreshCw,
   Save, CheckCircle2, HardDrive, Globe, LogIn, LogOut, Download, Eye, Stethoscope, User as UserIcon,
-  FlaskConical, Trash2, AlertTriangle,
+  FlaskConical, Trash2, AlertTriangle, Layers, Plus, X,
 } from 'lucide-react';
+import { getResidenceUnits, setResidenceUnits } from '@/db/settings';
 import { useUserSettings, setUserSettings } from '@/hooks/useUserSettings';
 import {
   seedDemoData, clearAllData,
@@ -288,6 +289,8 @@ export default function Settings() {
       </div>
 
       <IdentitySection />
+
+      <ResidenceUnitsSection />
 
       <DemoDataSection />
 
@@ -805,6 +808,153 @@ function IdentitySection() {
           {saving ? 'Enregistrement…' : 'Enregistrer'}
         </button>
       </div>
+    </div>
+  );
+}
+
+function ResidenceUnitsSection() {
+  const [units, setUnits] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newUnit, setNewUnit] = useState('');
+  const [busy, setBusy] = useState(false);
+  const addToast = useToastStore((s) => s.add);
+
+  useEffect(() => {
+    getResidenceUnits()
+      .then(setUnits)
+      .catch(() => setUnits([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function persist(next: string[]) {
+    setUnits(next);
+    setBusy(true);
+    try {
+      await setResidenceUnits(next);
+    } catch {
+      addToast('Erreur lors de la sauvegarde', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAdd() {
+    const v = newUnit.trim();
+    if (!v || units.some((u) => u.toLowerCase() === v.toLowerCase())) {
+      setNewUnit('');
+      return;
+    }
+    await persist([...units, v]);
+    setNewUnit('');
+    addToast('Unité ajoutée', 'success');
+  }
+
+  async function handleRemove(unit: string) {
+    if (!confirm(`Supprimer l'unité « ${unit} » ? Les résidents rattachés seront désaffectés côté liste, leur fiche reste intacte.`)) return;
+    await persist(units.filter((u) => u !== unit));
+    addToast('Unité supprimée', 'success');
+  }
+
+  async function handleRename(oldName: string) {
+    const next = prompt(`Renommer « ${oldName} » :`, oldName);
+    if (next === null) return;
+    const trimmed = next.trim();
+    if (!trimmed || trimmed === oldName) return;
+    if (units.some((u) => u.toLowerCase() === trimmed.toLowerCase() && u !== oldName)) {
+      addToast('Une unité avec ce nom existe déjà', 'error');
+      return;
+    }
+    await persist(units.map((u) => (u === oldName ? trimmed : u)));
+    addToast('Unité renommée', 'success');
+  }
+
+  return (
+    <div style={{
+      backgroundColor: 'var(--color-surface)', borderRadius: '8px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.06)', padding: '20px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+        <Layers size={16} style={{ color: 'var(--color-primary)' }} />
+        <h2 style={{
+          fontFamily: 'var(--font-sans)', fontSize: '14px', fontWeight: 600,
+          color: 'var(--color-text-primary)', margin: 0,
+        }}>
+          Unités / étages
+        </h2>
+      </div>
+
+      <p style={{
+        margin: '0 0 14px', fontSize: '12px', color: 'var(--color-text-secondary)',
+        fontFamily: 'var(--font-sans)',
+      }}>
+        Liste des étages et unités (ex. UPG Bastille). Utilisée comme filtre dans la page Résidents et comme champ dans la fiche résident.
+      </p>
+
+      {loading ? (
+        <div style={{ fontSize: 13, color: 'var(--ink-3)' }}>Chargement…</div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+            {units.length === 0 ? (
+              <div style={{ fontSize: 13, color: 'var(--ink-3)', fontStyle: 'italic' }}>
+                Aucune unité. Ajoutez-en ci-dessous.
+              </div>
+            ) : units.map((u) => (
+              <div
+                key={u}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 12px', borderRadius: 8,
+                  background: 'var(--surface-2)', border: '1px solid var(--line)',
+                }}
+              >
+                <Layers size={13} style={{ color: 'var(--ink-3)' }} />
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{u}</span>
+                <button
+                  className="btn ghost sm"
+                  onClick={() => handleRename(u)}
+                  disabled={busy}
+                  style={{ padding: '4px 8px' }}
+                >
+                  Renommer
+                </button>
+                <button
+                  className="btn ghost sm"
+                  onClick={() => handleRemove(u)}
+                  disabled={busy}
+                  style={{ padding: '4px 8px', color: 'var(--danger)' }}
+                  title="Supprimer"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type="text"
+              placeholder="Nouvelle unité (ex. Étage 3)"
+              value={newUnit}
+              onChange={(e) => setNewUnit(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAdd(); } }}
+              style={{
+                flex: 1, padding: '8px 10px',
+                border: '1px solid var(--color-border)', borderRadius: 6,
+                fontSize: 13, fontFamily: 'var(--font-sans)',
+              }}
+            />
+            <button
+              className="btn primary"
+              onClick={handleAdd}
+              disabled={busy || !newUnit.trim()}
+              style={{ opacity: busy || !newUnit.trim() ? 0.5 : 1 }}
+            >
+              <Plus size={12} /> Ajouter
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { getDb } from './database';
 import type { Resident } from './types';
 
 const UPDATABLE_FIELDS = new Set([
-  'display_name', 'room_number', 'interests', 'animation_notes', 'participation_level',
+  'display_name', 'room_number', 'unit', 'interests', 'animation_notes', 'participation_level',
   'birthday', 'arrival_date', 'mood', 'family_contacts',
 ]);
 
@@ -26,11 +26,11 @@ export async function getResident(id: number): Promise<Resident | null> {
 export async function createResident(resident: Omit<Resident, 'id' | 'created_at'>): Promise<number> {
   const db = await getDb();
   const result = await db.execute(
-    `INSERT INTO residents (display_name, room_number, interests, animation_notes, participation_level, birthday, arrival_date, mood, family_contacts)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO residents (display_name, room_number, unit, interests, animation_notes, participation_level, birthday, arrival_date, mood, family_contacts)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      resident.display_name, resident.room_number, resident.interests,
-      resident.animation_notes, resident.participation_level,
+      resident.display_name, resident.room_number, resident.unit ?? '',
+      resident.interests, resident.animation_notes, resident.participation_level,
       resident.birthday, resident.arrival_date, resident.mood, resident.family_contacts,
     ]
   );

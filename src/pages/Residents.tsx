@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Plus, Search, Trash2, X, Pencil, Home, Cake, Smile, Meh, Moon, Frown, Mail } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Search, Trash2, X, Pencil, Home, Cake, Smile, Meh, Moon, Frown, Mail, Layers } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
 import { getResidents, createResident, updateResident, deleteResident } from '@/db/residents';
 import { getJournalEntries } from '@/db/journal';
+import { getResidenceUnits } from '@/db/settings';
 import type { Resident, ResidentMood, JournalEntry } from '@/db/types';
 
 type ParticipationLevel = Resident['participation_level'];
-type DetailTab = 'profile' | 'preferences' | 'family' | 'photos' | 'notes';
 
 const PARTICIPATION: Record<ParticipationLevel, { label: string; chip: string }> = {
   active:     { label: 'Actif',       chip: 'done' },
@@ -32,6 +33,16 @@ const MONTH_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juille
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
   return (parts[0]?.[0] ?? '?').toUpperCase() + (parts[1]?.[0] ?? '').toUpperCase();
+}
+
+// Palette pastel pour les centres d'intérêt : hash du nom → classe chip stable.
+// On exclut 'prep' (gris) pour éviter le rendu fade qu'avait la version précédente.
+const INTEREST_CHIP_CLASSES = ['memory', 'creative', 'body', 'outing', 'rdv'] as const;
+
+function interestChipClass(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+  return INTEREST_CHIP_CLASSES[Math.abs(h) % INTEREST_CHIP_CLASSES.length];
 }
 
 function ageFromBirthday(birthday: string | null): number | null {
@@ -68,13 +79,14 @@ function daysUntilBirthday(birthday: string | null): number | null {
 export default function Residents() {
   const [residents, setResidents] = useState<Resident[]>([]);
   const [journal, setJournal] = useState<JournalEntry[]>([]);
+  const [units, setUnits] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filterParticipation, setFilterParticipation] = useState<ParticipationLevel | ''>('');
+  const [filterUnit, setFilterUnit] = useState<string>('');
+  const [filterBirthday, setFilterBirthday] = useState<boolean>(false);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [detailTab, setDetailTab] = useState<DetailTab>('profile');
   const addToast = useToastStore((s) => s.add);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -86,15 +98,21 @@ export default function Residents() {
         return [] as Resident[];
       }),
       getJournalEntries().catch(() => [] as JournalEntry[]),
-    ]).then(([r, j]) => {
+      getResidenceUnits().catch(() => [] as string[]),
+    ]).then(([r, j, u]) => {
       setResidents(r);
       setJournal(j);
+      setUnits(u);
       if (r[0]) setSelectedId(r[0].id);
     }).finally(() => setLoading(false));
   }, [addToast]);
 
   const filtered = useMemo(() => residents.filter((r) => {
-    if (filterParticipation && r.participation_level !== filterParticipation) return false;
+    if (filterUnit && r.unit !== filterUnit) return false;
+    if (filterBirthday) {
+      const days = daysUntilBirthday(r.birthday);
+      if (days === null || days < 0 || days > 7) return false;
+    }
     if (search) {
       const q = search.toLowerCase();
       return r.display_name.toLowerCase().includes(q)
@@ -102,7 +120,13 @@ export default function Residents() {
         || r.interests.toLowerCase().includes(q);
     }
     return true;
-  }), [residents, filterParticipation, search]);
+  }), [residents, filterUnit, filterBirthday, search]);
+
+  const unitCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of residents) counts.set(r.unit, (counts.get(r.unit) ?? 0) + 1);
+    return counts;
+  }, [residents]);
 
   const selected = useMemo(
     () => residents.find((r) => r.id === selectedId) ?? null,
@@ -125,6 +149,7 @@ export default function Residents() {
     const data = {
       display_name: fd.get('display_name') as string,
       room_number: fd.get('room_number') as string,
+      unit: (fd.get('unit') as string) || '',
       interests: fd.get('interests') as string,
       animation_notes: fd.get('animation_notes') as string,
       participation_level: fd.get('participation_level') as ParticipationLevel,
@@ -196,24 +221,36 @@ export default function Residents() {
               }}
             />
           </div>
+          {/* Filter chips — unités (configurables) + anniv cette sem. */}
           <div style={{ display: 'flex', gap: 4, marginTop: 10, flexWrap: 'wrap' }}>
             <button
-              onClick={() => setFilterParticipation('')}
-              className={filterParticipation === '' ? 'chip creative' : 'chip ghost'}
+              onClick={() => setFilterUnit('')}
+              className={filterUnit === '' ? 'chip creative' : 'chip ghost'}
               style={{ border: 'none', cursor: 'pointer' }}
             >
               Tous · {residents.length}
             </button>
-            {PARTICIPATION_KEYS.map((k) => (
-              <button
-                key={k}
-                onClick={() => setFilterParticipation(k === filterParticipation ? '' : k)}
-                className={filterParticipation === k ? `chip ${PARTICIPATION[k].chip}` : 'chip ghost'}
-                style={{ border: 'none', cursor: 'pointer' }}
-              >
-                {PARTICIPATION[k].label}
-              </button>
-            ))}
+            {units.map((u) => {
+              const count = unitCounts.get(u) ?? 0;
+              return (
+                <button
+                  key={u}
+                  onClick={() => setFilterUnit(u === filterUnit ? '' : u)}
+                  className={filterUnit === u ? 'chip creative' : 'chip ghost'}
+                  style={{ border: 'none', cursor: 'pointer' }}
+                >
+                  {u}{count > 0 && ` · ${count}`}
+                </button>
+              );
+            })}
+            <button
+              onClick={() => setFilterBirthday((v) => !v)}
+              className={filterBirthday ? 'chip creative' : 'chip ghost'}
+              style={{ border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              title="Résidents fêtant leur anniversaire dans les 7 prochains jours"
+            >
+              <Cake size={11} /> Anniv. cette sem.
+            </button>
           </div>
         </div>
 
@@ -270,8 +307,17 @@ export default function Residents() {
                     fontSize: 11.5,
                     color: active ? 'var(--terra-deep)' : 'var(--ink-3)',
                     fontFamily: 'var(--font-mono)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>
-                    ch. {r.room_number || '—'} · {PARTICIPATION[r.participation_level].label}
+                    {(() => {
+                      const age = ageFromBirthday(r.birthday);
+                      const parts = [
+                        age != null ? `${age} ans` : null,
+                        `ch. ${r.room_number || '—'}`,
+                        r.unit || null,
+                      ].filter(Boolean);
+                      return parts.join(' · ');
+                    })()}
                   </div>
                 </div>
               </button>
@@ -297,8 +343,6 @@ export default function Residents() {
         }}>
           <ResidentDetail
             resident={selected}
-            tab={detailTab}
-            onTabChange={setDetailTab}
             notes={selectedNotes}
             onEdit={() => { setEditId(selected.id); setShowForm(true); }}
             onDelete={() => handleDelete(selected.id)}
@@ -361,6 +405,16 @@ export default function Residents() {
                   />
                 </Field>
               </div>
+              <Field label="Unité / Étage" icon={<Layers size={11} />}>
+                <select
+                  name="unit"
+                  defaultValue={editResident?.unit ?? ''}
+                  style={inputStyle}
+                >
+                  <option value="">— Non assigné —</option>
+                  {units.map((u) => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </Field>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <Field label="Anniversaire" icon={<Cake size={11} />}>
                   <input
@@ -436,35 +490,29 @@ export default function Residents() {
   );
 }
 
-// ─── Detail (right panel with tabs) ──────────────────────────
+// ─── Detail (right panel) ────────────────────────────────────
 
 interface ResidentDetailProps {
   resident: Resident;
-  tab: DetailTab;
-  onTabChange: (t: DetailTab) => void;
   notes: JournalEntry[];
   onEdit: () => void;
   onDelete: () => void;
 }
 
-function ResidentDetail({ resident: r, tab, onTabChange, notes, onEdit, onDelete }: ResidentDetailProps) {
+function ResidentDetail({ resident: r, notes, onEdit, onDelete }: ResidentDetailProps) {
+  const navigate = useNavigate();
   const moodMeta = MOOD_META[r.mood] ?? MOOD_META.calm;
   const age = ageFromBirthday(r.birthday);
   const days = daysUntilBirthday(r.birthday);
   const cakeChip = days !== null && days >= 0 && days <= 7;
-
-  const TABS: Array<{ id: DetailTab; label: string }> = [
-    { id: 'profile',     label: 'Profil' },
-    { id: 'preferences', label: 'Préférences' },
-    { id: 'family',      label: 'Famille' },
-    { id: 'photos',      label: 'Photos' },
-    { id: 'notes',       label: 'Notes' },
-  ];
+  const interests = r.interests.split(',').map((s) => s.trim()).filter(Boolean);
+  const topInterests = interests.slice(0, 3);
+  const recentNotes = notes.slice(0, 5);
 
   return (
     <>
       {/* Header */}
-      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', marginBottom: 24 }}>
         <div style={{
           width: 88, height: 88, borderRadius: '50%',
           background: 'var(--sage-soft)', color: 'var(--sage-deep)',
@@ -476,7 +524,7 @@ function ResidentDetail({ resident: r, tab, onTabChange, notes, onEdit, onDelete
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="eyebrow">
-            Résident{r.room_number && ` · chambre ${r.room_number}`}
+            Résident{r.room_number && ` · chambre ${r.room_number}`}{r.unit && ` · ${r.unit}`}
           </div>
           <div className="serif" style={{
             fontSize: 30, fontWeight: 500, letterSpacing: -0.8,
@@ -499,6 +547,9 @@ function ResidentDetail({ resident: r, tab, onTabChange, notes, onEdit, onDelete
             <span className={`chip ${PARTICIPATION[r.participation_level].chip}`}>
               {PARTICIPATION[r.participation_level].label}
             </span>
+            {topInterests.map((it, i) => (
+              <span key={i} className={`chip ${interestChipClass(it)}`}>{it}</span>
+            ))}
             {cakeChip && (
               <span className="chip creative" style={{ alignItems: 'center' }}>
                 <Cake size={10} />
@@ -517,147 +568,103 @@ function ResidentDetail({ resident: r, tab, onTabChange, notes, onEdit, onDelete
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{
-        display: 'inline-flex', borderRadius: 999,
-        border: '1px solid var(--line)', overflow: 'hidden',
-        background: 'var(--surface)', marginBottom: 18,
-      }}>
-        {TABS.map((t) => {
-          const active = tab === t.id;
-          return (
-            <button
-              key={t.id}
-              onClick={() => onTabChange(t.id)}
-              style={{
-                padding: '7px 14px', border: 'none',
-                background: active ? 'var(--terra-soft)' : 'transparent',
-                color: active ? 'var(--terra-deep)' : 'var(--ink-2)',
-                fontSize: 12.5, fontWeight: active ? 600 : 500,
-                cursor: 'pointer',
-                transition: 'background 0.12s, color 0.12s',
-              }}
-            >
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* Body — 2-col grid + full-width participations */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        {/* Préférences & anecdotes */}
+        <div className="card-soft" style={{ padding: 16 }}>
+          <div className="eyebrow" style={{ marginBottom: 10 }}>Préférences & anecdotes</div>
+          {interests.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+              {interests.map((it, idx) => (
+                <span key={idx} className={`chip ${interestChipClass(it)}`}>{it}</span>
+              ))}
+            </div>
+          )}
+          <div style={{ fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.65 }}>
+            {r.animation_notes || (
+              <span style={{ color: 'var(--ink-3)', fontStyle: 'italic' }}>
+                Aucune anecdote renseignée.
+              </span>
+            )}
+          </div>
+        </div>
 
-      {/* Tab content */}
-      {tab === 'profile' && <ProfileTab resident={r} />}
-      {tab === 'preferences' && <PreferencesTab resident={r} />}
-      {tab === 'family' && <FamilyTab resident={r} />}
-      {tab === 'photos' && <PhotosTab />}
-      {tab === 'notes' && <NotesTab notes={notes} />}
-    </>
-  );
-}
+        {/* Famille & contacts */}
+        <div className="card-soft" style={{ padding: 16 }}>
+          <div className="eyebrow" style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Mail size={11} /> Famille & contacts
+          </div>
+          {r.family_contacts ? (
+            <div style={{ fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+              {r.family_contacts}
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, color: 'var(--ink-3)', fontStyle: 'italic' }}>
+              Aucun contact famille renseigné. Cliquez sur « Modifier » pour les ajouter.
+            </div>
+          )}
+        </div>
 
-function ProfileTab({ resident: r }: { resident: Resident }) {
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-      <div className="card-soft" style={{ padding: 16 }}>
-        <div className="eyebrow" style={{ marginBottom: 8 }}>À savoir</div>
-        <div style={{ fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.65 }}>
-          {r.animation_notes || (
-            <span style={{ color: 'var(--ink-3)', fontStyle: 'italic' }}>
-              Aucune note pour l'animation.
-            </span>
+        {/* Dernières participations — pleine largeur */}
+        <div className="card-soft" style={{ padding: 16, gridColumn: '1 / -1' }}>
+          <div className="eyebrow" style={{ marginBottom: 10 }}>Dernières participations</div>
+          {recentNotes.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--ink-3)', fontStyle: 'italic' }}>
+              Aucune participation enregistrée (les notes du journal qui mentionnent ce résident apparaîtront ici).
+            </div>
+          ) : (
+            <div>
+              {recentNotes.map((n, i) => {
+                const d = new Date(n.date);
+                const dateLabel = `${DAY_FR_SHORT[d.getDay()]} ${String(d.getDate()).padStart(2, '0')} ${MONTH_FR[d.getMonth()].slice(0, 4)}.`;
+                const cat = n.category ?? 'prep';
+                const firstLine = n.content.split('\n')[0] ?? '';
+                const excerpt = firstLine.length > 80 ? firstLine.slice(0, 80) + '…' : firstLine;
+                return (
+                  <button
+                    key={n.id}
+                    onClick={() => navigate(`/journal?note=${n.id}`)}
+                    title="Ouvrir la note dans le journal"
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '100px 1fr auto',
+                      gap: 12, padding: '10px 4px', fontSize: 13, alignItems: 'center',
+                      borderTop: i > 0 ? '1px solid var(--line)' : 'none',
+                      background: 'transparent', border: 'none',
+                      textAlign: 'left', cursor: 'pointer', width: '100%',
+                      transition: 'background 0.12s',
+                    }}
+                    onMouseEnter={(ev) => (ev.currentTarget.style.background = 'var(--surface)')}
+                    onMouseLeave={(ev) => (ev.currentTarget.style.background = 'transparent')}
+                  >
+                    <div className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--ink-3)' }}>
+                      {dateLabel}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                      <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {n.title || excerpt || 'Note'}
+                      </span>
+                      {n.title && excerpt && (
+                        <span style={{ color: 'var(--ink-3)', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          · {excerpt}
+                        </span>
+                      )}
+                    </div>
+                    <span className={`chip ${cat}`} style={{ fontSize: 10.5 }}>
+                      {cat === 'memory' ? 'mémoire'
+                        : cat === 'creative' ? 'créatif'
+                        : cat === 'body' ? 'corps'
+                        : cat === 'outing' ? 'sortie'
+                        : cat === 'rdv' ? 'admin' : 'prépa'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>
-      <div className="card-soft" style={{ padding: 16 }}>
-        <div className="eyebrow" style={{ marginBottom: 8 }}>Confidentialité</div>
-        <div style={{ fontSize: 12.5, color: 'var(--ink-3)', fontStyle: 'italic', lineHeight: 1.6 }}>
-          Aucune donnée médicale n'est stockée. Utilisez uniquement le prénom et des informations d'animation.
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PreferencesTab({ resident: r }: { resident: Resident }) {
-  const interests = r.interests.split(',').map((s) => s.trim()).filter(Boolean);
-  return (
-    <div className="card-soft" style={{ padding: 18 }}>
-      <div className="eyebrow" style={{ marginBottom: 10 }}>Centres d'intérêt</div>
-      {interests.length === 0 ? (
-        <div style={{ fontSize: 13, color: 'var(--ink-3)', fontStyle: 'italic' }}>
-          Aucun centre d'intérêt renseigné.
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {interests.map((i, idx) => (
-            <span key={idx} className="chip memory">{i}</span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FamilyTab({ resident: r }: { resident: Resident }) {
-  return (
-    <div className="card-soft" style={{ padding: 18 }}>
-      <div className="eyebrow" style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Mail size={11} /> Famille & contacts
-      </div>
-      {r.family_contacts ? (
-        <div style={{ fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-          {r.family_contacts}
-        </div>
-      ) : (
-        <div style={{ fontSize: 13, color: 'var(--ink-3)', fontStyle: 'italic' }}>
-          Aucun contact famille renseigné. Cliquez sur « Modifier » pour les ajouter.
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PhotosTab() {
-  return (
-    <div className="card-soft" style={{
-      padding: 32, textAlign: 'center',
-      color: 'var(--ink-3)', fontSize: 13,
-    }}>
-      Pour voir les photos de ce résident, ouvrez la page <strong>Photos</strong> et filtrez par tag résident (à venir).
-    </div>
-  );
-}
-
-function NotesTab({ notes }: { notes: JournalEntry[] }) {
-  if (notes.length === 0) {
-    return (
-      <div className="card-soft" style={{
-        padding: 32, textAlign: 'center',
-        color: 'var(--ink-3)', fontSize: 13,
-      }}>
-        Aucune note du carnet de bord ne mentionne ce résident.
-      </div>
-    );
-  }
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {notes.map((n) => {
-        const d = new Date(n.date);
-        const label = `${DAY_FR_SHORT[d.getDay()]} ${d.getDate()} ${MONTH_FR[d.getMonth()].slice(0, 4)}.`;
-        return (
-          <div key={n.id} className="card-soft" style={{ padding: 14 }}>
-            <div className="num" style={{
-              fontSize: 11.5, color: 'var(--ink-3)',
-              fontFamily: 'var(--font-mono)', marginBottom: 6,
-            }}>
-              {label}
-            </div>
-            <div style={{ fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-              {n.content}
-            </div>
-          </div>
-        );
-      })}
-    </div>
+    </>
   );
 }
 

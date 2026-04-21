@@ -84,6 +84,7 @@ export async function seedDemoData(): Promise<SeedCounts> {
     const id = await createResident({
       display_name: r.name,
       room_number: r.room,
+      unit: '',
       interests: r.prefs,
       animation_notes: r.notes,
       participation_level: r.participation,

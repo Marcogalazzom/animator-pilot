@@ -129,6 +129,12 @@ pub fn run() {
             sql: include_str!("../migrations/021_journal_v2_fields.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 22,
+            description: "residents: unit column + default residence_units list",
+            sql: include_str!("../migrations/022_resident_unit.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

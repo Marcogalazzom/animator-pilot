@@ -182,6 +182,16 @@ async function ensureResidentsSchema(db: Database): Promise<void> {
         [],
       );
     }
+    if (!names.has('unit')) {
+      await db.execute(
+        "ALTER TABLE residents ADD COLUMN unit TEXT NOT NULL DEFAULT ''",
+        [],
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_residents_unit ON residents(unit)',
+        [],
+      );
+    }
   } catch (err) {
     console.error('[schema-guard] ensureResidentsSchema failed:', err);
   }
@@ -279,6 +289,7 @@ async function ensureSettingsSeeded(db: Database): Promise<void> {
       ['user_role',       'Animatrice'],
       ['residence_name',  'Les Glycines'],
       ['residence_kind',  'EHPAD'],
+      ['residence_units', '["Étage 1","Étage 2","UPG Bastille","UPG Saint-Hilaire"]'],
     ];
     for (const [key, value] of seeds) {
       await db.execute(

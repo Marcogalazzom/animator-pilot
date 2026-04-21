@@ -255,6 +255,7 @@ export interface Resident {
   id: number;
   display_name: string;
   room_number: string;
+  unit: string;
   interests: string;
   animation_notes: string;
   participation_level: 'active' | 'moderate' | 'occasional' | 'observer';
