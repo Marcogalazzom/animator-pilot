@@ -12,6 +12,7 @@ function evt(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
     title: 'Test',
     date: '2026-04-15',
     time: '14:00',
+    timeEnd: null,
     type: 'jeux',
     location: 'Étage 1',
     animator: '',

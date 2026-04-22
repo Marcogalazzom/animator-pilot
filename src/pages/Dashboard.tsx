@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Cake, CalendarClock, ChevronRight, Download, MapPin, Smile, Meh, Moon, Frown } from 'lucide-react';
+import { Cake, CalendarClock, ChevronRight, Smile, Meh, Moon, Frown } from 'lucide-react';
 
 import { useDashboardData } from './dashboard/useDashboardData';
-import { byDay, resolveEventColor, useCalendarEvents } from './calendar/useCalendarEvents';
-import { listCategoryColors, categoryLabel, type CategoryColor } from '@/db/categoryColors';
+import { byDay, useCalendarEvents } from './calendar/useCalendarEvents';
+import { listCategoryColors, type CategoryColor } from '@/db/categoryColors';
 import { exportDashboardPdf } from '@/utils/pdfExport';
 import { todayIso } from '@/utils/dateUtils';
 import { useUserSettings } from '@/hooks/useUserSettings';
@@ -13,20 +13,11 @@ import { getUpcomingPlanned } from '@/db/appointments';
 import { getJournalEntries } from '@/db/journal';
 import { residentMoodFromNotes } from '@/utils/moodFromJournal';
 import type { Appointment, JournalEntry, Resident, ResidentMood } from '@/db/types';
+import DashboardGreeting from './dashboard/DashboardGreeting';
+import MaJourneeCard from './dashboard/MaJourneeCard';
 
 const DAY_FR = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 const MONTH_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-
-function timeToMin(t: string | null): number | null {
-  if (!t) return null;
-  const [h, m] = t.split(':').map(Number);
-  return h * 60 + m;
-}
-
-function nowMin(): number {
-  const d = new Date();
-  return d.getHours() * 60 + d.getMinutes();
-}
 
 function formatShortDate(iso: string | null): string {
   if (!iso) return '—';
@@ -104,7 +95,6 @@ export default function Dashboard() {
   const settings = useUserSettings();
   const {
     activityStats,
-    appointmentStats,
     overdueProjects,
     loading,
     error,
@@ -115,20 +105,8 @@ export default function Dashboard() {
   const today = todayIso();
   const dayEvents = useMemo(() => byDay(calendarEvents, today), [calendarEvents, today]);
 
-  const currentId = useMemo(() => {
-    const cur = nowMin();
-    let id: string | null = null;
-    for (const e of dayEvents) {
-      const m = timeToMin(e.time);
-      if (m !== null && m <= cur && cur - m <= 60) id = e.id;
-    }
-    return id;
-  }, [dayEvents]);
-
   const today2 = new Date();
-  const dayName = DAY_FR[today2.getDay()];
   const monthName = MONTH_FR[today2.getMonth()];
-  const greetingDate = `${dayName.charAt(0).toUpperCase()}${dayName.slice(1)} ${today2.getDate()} ${monthName}`;
 
   // Residents — used by Anniversaires + Humeur strip.
   const [residents, setResidents] = useState<Resident[]>([]);
@@ -190,6 +168,18 @@ export default function Dashboard() {
       .slice(0, 3);
   }, [residents]);
 
+  // Prénoms des résidents dont c'est l'anniversaire aujourd'hui, pour le
+  // bonjour ("Et c'est l'anniversaire de Marie.").
+  const todayBirthdayNames = useMemo(() => {
+    return residents
+      .map((r) => {
+        const next = nextBirthday(r.birthday);
+        if (!next || daysUntil(next) !== 0) return null;
+        return r.display_name.split(/\s+/)[0] ?? r.display_name;
+      })
+      .filter((n): n is string => n !== null);
+  }, [residents]);
+
   const moodResidents = useMemo(() => residents.slice(0, 8), [residents]);
 
   const participationValues = useMemo(() => {
@@ -224,26 +214,13 @@ export default function Dashboard() {
     }}>
 
       {/* ─── Greeting ─── */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 20, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 280 }}>
-          <div className="serif" style={{
-            fontSize: 34, fontWeight: 500, letterSpacing: -0.8, lineHeight: 1.1,
-          }}>
-            Bonjour {settings.user_first_name}<span style={{ color: 'var(--terra)' }}>.</span>
-          </div>
-          <div style={{ fontSize: 15, color: 'var(--ink-3)', marginTop: 4 }}>
-            {greetingDate}
-            {' · '}
-            {dayEvents.length} activité{dayEvents.length > 1 ? 's' : ''} prévue{dayEvents.length > 1 ? 's' : ''}
-            {' · '}
-            {appointmentStats.thisWeek} rendez-vous cette semaine
-          </div>
-        </div>
-        <button className="btn" onClick={handleExportPdf} disabled={exporting}>
-          <Download size={13} />
-          {exporting ? 'Export…' : 'Exporter le bilan'}
-        </button>
-      </div>
+      <DashboardGreeting
+        firstName={settings.user_first_name}
+        todayEvents={dayEvents}
+        todayBirthdayNames={todayBirthdayNames}
+        onExport={handleExportPdf}
+        exporting={exporting}
+      />
 
       {error && (
         <div role="alert" className="chip warn" style={{ padding: '8px 14px', alignSelf: 'flex-start' }}>
@@ -254,109 +231,12 @@ export default function Dashboard() {
       {/* ─── Main grid ─── */}
       <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'minmax(0, 1.6fr) minmax(0, 1fr)' }}>
 
-        {/* LEFT — Today timeline */}
-        <div className="card" style={{ padding: 22 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 18 }}>
-            <div className="serif" style={{ fontSize: 20, fontWeight: 500, letterSpacing: -0.3 }}>
-              Ma journée
-            </div>
-            <div style={{ flex: 1 }} />
-            <Link to="/calendar" style={{ fontSize: 12, color: 'var(--ink-3)', textDecoration: 'none' }}>
-              Tout voir →
-            </Link>
-          </div>
-
-          {dayEvents.length === 0 ? (
-            <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13 }}>
-              Pas d'activité prévue aujourd'hui.
-            </div>
-          ) : (
-            <div style={{ position: 'relative' }}>
-              <div style={{
-                position: 'absolute', left: 66, top: 8, bottom: 8,
-                width: 1, background: 'var(--line)',
-              }} />
-              {dayEvents.map((e) => {
-                const active = e.id === currentId;
-                const cat = resolveEventColor(e, typeMap);
-                return (
-                  <div key={e.id} style={{
-                    display: 'grid', gap: 12, padding: '10px 0',
-                    gridTemplateColumns: '54px 14px 1fr auto',
-                    alignItems: 'center', position: 'relative',
-                  }}>
-                    <div className="num" style={{
-                      fontFamily: 'var(--font-mono)', fontSize: 12,
-                      color: active ? 'var(--terra)' : 'var(--ink-3)',
-                      fontWeight: active ? 700 : 400,
-                    }}>
-                      {e.time ?? '—'}
-                    </div>
-                    <div style={{
-                      width: 12, height: 12, borderRadius: '50%',
-                      background: active ? 'var(--terra)' : 'var(--surface)',
-                      border: `2px solid ${active ? 'var(--terra)' : 'var(--line-strong)'}`,
-                      boxShadow: active ? '0 0 0 4px var(--terra-soft)' : 'none',
-                      zIndex: 1,
-                    }} />
-                    <button
-                      onClick={() => navigate(e.link)}
-                      style={{
-                        textAlign: 'left',
-                        padding: '10px 14px', borderRadius: 10,
-                        background: active ? 'var(--terra-soft)' : 'var(--surface-2)',
-                        border: `1px solid ${active ? 'var(--terra-soft)' : 'var(--line)'}`,
-                        cursor: 'pointer',
-                        transition: 'box-shadow 0.18s ease',
-                      }}
-                      onMouseEnter={(ev) => (ev.currentTarget.style.boxShadow = 'var(--shadow-sm)')}
-                      onMouseLeave={(ev) => (ev.currentTarget.style.boxShadow = 'none')}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <div style={{
-                          fontWeight: 600, fontSize: 14.5,
-                          color: active ? 'var(--terra-deep)' : 'var(--ink)',
-                        }}>
-                          {e.title}
-                        </div>
-                        {active && (
-                          <span className="chip live no-dot" style={{
-                            fontSize: 10, textTransform: 'uppercase',
-                            letterSpacing: 0.1, fontWeight: 700,
-                            padding: '2px 8px',
-                          }}>
-                            en cours
-                          </span>
-                        )}
-                      </div>
-                      {e.location && (
-                        <div style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 4,
-                          fontSize: 12.5, marginTop: 4,
-                          color: active ? 'var(--terra-deep)' : 'var(--ink-3)',
-                          opacity: active ? 0.85 : 1,
-                        }}>
-                          <MapPin size={11} /> {e.location}
-                        </div>
-                      )}
-                    </button>
-                    {/* Category chip — à côté de la carte, pas dessus (prototype v2) */}
-                    <span
-                      className="chip no-dot"
-                      style={{
-                        fontSize: 11, padding: '3px 10px',
-                        color: cat.color, backgroundColor: cat.bg,
-                        fontWeight: 500, flexShrink: 0,
-                      }}
-                    >
-                      {categoryLabel(cat)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        {/* LEFT — Today timeline, groupée par moments */}
+        <MaJourneeCard
+          events={dayEvents}
+          typeMap={typeMap}
+          onOpenEvent={(e) => navigate(e.link)}
+        />
 
         {/* RIGHT — highlight stack */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

@@ -13,7 +13,8 @@ export interface CalendarEvent {
   id: string;
   title: string;
   date: string;            // YYYY-MM-DD
-  time: string | null;     // HH:MM (null pour les projects)
+  time: string | null;     // HH:MM — heure de début (null pour les projects)
+  timeEnd: string | null;  // HH:MM — heure de fin (null si pas saisie)
   type: string;            // activity_type, appointment_type ou 'project'
   location: string;
   animator: string;
@@ -77,6 +78,7 @@ export function buildEventsFromDb(
       title: a.title,
       date: toIso(d),
       time: a.time_start || null,
+      timeEnd: a.time_end || null,
       type: a.activity_type,
       location: a.location ?? '',
       animator: a.animator_name ?? '',
@@ -95,6 +97,7 @@ export function buildEventsFromDb(
       title: p.title,
       date: toIso(d),
       time: null,
+      timeEnd: null,
       type: 'project',
       location: '',
       animator: '',
@@ -113,6 +116,7 @@ export function buildEventsFromDb(
       title: r.title,
       date: toIso(d),
       time: r.time_start || null,
+      timeEnd: r.time_end || null,
       type: r.appointment_type,
       location: r.location ?? '',
       animator: r.participants ?? '',
