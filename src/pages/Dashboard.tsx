@@ -99,8 +99,7 @@ export default function Dashboard() {
     loading,
     error,
   } = useDashboardData();
-  const { events: allCalendarEvents } = useCalendarEvents();
-  const calendarEvents = allCalendarEvents.filter((e) => e.source !== 'appointment');
+  const { events: calendarEvents } = useCalendarEvents();
 
   const today = todayIso();
   const dayEvents = useMemo(() => byDay(calendarEvents, today), [calendarEvents, today]);
