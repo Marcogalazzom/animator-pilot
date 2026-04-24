@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   getProjects,
   getActions,
+  getProjectsProgress,
   createProject as dbCreateProject,
   updateProject as dbUpdateProject,
   deleteProject as dbDeleteProject,
@@ -20,6 +21,8 @@ export interface ProjectsData {
   loading: boolean;
   error: string | null;
   usingMock: boolean;
+  // Ratio done/total (%) par project_id, préchargé pour toute la liste
+  progressByProjectId: Map<number, number>;
   // Selected project & its actions
   selectedProject: Project | null;
   selectedActions: Action[];
@@ -46,13 +49,22 @@ export function useProjectsData(): ProjectsData {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedActions, setSelectedActions] = useState<Action[]>([]);
   const [actionsLoading, setActionsLoading]   = useState(false);
+  const [progressByProjectId, setProgressByProjectId] = useState<Map<number, number>>(new Map());
+
+  const refreshProgress = useCallback(async () => {
+    try {
+      setProgressByProjectId(await getProjectsProgress());
+    } catch {
+      setProgressByProjectId(new Map());
+    }
+  }, []);
 
   // ── Load all projects ──
   const loadProjects = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getProjects();
+      const [data] = await Promise.all([getProjects(), refreshProgress()]);
       setProjects(data);
       setUsingMock(false);
     } catch (err) {
@@ -62,7 +74,7 @@ export function useProjectsData(): ProjectsData {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [refreshProgress]);
 
   // ── Load actions for selected project ──
   const loadActions = useCallback(async (project: Project) => {
@@ -127,23 +139,27 @@ export function useProjectsData(): ProjectsData {
       created_at: new Date().toISOString(),
     };
     setSelectedActions(prev => [...prev, newAction]);
-  }, []);
+    await refreshProgress();
+  }, [refreshProgress]);
 
   const updateAction = useCallback(async (id: number, updates: Partial<Action>) => {
     await dbUpdateAction(id, updates);
     setSelectedActions(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
-  }, []);
+    await refreshProgress();
+  }, [refreshProgress]);
 
   const deleteAction = useCallback(async (id: number) => {
     await dbDeleteAction(id);
     setSelectedActions(prev => prev.filter(a => a.id !== id));
-  }, []);
+    await refreshProgress();
+  }, [refreshProgress]);
 
   return {
     projects,
     loading,
     error,
     usingMock,
+    progressByProjectId,
     selectedProject,
     selectedActions,
     actionsLoading,

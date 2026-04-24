@@ -73,9 +73,12 @@ function initials(name: string): string {
   return (parts[0]?.[0] ?? '?').toUpperCase() + (parts[1]?.[0] ?? '').toUpperCase();
 }
 
+// Avancement = proportion d'étapes terminées. Cohérent avec le "X / Y" du détail
+// et avec la checkbox (seul levier UI : toggle status ↔ 'done').
 function projectProgress(actions: Action[]): number {
   if (actions.length === 0) return 0;
-  return Math.round(actions.reduce((sum, a) => sum + a.progress, 0) / actions.length);
+  const done = actions.filter((a) => a.status === 'done').length;
+  return Math.round((done / actions.length) * 100);
 }
 
 /* ─── Page ───────────────────────────────────────────────────── */
@@ -83,6 +86,7 @@ function projectProgress(actions: Action[]): number {
 export default function Projects() {
   const {
     projects, loading,
+    progressByProjectId,
     selectedProject, selectedActions,
     selectProject,
     createProject, updateProject, deleteProject,
@@ -112,12 +116,15 @@ export default function Projects() {
     });
   }, [projects, filter, search]);
 
-  // Inline action progress per project (use selected's actions; list shows static pct from status)
-  const progressByProjectId = useMemo(() => {
-    const map = new Map<number, number>();
-    if (selectedProject) map.set(selectedProject.id, projectProgress(selectedActions));
-    return map;
-  }, [selectedProject, selectedActions]);
+  // Pour le projet sélectionné, on calcule depuis les actions en mémoire pour
+  // refléter immédiatement un toggle avant même que la requête agrégée ne revienne.
+  const livePct = selectedProject ? projectProgress(selectedActions) : null;
+  function pctFor(p: Project): number {
+    if (selectedProject?.id === p.id && livePct !== null) return livePct;
+    const stored = progressByProjectId.get(p.id);
+    if (stored !== undefined) return stored;
+    return p.status === 'done' ? 100 : 0;
+  }
 
   const editingProject = editProjectId
     ? projects.find((p) => p.id === editProjectId) ?? null
@@ -188,7 +195,8 @@ export default function Projects() {
             filtered.map((p) => {
               const active = p.id === selectedProject?.id;
               const cls = normalizeCategory(p.category);
-              const pct = progressByProjectId.get(p.id) ?? (p.status === 'done' ? 100 : 0);
+              const pct = pctFor(p);
+              const showBar = p.status === 'in_progress' || p.status === 'overdue';
               const statusMeta = STATUS_CHIP[p.status];
               return (
                 <button
@@ -236,7 +244,7 @@ export default function Projects() {
                   }}>
                     {formatDeadline(p.due_date)}
                   </div>
-                  {p.status === 'in_progress' && (
+                  {showBar && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
                       <div style={{
                         flex: 1, height: 4, background: 'var(--surface-2)',
@@ -244,7 +252,7 @@ export default function Projects() {
                       }}>
                         <div style={{
                           width: `${pct}%`, height: '100%',
-                          background: `var(--cat-${cls})`,
+                          background: p.status === 'overdue' ? 'var(--danger)' : `var(--cat-${cls})`,
                         }} />
                       </div>
                       <div className="num" style={{ fontSize: 11, color: 'var(--ink-3)' }}>

@@ -111,3 +111,22 @@ export async function getOverdueActions(limit = 10): Promise<OverdueAction[]> {
     [limit]
   );
 }
+
+// Ratio done/total par projet, en une requête. Les projets sans action n'apparaissent
+// pas dans le résultat (le consommateur gère le fallback à 0%).
+export async function getProjectsProgress(): Promise<Map<number, number>> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ project_id: number; total: number; done_count: number }>>(
+    `SELECT project_id,
+            COUNT(*) AS total,
+            SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done_count
+     FROM actions
+     GROUP BY project_id`,
+    []
+  );
+  const map = new Map<number, number>();
+  for (const r of rows) {
+    if (r.total > 0) map.set(r.project_id, Math.round((r.done_count / r.total) * 100));
+  }
+  return map;
+}
